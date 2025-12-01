@@ -1,6 +1,7 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
-import { Save, Bell, Building2, Globe, Shield, Plus, Trash2, MapPin, ExternalLink, CheckCircle, Palette, RefreshCcw, Database, Download, Upload, UsersRound, X as XIcon, Edit2, Lock, Eye, EyeOff, Mail, Server, Cloud, CloudUpload, CloudDownload, LogOut, AlertTriangle, Zap, RefreshCw, HardDrive, HelpCircle, Code, ChevronDown, ChevronUp, Check, Layers, Target, Settings as SettingsIcon, FileCode } from 'lucide-react';
+import { Save, Bell, Building2, Globe, Shield, Plus, Trash2, MapPin, ExternalLink, CheckCircle, Palette, RefreshCcw, Database, Download, Upload, UsersRound, X as XIcon, Edit2, Lock, Eye, EyeOff, Mail, Server, Cloud, UploadCloud, CloudDownload, LogOut, AlertTriangle, Zap, RefreshCw, HardDrive, HelpCircle, Code, ChevronDown, ChevronUp, Check, Layers, Target, Settings as SettingsIcon, FileCode } from 'lucide-react';
 import { useBranding } from '../../context/BrandingContext';
 import { initFirebase, syncToCloud, restoreFromCloud, FirebaseConfig, setupAutoSync, getCloudDatabaseStats, DEFAULT_FIREBASE_CONFIG } from '../../services/cloudService';
 
@@ -836,7 +837,7 @@ const Settings: React.FC = () => {
                                 disabled={isSyncing}
                                 className="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-xs font-bold hover:bg-gray-50 flex items-center gap-2"
                             >
-                                <CloudUpload className="w-4 h-4" /> Force Push
+                                <UploadCloud className="w-4 h-4" /> Force Push
                             </button>
                             <button 
                                 onClick={handleDisconnectCloud}
@@ -1461,7 +1462,7 @@ const Settings: React.FC = () => {
                                                onChange={() => handlePermissionChange(module, type)}
                                                className="w-4 h-4 text-emerald-600 rounded border-gray-300 focus:ring-emerald-500 cursor-pointer"
                                             />
-                                         </td>
+                                                                                       </td>
                                       ))}
                                       <td className="px-4 py-3 text-center">
                                          <button
