@@ -137,7 +137,20 @@ export interface SalaryAdvanceRequest {
   corporateId?: string; // For syncing to correct dashboard
 }
 
-// Centralized Google Maps type declarations
+export interface SystemNotification {
+  id: string;
+  type: 'login' | 'logout' | 'alarm' | 'new_lead' | 'new_task'; // Type of notification
+  title: string; // Short title, e.g., "Employee Logged In"
+  message: string; // Detailed message
+  timestamp: string; // ISO string
+  read: boolean; // Has the current user read this?
+  targetRoles: UserRole[]; // Which roles should see this notification
+  corporateId?: string; // Specific corporate email if only for one corporate panel
+  employeeName?: string; // Relevant employee name
+  employeeId?: string; // Relevant employee ID
+  link?: string; // Path to redirect on click
+}
+
 declare global {
   namespace google {
     namespace maps {

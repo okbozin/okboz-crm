@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
@@ -29,6 +28,7 @@ import EmailMarketing from './pages/admin/EmailMarketing';
 import { UserRole } from './types';
 import { BrandingProvider } from './context/BrandingContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { NotificationProvider } from './context/NotificationContext'; // Import NotificationProvider
 import { setupAutoSync, hydrateFromCloud } from './services/cloudService';
 import { Loader2, Cloud } from 'lucide-react';
 
@@ -117,64 +117,66 @@ const App: React.FC = () => {
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           ) : (
-            <Layout role={userRole} onLogout={handleLogout}>
-              <Routes>
-                {/* Redirect root to appropriate home */}
-                <Route path="/" element={<Navigate to={homePath} replace />} />
+            <NotificationProvider> {/* Wrap Layout with NotificationProvider */}
+              <Layout role={userRole} onLogout={handleLogout}>
+                <Routes>
+                  {/* Redirect root to appropriate home */}
+                  <Route path="/" element={<Navigate to={homePath} replace />} />
 
-                {/* Admin Routes (Shared with Corporate, unless specified) */}
-                {(userRole === UserRole.ADMIN || userRole === UserRole.CORPORATE) && (
-                  <>
-                    <Route path="/admin" element={<Dashboard />} />
-                    {/* Email Marketing - Only Super Admin */}
-                    <Route 
-                      path="/admin/marketing" 
-                      element={userRole === UserRole.ADMIN ? <EmailMarketing /> : <Navigate to="/admin" replace />} 
-                    />
-                    <Route path="/admin/reception" element={<Reception />} />
-                    <Route path="/admin/vehicle-enquiries" element={<VehicleEnquiries />} />
-                    <Route path="/admin/tracking" element={<LiveTracking />} />
-                    <Route path="/admin/leads" element={<Leads />} />
-                    <Route path="/admin/tasks" element={<TaskManagement role={userRole} />} />
-                    <Route path="/admin/attendance" element={<UserAttendance isAdmin={true} />} />
-                    <Route path="/admin/branches" element={<BranchForm />} />
-                    <Route path="/admin/staff" element={<StaffList />} />
-                    <Route path="/admin/employee-settings" element={<EmployeeSettings />} />
-                    <Route path="/admin/documents" element={<Documents role={userRole} />} />
-                    <Route path="/admin/vendors" element={<VendorAttachment />} />
-                    <Route path="/admin/payroll" element={<Payroll />} />
-                    <Route path="/admin/expenses" element={<Expenses />} />
-                    <Route path="/admin/subscription" element={<Subscription />} />
-                    <Route path="/admin/settings" element={<Settings />} />
-                    {/* Corporate Management - Only Super Admin */}
-                    {userRole === UserRole.ADMIN && (
-                       <Route path="/admin/corporate" element={<Corporate />} />
-                    )}
-                    <Route path="/admin/*" element={<div className="p-8 text-center text-gray-500">Page under construction</div>} />
-                  </>
-                )}
+                  {/* Admin Routes (Shared with Corporate, unless specified) */}
+                  {(userRole === UserRole.ADMIN || userRole === UserRole.CORPORATE) && (
+                    <>
+                      <Route path="/admin" element={<Dashboard />} />
+                      {/* Email Marketing - Only Super Admin */}
+                      <Route 
+                        path="/admin/marketing" 
+                        element={userRole === UserRole.ADMIN ? <EmailMarketing /> : <Navigate to="/admin" replace />} 
+                      />
+                      <Route path="/admin/reception" element={<Reception />} />
+                      <Route path="/admin/vehicle-enquiries" element={<VehicleEnquiries />} />
+                      <Route path="/admin/tracking" element={<LiveTracking />} />
+                      <Route path="/admin/leads" element={<Leads />} />
+                      <Route path="/admin/tasks" element={<TaskManagement role={userRole} />} />
+                      <Route path="/admin/attendance" element={<UserAttendance isAdmin={true} />} />
+                      <Route path="/admin/branches" element={<BranchForm />} />
+                      <Route path="/admin/staff" element={<StaffList />} />
+                      <Route path="/admin/employee-settings" element={<EmployeeSettings />} />
+                      <Route path="/admin/documents" element={<Documents role={userRole} />} />
+                      <Route path="/admin/vendors" element={<VendorAttachment />} />
+                      <Route path="/admin/payroll" element={<Payroll />} />
+                      <Route path="/admin/expenses" element={<Expenses />} />
+                      <Route path="/admin/subscription" element={<Subscription />} />
+                      <Route path="/admin/settings" element={<Settings />} />
+                      {/* Corporate Management - Only Super Admin */}
+                      {userRole === UserRole.ADMIN && (
+                        <Route path="/admin/corporate" element={<Corporate />} />
+                      )}
+                      <Route path="/admin/*" element={<div className="p-8 text-center text-gray-500">Page under construction</div>} />
+                    </>
+                  )}
 
-                {/* User Routes */}
-                {userRole === UserRole.EMPLOYEE && (
-                  <>
-                    <Route path="/user" element={<UserAttendance />} />
-                    <Route path="/user/tasks" element={<TaskManagement role={UserRole.EMPLOYEE} />} />
-                    {/* Removed Reception Desk from Employee portal */}
-                    {/* <Route path="/user/reception" element={<Reception />} /> */}
-                    <Route path="/user/vehicle-enquiries" element={<VehicleEnquiries />} /> {/* Added Vehicle Enquiries */}
-                    <Route path="/user/vendors" element={<VendorAttachment />} />
-                    <Route path="/user/salary" element={<UserSalary />} />
-                    <Route path="/user/documents" element={<Documents role={UserRole.EMPLOYEE} />} />
-                    <Route path="/user/apply-leave" element={<ApplyLeave />} />
-                    <Route path="/user/profile" element={<UserProfile />} />
-                    <Route path="/user/*" element={<div className="p-8 text-center text-gray-500">Page under construction</div>} />
-                  </>
-                )}
+                  {/* User Routes */}
+                  {userRole === UserRole.EMPLOYEE && (
+                    <>
+                      <Route path="/user" element={<UserAttendance />} />
+                      <Route path="/user/tasks" element={<TaskManagement role={UserRole.EMPLOYEE} />} />
+                      {/* Removed Reception Desk from Employee portal */}
+                      {/* <Route path="/user/reception" element={<Reception />} /> */}
+                      <Route path="/user/vehicle-enquiries" element={<VehicleEnquiries />} /> {/* Added Vehicle Enquiries */}
+                      <Route path="/user/vendors" element={<VendorAttachment />} />
+                      <Route path="/user/salary" element={<UserSalary />} />
+                      <Route path="/user/documents" element={<Documents role={UserRole.EMPLOYEE} />} />
+                      <Route path="/user/apply-leave" element={<ApplyLeave />} />
+                      <Route path="/user/profile" element={<UserProfile />} />
+                      <Route path="/user/*" element={<div className="p-8 text-center text-gray-500">Page under construction</div>} />
+                    </>
+                  )}
 
-                {/* Catch all redirect */}
-                <Route path="*" element={<Navigate to={homePath} replace />} />
-              </Routes>
-            </Layout>
+                  {/* Catch all redirect */}
+                  <Route path="*" element={<Navigate to={homePath} replace />} />
+                </Routes>
+              </Layout>
+            </NotificationProvider>
           )}
           
           {/* AI Assistant is available for both roles when authenticated */}

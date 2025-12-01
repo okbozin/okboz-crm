@@ -1,6 +1,7 @@
 import { initializeApp, FirebaseApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, doc, setDoc, getDoc, Firestore, deleteDoc, collection, getDocs } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, getDoc, Firestore, deleteDoc, collection, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
 import { getAnalytics } from "firebase/analytics";
+import { SystemNotification, UserRole } from '../types'; // Import UserRole
 
 // Interface for the config saved in localStorage
 export interface FirebaseConfig {
@@ -47,6 +48,7 @@ const shouldSyncKey = (key: string): boolean => {
     if (key.startsWith('office_expenses')) return true;
     if (key.startsWith('tasks_data')) return true;
     if (key.startsWith('sub_admins')) return true;
+    if (key.startsWith('system_notifications')) return true; // NEW: System Notifications
     
     // 3. Financial & HR History
     if (key.startsWith('salary_advances')) return true;
@@ -362,5 +364,116 @@ export const getCloudDatabaseStats = async (config: FirebaseConfig) => {
   } catch (e) {
     console.error("Error fetching cloud stats", e);
     return null;
+  }
+};
+
+// --- System Notification Functions ---
+
+// Collection path for system notifications. 
+// For simplicity, we use one collection and filter by targetRoles/corporateId.
+const NOTIFICATION_COLLECTION = "system_notifications";
+
+// Ensure Firestore DB is initialized before using
+const getDb = () => {
+  if (!db) {
+    // Attempt to initialize if not already
+    const savedConfig = localStorage.getItem('firebase_config');
+    if (savedConfig) {
+      try {
+        const config = JSON.parse(savedConfig);
+        initFirebase(config);
+      } catch(e) {
+        console.error("Failed to re-initialize Firebase for notification service", e);
+      }
+    } else {
+        initFirebase(DEFAULT_FIREBASE_CONFIG);
+    }
+  }
+  return db;
+}
+
+// Function to send a new system notification
+export const sendSystemNotification = async (notification: SystemNotification) => {
+  const firestore = getDb();
+  if (!firestore) {
+    console.warn("Firestore not initialized, cannot send system notification.");
+    return;
+  }
+
+  try {
+    const notificationWithId = { ...notification, id: `NOTIF-${Date.now()}` };
+    await setDoc(doc(firestore, NOTIFICATION_COLLECTION, notificationWithId.id), notificationWithId);
+    console.log(`📢 System notification sent: ${notification.title}`);
+  } catch (error) {
+    console.error("Failed to send system notification:", error);
+  }
+};
+
+// Function to fetch system notifications for a specific user/role
+export const fetchSystemNotifications = async (userRole: UserRole, corporateId?: string): Promise<SystemNotification[]> => {
+  const firestore = getDb();
+  if (!firestore) {
+    console.warn("Firestore not initialized, cannot fetch system notifications.");
+    return [];
+  }
+
+  try {
+    let qRef;
+    if (userRole === UserRole.ADMIN) {
+      // Admin gets all notifications targeting ADMIN role
+      qRef = query(
+        collection(firestore, NOTIFICATION_COLLECTION),
+        where('targetRoles', 'array-contains', UserRole.ADMIN),
+        orderBy('timestamp', 'desc'),
+        limit(50) // Limit to recent 50 notifications
+      );
+    } else if (userRole === UserRole.CORPORATE && corporateId) {
+      // Corporate gets notifications targeting CORPORATE role and their specific corporateId
+      qRef = query(
+        collection(firestore, NOTIFICATION_COLLECTION),
+        where('targetRoles', 'array-contains', UserRole.CORPORATE),
+        where('corporateId', '==', corporateId),
+        orderBy('timestamp', 'desc'),
+        limit(50)
+      );
+    } else {
+      // Employees don't typically fetch system-wide notifications in this model
+      return [];
+    }
+
+    const querySnapshot = await getDocs(qRef);
+    const notifications: SystemNotification[] = [];
+    querySnapshot.forEach(doc => {
+      // For notifications already marked as read by the current user, mark them locally.
+      // This is a client-side filter for read status. Firestore can't filter array-contains in nested array.
+      // More robust solution would be a subcollection of 'readBy' for each user.
+      const data = doc.data() as SystemNotification;
+      notifications.push({ ...data, read: false }); // Assume unread initially, context will mark them
+    });
+    return notifications;
+  } catch (error) {
+    console.error("Failed to fetch system notifications:", error);
+    return [];
+  }
+};
+
+// Function to mark a system notification as read (for a specific user)
+export const markNotificationAsRead = async (notificationId: string, userId: string) => {
+  const firestore = getDb();
+  if (!firestore) return;
+
+  try {
+    const docRef = doc(firestore, NOTIFICATION_COLLECTION, notificationId);
+    const docSnap = await getDoc(docRef);
+
+    if (docSnap.exists()) {
+      const data = docSnap.data() as SystemNotification;
+      const currentReadBy = (data as any).readBy || []; // Assuming 'readBy' is an array of userIds
+      if (!currentReadBy.includes(userId)) {
+        await setDoc(docRef, { readBy: [...currentReadBy, userId] }, { merge: true });
+      }
+    }
+  } catch (error) {
+    console.error("Failed to mark notification as read:", error);
   }
 };

@@ -1,10 +1,13 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, MapPin, Calendar, DollarSign, Briefcase, Menu, X, LogOut, UserCircle, Building, Settings, Target, CreditCard, ClipboardList, ReceiptIndianRupee, Navigation, Car, Building2, PhoneIncoming, GripVertical, Edit2, Check, FileText, Layers, PhoneCall, Bus, Bell, Sun, Moon, Monitor, Mail, UserCog, CarFront } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { LayoutDashboard, Users, MapPin, Calendar, DollarSign, Briefcase, Menu, X, LogOut, UserCircle, Building, Settings, Target, CreditCard, ClipboardList, ReceiptIndianRupee, Navigation, Car, Building2, PhoneIncoming, GripVertical, Edit2, Check, FileText, Layers, PhoneCall, Bus, Bell, Sun, Moon, Monitor, Mail, UserCog, CarFront, BellRing } from 'lucide-react';
 import { UserRole } from '../types';
 import { useBranding } from '../context/BrandingContext';
 import { useTheme } from '../context/ThemeContext';
+import { useNotification } from '../context/NotificationContext'; // Import useNotification
+import { sendSystemNotification } from '../services/cloudService'; // Import sendSystemNotification
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -38,9 +41,13 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isEditingSidebar, setIsEditingSidebar] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate(); // Use useNavigate for redirection
   const { companyName, logoUrl, primaryColor } = useBranding();
   const { theme, setTheme } = useTheme();
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
+  
+  // Notification Context
+  const { notifications, markNotificationAsRead, playAlarmSound } = useNotification();
   
   // State to manage the ordered list of links
   const [orderedLinks, setOrderedLinks] = useState(MASTER_ADMIN_LINKS);
@@ -53,15 +60,6 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const notificationRef = useRef<HTMLDivElement>(null);
   const themeRef = useRef<HTMLDivElement>(null);
-
-  const [notifications, setNotifications] = useState([
-    { id: 1, title: 'New Lead Assigned', message: 'Rahul Gupta has been assigned to you.', time: '10 min ago', unread: true },
-    { id: 2, title: 'Meeting Reminder', message: 'Team sync at 4:00 PM.', time: '1 hr ago', unread: true },
-    { id: 3, title: 'Task Completed', message: 'Monthly Report task marked as done.', time: '3 hrs ago', unread: false },
-    { id: 4, title: 'System Alert', message: 'Server maintenance scheduled for Sunday.', time: '5 hrs ago', unread: false },
-  ]);
-
-  const unreadCount = notifications.filter(n => n.unread).length;
 
   // Load user details based on role and session
   useEffect(() => {
@@ -169,6 +167,23 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
     };
   }, []);
 
+  // Handle click on notification: mark read and redirect
+  const handleNotificationClick = (notificationId: string, link?: string) => {
+    const userId = localStorage.getItem('app_session_id') || 'guest';
+    markNotificationAsRead(notificationId, userId);
+    setNotificationsOpen(false);
+    if (link) {
+      navigate(link);
+    }
+  };
+
+  const handleMarkAllRead = () => {
+    const userId = localStorage.getItem('app_session_id') || 'guest';
+    notifications.filter(n => !n.read).forEach(n => markNotificationAsRead(n.id, userId));
+  }
+
+  const unreadCount = notifications.filter(n => !n.read).length;
+
   // Drag and Drop Handlers
   const handleDragStart = (e: React.DragEvent<HTMLAnchorElement>, index: number) => {
     e.dataTransfer.setData('dragIndex', index.toString());
@@ -237,6 +252,35 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
   
   // Only Super Admin can drag, AND only when in edit mode
   const canDrag = role === UserRole.ADMIN && isEditingSidebar;
+
+  const handleLogout = async () => {
+    // If logging out an employee, send a logout notification
+    const loggedInEmployeeName = localStorage.getItem('logged_in_employee_name');
+    const loggedInEmployeeId = localStorage.getItem('logged_in_employee_id');
+    const loggedInEmployeeCorporateId = localStorage.getItem('logged_in_employee_corporate_id');
+
+    if (loggedInEmployeeName && loggedInEmployeeId && role === UserRole.EMPLOYEE) {
+        await sendSystemNotification({
+            id: `logout-${Date.now()}`,
+            type: 'logout',
+            title: 'Employee Logged Out',
+            message: `${loggedInEmployeeName} (${loggedInEmployeeId}) has logged out.`,
+            timestamp: new Date().toISOString(),
+            read: false,
+            targetRoles: [UserRole.ADMIN, UserRole.CORPORATE],
+            corporateId: loggedInEmployeeCorporateId === 'admin' ? 'admin' : loggedInEmployeeCorporateId || undefined,
+            employeeName: loggedInEmployeeName,
+            employeeId: loggedInEmployeeId,
+            link: `/admin/staff`
+        });
+        // Clear stored employee details
+        localStorage.removeItem('logged_in_employee_name');
+        localStorage.removeItem('logged_in_employee_id');
+        localStorage.removeItem('logged_in_employee_corporate_id');
+    }
+    onLogout();
+  };
+
 
   return (
     <div className="h-screen bg-gray-50 dark:bg-gray-950 flex overflow-hidden transition-colors duration-200">
@@ -394,7 +438,13 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
             {/* Notification Bell */}
             <div className="relative" ref={notificationRef}>
               <button 
-                onClick={() => setNotificationsOpen(!notificationsOpen)}
+                onClick={() => {
+                    setNotificationsOpen(!notificationsOpen);
+                    // Play sound when opening, but only if there are unread notifications
+                    if (unreadCount > 0 && !notificationsOpen) {
+                        playAlarmSound();
+                    }
+                }}
                 className="p-2 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 rounded-full transition-colors relative"
                 title="Notifications"
               >
@@ -412,7 +462,7 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
                     {unreadCount > 0 && (
                       <span 
                         className="text-xs text-emerald-600 font-medium cursor-pointer hover:underline" 
-                        onClick={() => setNotifications(prev => prev.map(n => ({...n, unread: false})))}
+                        onClick={handleMarkAllRead}
                       >
                         Mark all read
                       </span>
@@ -421,10 +471,18 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
                   <div className="max-h-[300px] overflow-y-auto">
                     {notifications.length > 0 ? (
                       notifications.map(n => (
-                        <div key={n.id} className={`px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border-b border-gray-50 dark:border-gray-800 last:border-0 cursor-pointer ${n.unread ? 'bg-blue-50/30 dark:bg-blue-900/10' : ''}`}>
+                        <div 
+                            key={n.id} 
+                            onClick={() => handleNotificationClick(n.id, n.link)}
+                            className={`px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border-b border-gray-50 dark:border-gray-800 last:border-0 cursor-pointer ${n.read ? '' : 'bg-blue-50/30 dark:bg-blue-900/10'}`}
+                        >
                           <div className="flex justify-between items-start mb-1">
-                            <p className={`text-sm font-medium ${n.unread ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'}`}>{n.title}</p>
-                            <span className="text-[10px] text-gray-400">{n.time}</span>
+                            <p className={`text-sm font-medium ${n.read ? 'text-gray-600 dark:text-gray-400' : 'text-gray-900 dark:text-white'}`}>
+                                {n.type === 'login' && <span className="mr-1"><BellRing className="w-4 h-4 inline text-emerald-500"/></span>}
+                                {n.type === 'logout' && <span className="mr-1"><LogOut className="w-4 h-4 inline text-red-500"/></span>}
+                                {n.title}
+                            </p>
+                            <span className="text-[10px] text-gray-400">{new Date(n.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                           </div>
                           <p className="text-xs text-gray-500 dark:text-gray-500 line-clamp-2">{n.message}</p>
                         </div>
@@ -464,7 +522,7 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
             <div className="h-8 w-[1px] bg-gray-200 dark:bg-gray-700 hidden sm:block"></div>
             
             <button 
-              onClick={onLogout}
+              onClick={handleLogout}
               className="flex items-center gap-2 p-2 px-3 text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
               title="Logout"
             >
