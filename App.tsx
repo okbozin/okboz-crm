@@ -1,3 +1,6 @@
+
+
+
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
@@ -17,7 +20,9 @@ import Corporate from './pages/admin/Corporate';
 import Documents from './pages/Documents';
 import Leads from './pages/admin/Leads';
 import Reception from './pages/admin/Reception';
-import VehicleEnquiries from './pages/admin/VehicleEnquiries'; // Import New Page
+import Reports from './pages/admin/Reports'; // Import Reports
+// Changed import of `VehicleEnquiries` from a default import to a named import
+import { VehicleEnquiries } from './pages/admin/VehicleEnquiries'; 
 import UserAttendance from './pages/user/UserAttendance';
 import UserSalary from './pages/user/UserSalary';
 import ApplyLeave from './pages/user/ApplyLeave';
@@ -28,41 +33,27 @@ import EmailMarketing from './pages/admin/EmailMarketing';
 import { UserRole } from './types';
 import { BrandingProvider } from './context/BrandingContext';
 import { ThemeProvider } from './context/ThemeContext';
-import { NotificationProvider } from './context/NotificationContext'; // Import NotificationProvider
-import { setupAutoSync, hydrateFromCloud } from './services/cloudService';
-import { Loader2, Cloud } from 'lucide-react';
+// import { NotificationProvider } from './context/NotificationContext'; // Removed: Import NotificationProvider
+// import { setupAutoSync, hydrateFromCloud } from './services/cloudService'; // Removed: Cloud service imports
+import { Loader2, Cloud } from 'lucide-react'; // Still used for a generic loader if needed
 
 const App: React.FC = () => {
   // Initialize state from localStorage
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [userRole, setUserRole] = useState<UserRole>(UserRole.ADMIN);
-  const [isCloudInitialized, setIsCloudInitialized] = useState(false);
+  // Removed: const [isCloudInitialized, setIsCloudInitialized] = useState(false);
 
-  // Initialize Cloud & Auth
+  // Initialize Auth (simplified to local storage check only)
   useEffect(() => {
-    const initApp = async () => {
-      // 1. Pull latest data from cloud (Hydration)
-      // This ensures we have the latest "total website" data before showing anything
-      // Errors are caught internally
-      await hydrateFromCloud();
-      
-      // 2. Setup listeners for future changes (Instant Backup)
-      setupAutoSync();
+    const hasSession = !!localStorage.getItem('app_session_id');
+    const savedRole = localStorage.getItem('user_role');
+    
+    if (hasSession && savedRole && Object.values(UserRole).includes(savedRole as UserRole)) {
+      setIsAuthenticated(true);
+      setUserRole(savedRole as UserRole);
+    }
 
-      // 3. Check Auth (after hydration to ensure we have latest session data)
-      const hasSession = !!localStorage.getItem('app_session_id');
-      const savedRole = localStorage.getItem('user_role');
-      
-      if (hasSession && savedRole && Object.values(UserRole).includes(savedRole as UserRole)) {
-        setIsAuthenticated(true);
-        setUserRole(savedRole as UserRole);
-      }
-
-      // 4. Ready to render
-      setIsCloudInitialized(true);
-    };
-
-    initApp();
+    // Removed: setIsCloudInitialized(true); // App is always "initialized" if no cloud syncing
   }, []);
 
   // Handle Login
@@ -88,23 +79,23 @@ const App: React.FC = () => {
   Keep answers concise, professional, and helpful.`;
   const hrAssistantInitialMessage = 'Hi! I am your OK BOZ HR Assistant. Ask me about leave policies, labor laws, or how to manage your staff.';
 
-  // Loading Screen (Hydration Phase)
-  if (!isCloudInitialized) {
-    return (
-      <div className="h-screen w-full flex flex-col items-center justify-center bg-gray-50 text-gray-600 gap-4">
-        <div className="relative">
-           <Cloud className="w-16 h-16 text-emerald-500 animate-bounce" />
-           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-              <Loader2 className="w-8 h-8 text-white animate-spin" />
-           </div>
-        </div>
-        <div className="text-center">
-           <h2 className="text-xl font-bold text-gray-800">OK BOZ Cloud</h2>
-           <p className="text-sm">Syncing your total website data...</p>
-        </div>
-      </div>
-    );
-  }
+  // Removed: Loading Screen (Hydration Phase)
+  // if (!isCloudInitialized) {
+  //   return (
+  //     <div className="h-screen w-full flex flex-col items-center justify-center bg-gray-50 text-gray-600 gap-4">
+  //       <div className="relative">
+  //          <Cloud className="w-16 h-16 text-emerald-500 animate-bounce" />
+  //          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+  //             <Loader2 className="w-8 h-8 text-white animate-spin" />
+  //          </div>
+  //       </div>
+  //       <div className="text-center">
+  //          <h2 className="text-xl font-bold text-gray-800">OK BOZ Cloud</h2>
+  //          <p className="text-sm">Syncing your total website data...</p>
+  //       </div>
+  //     </div>
+  //   );
+  // }
 
   return (
     <ThemeProvider>
@@ -117,7 +108,7 @@ const App: React.FC = () => {
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           ) : (
-            <NotificationProvider> {/* Wrap Layout with NotificationProvider */}
+            // Removed: <NotificationProvider>
               <Layout role={userRole} onLogout={handleLogout}>
                 <Routes>
                   {/* Redirect root to appropriate home */}
@@ -127,6 +118,7 @@ const App: React.FC = () => {
                   {(userRole === UserRole.ADMIN || userRole === UserRole.CORPORATE) && (
                     <>
                       <Route path="/admin" element={<Dashboard />} />
+                      <Route path="/admin/reports" element={<Reports />} /> {/* Added Reports Route */}
                       {/* Email Marketing - Only Super Admin */}
                       <Route 
                         path="/admin/marketing" 
@@ -161,7 +153,7 @@ const App: React.FC = () => {
                       <Route path="/user" element={<UserAttendance />} />
                       <Route path="/user/tasks" element={<TaskManagement role={UserRole.EMPLOYEE} />} />
                       {/* Removed Reception Desk from Employee portal */}
-                      {/* <Route path="/user/reception" element={<Reception />} /> */}
+                      {/* <Route path="/user/reception" element={<Reception />} */}
                       <Route path="/user/vehicle-enquiries" element={<VehicleEnquiries />} /> {/* Added Vehicle Enquiries */}
                       <Route path="/user/vendors" element={<VendorAttachment />} />
                       <Route path="/user/salary" element={<UserSalary />} />
@@ -176,7 +168,7 @@ const App: React.FC = () => {
                   <Route path="*" element={<Navigate to={homePath} replace />} />
                 </Routes>
               </Layout>
-            </NotificationProvider>
+            // Removed: </NotificationProvider>
           )}
           
           {/* AI Assistant is available for both roles when authenticated */}

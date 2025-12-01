@@ -1,8 +1,8 @@
-
 import React, { useState } from 'react';
 import { UserRole } from '../types';
 import { Shield, User, Lock, Mail, ArrowRight, Building2, Eye, EyeOff, AlertTriangle, Cloud, BadgeCheck } from 'lucide-react';
 import { useBranding } from '../context/BrandingContext';
+import { sendSystemNotification } from '../services/cloudService'; // Corrected: import path
 
 interface LoginProps {
   onLogin: (role: UserRole) => void;
@@ -24,10 +24,13 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setIsLoading(true);
 
     // Simulate network delay for better UX
-    setTimeout(() => {
+    setTimeout(async () => { // Made async to await sendSystemNotification
         let success = false;
         let role = UserRole.ADMIN;
         let sessionId = '';
+        let employeeName = '';
+        let employeeId = '';
+        let corporateOwnerId = ''; // To store corporate email if employee belongs to one
 
         if (activeTab === 'admin') {
             // Check against stored admin password or default
@@ -57,6 +60,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             try {
                 const adminStaff = JSON.parse(localStorage.getItem('staff_data') || '[]');
                 foundEmp = adminStaff.find((e: any) => e.email?.toLowerCase() === email.toLowerCase() && e.password === password);
+                if (foundEmp) corporateOwnerId = 'admin';
             } catch(e) {}
 
             // 2. Search Corporate Staff if not found
@@ -66,7 +70,10 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                     for (const corp of corps) {
                         const corpStaff = JSON.parse(localStorage.getItem(`staff_data_${corp.email}`) || '[]');
                         foundEmp = corpStaff.find((e: any) => e.email?.toLowerCase() === email.toLowerCase() && e.password === password);
-                        if (foundEmp) break;
+                        if (foundEmp) {
+                            corporateOwnerId = corp.email; // Found in this corporate account
+                            break;
+                        }
                     }
                 } catch(e) {}
             }
@@ -75,12 +82,37 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 success = true;
                 role = UserRole.EMPLOYEE;
                 sessionId = foundEmp.id;
+                employeeName = foundEmp.name;
+                employeeId = foundEmp.id;
             }
         }
 
         if (success) {
             localStorage.setItem('app_session_id', sessionId);
             localStorage.setItem('user_role', role);
+            
+            // Store employee details for logout notification if it's an employee
+            if (role === UserRole.EMPLOYEE) {
+                localStorage.setItem('logged_in_employee_name', employeeName);
+                localStorage.setItem('logged_in_employee_id', employeeId);
+                localStorage.setItem('logged_in_employee_corporate_id', corporateOwnerId);
+
+                // Send login notification
+                await sendSystemNotification({
+                    id: `login-${Date.now()}`,
+                    type: 'login',
+                    title: 'Employee Logged In',
+                    message: `${employeeName} (${employeeId}) has logged in.`,
+                    timestamp: new Date().toISOString(),
+                    read: false,
+                    targetRoles: [UserRole.ADMIN, UserRole.CORPORATE],
+                    corporateId: corporateOwnerId, // Admin sees all, Corporate only sees their own staff's logins
+                    employeeName: employeeName,
+                    employeeId: employeeId,
+                    link: `/admin/staff` // Admin and Corporate can go to staff list
+                });
+            }
+
             onLogin(role);
         } else {
             setError('Invalid credentials. Please check email and password.');
