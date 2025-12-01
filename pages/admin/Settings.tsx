@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Save, Bell, Building2, Globe, Shield, Plus, Trash2, MapPin, ExternalLink, CheckCircle, Palette, RefreshCcw, Database, Download, Upload, UsersRound, X as XIcon, Edit2, Lock, Eye, EyeOff, Mail, Server, Cloud, CloudUpload, CloudDownload, LogOut, AlertTriangle, Zap, RefreshCw, HardDrive, HelpCircle, Code, ChevronDown, ChevronUp, Check, Layers, Target, Settings as SettingsIcon, FileCode } from 'lucide-react';
 import { useBranding } from '../../context/BrandingContext';
 import { initFirebase, syncToCloud, restoreFromCloud, FirebaseConfig, setupAutoSync, getCloudDatabaseStats, DEFAULT_FIREBASE_CONFIG } from '../../services/cloudService';
@@ -404,14 +404,19 @@ const Settings: React.FC = () => {
         return;
     }
 
+    if (securityForm.newPassword.length < 6) {
+        setSecurityMessage({ type: 'error', text: 'New password must be at least 6 characters.' });
+        return;
+    }
+
     if (securityForm.newPassword !== securityForm.confirmPassword) {
-        setSecurityMessage({ type: 'error', text: 'New passwords do not match' });
+        setSecurityMessage({ type: 'error', text: 'New passwords do not match.' });
         return;
     }
 
     // Logic for updating password based on role
     if (isSuperAdmin) {
-        const currentStored = localStorage.getItem('admin_password') || 'admin123';
+        const currentStored = localStorage.getItem('admin_password') || '123456';
         if (securityForm.currentPassword !== currentStored) {
              setSecurityMessage({ type: 'error', text: 'Current password is incorrect' });
              return;
@@ -468,46 +473,47 @@ const Settings: React.FC = () => {
     setIsSubAdminModalOpen(true);
   };
 
+  // FIX: Ensure permissions are updated immutably and correctly typed
   const handlePermissionChange = (module: string, type: keyof Permission | 'all') => {
     setSubAdminForm(prev => {
-        const current = prev.permissions[module];
+        // Create a new permissions object to ensure immutability
+        const newPermissions: Record<string, Permission> = { ...prev.permissions };
+        // Copy the specific module's permissions
+        const currentModulePermissions: Permission = { ...newPermissions[module] }; 
+
         if (type === 'all') {
-            const allTrue = current.view && current.add && current.edit && current.delete;
+            const allTrue = currentModulePermissions.view && currentModulePermissions.add && currentModulePermissions.edit && currentModulePermissions.delete;
             const newVal = !allTrue;
-            return {
-                ...prev,
-                permissions: {
-                    ...prev.permissions,
-                    [module]: { view: newVal, add: newVal, edit: newVal, delete: newVal }
-                }
-            };
+            newPermissions[module] = { view: newVal, add: newVal, edit: newVal, delete: newVal };
+        } else {
+            // Update the specific permission property
+            currentModulePermissions[type] = !currentModulePermissions[type];
+            newPermissions[module] = currentModulePermissions; // Assign the updated module permissions back
         }
-        return {
-            ...prev,
-            permissions: {
-                ...prev.permissions,
-                [module]: { ...current, [type]: !current[type] }
-            }
-        };
+
+        return { ...prev, permissions: newPermissions };
     });
   };
 
+  // FIX: Ensure permissions are updated immutably and correctly typed
   const handleToggleFullAccess = () => {
-      const allModules = MODULES;
-      const allEnabled = allModules.every(m => 
-          subAdminForm.permissions[m].view && 
-          subAdminForm.permissions[m].add && 
-          subAdminForm.permissions[m].edit && 
-          subAdminForm.permissions[m].delete
-      );
+      setSubAdminForm(prev => {
+          const allModules = MODULES;
+          const allEnabled = allModules.every(m =>
+              prev.permissions[m]?.view && 
+              prev.permissions[m]?.add && 
+              prev.permissions[m]?.edit && 
+              prev.permissions[m]?.delete
+          );
 
-      const newVal = !allEnabled;
-      const newPermissions: any = {};
-      allModules.forEach(m => {
-          newPermissions[m] = { view: newVal, add: newVal, edit: newVal, delete: newVal };
+          const newVal = !allEnabled;
+          const newPermissions: Record<string, Permission> = {}; // Ensure correct type
+          allModules.forEach(m => {
+              newPermissions[m] = { view: newVal, add: newVal, edit: newVal, delete: newVal };
+          });
+
+          return { ...prev, permissions: newPermissions };
       });
-
-      setSubAdminForm(prev => ({ ...prev, permissions: newPermissions }));
   };
 
   const saveSubAdmin = (e: React.FormEvent) => {
@@ -955,7 +961,7 @@ const Settings: React.FC = () => {
                         </div>
                     ) : (
                         <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse">
+                            <table className="w-full text-left text-sm">
                                 <thead className="bg-gray-50 text-gray-500 text-xs font-bold uppercase">
                                     <tr>
                                         <th className="px-4 py-3">Name</th>
@@ -1121,6 +1127,9 @@ const Settings: React.FC = () => {
                            </div>
                            <p className="text-xs text-amber-600 flex items-center gap-1 mt-1">
                               <AlertTriangle className="w-3 h-3" /> Ensure 'Maps JavaScript API', 'Places API', and 'Geocoding API' are enabled.
+                           </p>
+                           <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                               <CheckCircle className="w-3 h-3 text-emerald-500" /> This key will be used across all Corporate panels.
                            </p>
                         </div>
                      </div>

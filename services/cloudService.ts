@@ -18,7 +18,7 @@ export const DEFAULT_FIREBASE_CONFIG: FirebaseConfig = {
   apiKey: "AIzaSyC9UI-Dyf2GQCF-sW9ksXZQ8BvNUzSYe5g",
   authDomain: "okboz-crm.firebaseapp.com",
   projectId: "okboz-crm",
-  storageBucket: "okboz-crm.firebasestorage.app",
+  storageBucket: "okboz-crm.firebaseapp.com",
   messagingSenderId: "91493515170",
   appId: "1:91493515170:web:4f7685341eedc2dd34bcfb",
   measurementId: "G-SJC4WPF1QJ"
@@ -62,6 +62,7 @@ const shouldSyncKey = (key: string): boolean => {
     // 5. Global Settings & Configs
     if (key === 'app_branding') return true;
     if (key === 'smtp_config') return true;
+    if (key === 'maps_api_key') return true; // Added for Maps API key
     if (key.startsWith('transport_pricing')) return true;
     if (key.startsWith('transport_rental')) return true;
     if (key.startsWith('company_')) return true; // Shifts, Roles, Depts, Holiday Lists

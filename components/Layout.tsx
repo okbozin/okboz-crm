@@ -214,6 +214,9 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
     // 4. "Employee Setting" hidden for Corporate users
     if (link.id === 'employee-settings' && role === UserRole.CORPORATE) return false;
 
+    // 5. "Email Marketing" is hidden for Corporate users
+    if (link.id === 'marketing' && role === UserRole.CORPORATE) return false;
+
     return true;
   });
 

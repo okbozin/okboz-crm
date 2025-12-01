@@ -122,11 +122,15 @@ const App: React.FC = () => {
                 {/* Redirect root to appropriate home */}
                 <Route path="/" element={<Navigate to={homePath} replace />} />
 
-                {/* Admin Routes (Shared with Corporate) */}
+                {/* Admin Routes (Shared with Corporate, unless specified) */}
                 {(userRole === UserRole.ADMIN || userRole === UserRole.CORPORATE) && (
                   <>
                     <Route path="/admin" element={<Dashboard />} />
-                    <Route path="/admin/marketing" element={<EmailMarketing />} />
+                    {/* Email Marketing - Only Super Admin */}
+                    <Route 
+                      path="/admin/marketing" 
+                      element={userRole === UserRole.ADMIN ? <EmailMarketing /> : <Navigate to="/admin" replace />} 
+                    />
                     <Route path="/admin/reception" element={<Reception />} />
                     <Route path="/admin/vehicle-enquiries" element={<VehicleEnquiries />} />
                     <Route path="/admin/tracking" element={<LiveTracking />} />

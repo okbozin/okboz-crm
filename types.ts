@@ -1,4 +1,5 @@
 
+
 export enum UserRole {
   ADMIN = 'ADMIN',
   EMPLOYEE = 'EMPLOYEE',
@@ -99,13 +100,14 @@ export interface Enquiry {
   city: string;
   email?: string;
   details: string; // The query/requirement
-  status: 'New' | 'In Progress' | 'Converted' | 'Closed';
+  status: 'New' | 'In Progress' | 'Converted' | 'Closed' | 'Booked' | 'Scheduled'; // ADDED 'Booked' and 'Scheduled'
   isExistingVendor?: boolean; // If they were found in the vendor DB
   vendorId?: string; // Link to vendor if exists
   assignedTo?: string; // Employee ID
   createdAt: string;
   nextFollowUp?: string;
   history: HistoryLog[];
+  date?: string; // ADDED
 }
 
 export interface DocumentFile {

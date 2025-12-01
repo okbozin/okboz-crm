@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { MapPin, Maximize, Crosshair, Loader2, AlertTriangle, Building, Trash2, Settings, Building2, Pencil, X, QrCode, Download } from 'lucide-react';
 import { Branch } from '../types';
@@ -15,6 +14,10 @@ const BranchForm: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   
   // Determine Session Context
+  const userRole = localStorage.getItem('user_role');
+  const isSuperAdminUser = userRole === 'ADMIN';
+  const isCorporateUser = userRole === 'CORPORATE';
+
   const getSessionKey = () => {
     const sessionId = localStorage.getItem('app_session_id') || 'admin';
     return sessionId === 'admin' ? 'branches_data' : `branches_data_${sessionId}`;
@@ -454,7 +457,11 @@ const BranchForm: React.FC = () => {
                     {mapError && (
                     <p className="text-xs text-amber-600 mt-2 flex items-center gap-1">
                         <AlertTriangle className="w-3 h-3" />
-                        Map services unavailable. Please enter address manually.
+                        {isCorporateUser ? (
+                          <span>Google Maps API Key is not configured by Super Admin. Please contact your Super Admin to enable map features.</span>
+                        ) : (
+                          <span>Map services unavailable. Please enter address manually.</span>
+                        )}
                     </p>
                     )}
                 </div>
@@ -519,21 +526,29 @@ const BranchForm: React.FC = () => {
                   <div className="flex flex-col items-center gap-3 max-w-sm">
                     <AlertTriangle className="w-10 h-10 text-red-400" />
                     <h3 className="font-medium text-gray-900">Map Loading Failed</h3>
-                    <p className="text-sm text-gray-600">{mapError}</p>
-                    <div className="bg-amber-50 border border-amber-100 p-3 rounded text-xs text-amber-800 mt-2 text-left w-full">
-                       <strong>Troubleshooting "ApiNotActivated":</strong>
-                       <ul className="list-disc list-inside mt-1 space-y-1">
-                          <li>Enable "Maps JavaScript API"</li>
-                          <li>Enable "Places API"</li>
-                          <li>Enable "Geocoding API"</li>
-                       </ul>
-                    </div>
-                    <button 
-                      onClick={() => navigate('/admin/settings')} 
-                      className="mt-2 text-xs flex items-center gap-1 bg-white border border-gray-300 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
-                    >
-                      <Settings className="w-3 h-3" /> Configure in Settings
-                    </button>
+                    {isCorporateUser ? (
+                      <p className="text-sm text-gray-600">
+                        Google Maps API Key is not configured by Super Admin. Please contact your Super Admin to enable map features.
+                      </p>
+                    ) : (
+                      <>
+                        <p className="text-sm text-gray-600">{mapError}</p>
+                        <div className="bg-amber-50 border border-amber-100 p-3 rounded text-xs text-amber-800 mt-2 text-left w-full">
+                           <strong>Troubleshooting "ApiNotActivated":</strong>
+                           <ul className="list-disc list-inside mt-1 space-y-1">
+                              <li>Enable "Maps JavaScript API"</li>
+                              <li>Enable "Places API"</li>
+                              <li>Enable "Geocoding API"</li>
+                           </ul>
+                        </div>
+                        <button 
+                          onClick={() => navigate('/admin/settings')} 
+                          className="mt-2 text-xs flex items-center gap-1 bg-white border border-gray-300 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
+                        >
+                          <Settings className="w-3 h-3" /> Configure in Settings
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               ) : (
