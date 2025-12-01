@@ -159,7 +159,9 @@ const App: React.FC = () => {
                   <>
                     <Route path="/user" element={<UserAttendance />} />
                     <Route path="/user/tasks" element={<TaskManagement role={UserRole.EMPLOYEE} />} />
-                    <Route path="/user/reception" element={<Reception />} />
+                    {/* Removed Reception Desk from Employee portal */}
+                    {/* <Route path="/user/reception" element={<Reception />} /> */}
+                    <Route path="/user/vehicle-enquiries" element={<VehicleEnquiries />} /> {/* Added Vehicle Enquiries */}
                     <Route path="/user/vendors" element={<VendorAttachment />} />
                     <Route path="/user/salary" element={<UserSalary />} />
                     <Route path="/user/documents" element={<Documents role={UserRole.EMPLOYEE} />} />

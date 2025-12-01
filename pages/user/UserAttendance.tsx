@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import AttendanceCalendar from '../../components/AttendanceCalendar';
 import { MOCK_EMPLOYEES, getEmployeeAttendance } from '../../constants';
@@ -465,6 +466,8 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
     
     // If no methods are enabled, we might default to manual or show error
     const noMethodsEnabled = !config.manualPunch && !config.qrScan;
+    const isGpsRequiredAndDenied = config.gpsGeofencing && (location.includes("Denied") || location.includes("Fetching"));
+
 
     return (
       <div className="space-y-6 max-w-7xl mx-auto">
@@ -526,7 +529,7 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
                {/* Dynamic Punch Buttons based on Restrictions */}
                <div className="space-y-3 w-full flex flex-col items-center">
                    {isCheckedIn ? (
-                       // If checked in, showing Check Out button (usually standard)
+                       // Check Out button
                        <button
                           onClick={handleManualPunch}
                           className="w-40 h-40 rounded-full flex flex-col items-center justify-center transition-all duration-300 shadow-xl border-4 bg-red-50 border-red-100 text-red-600 hover:bg-red-100"
@@ -537,17 +540,19 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
                    ) : (
                        // Check In Options
                        <>
-                           {config.manualPunch && (
+                           {config.manualPunch && !config.qrScan && ( // Only Manual Punch allowed
                                <button
                                   onClick={handleManualPunch}
-                                  className="w-40 h-40 rounded-full flex flex-col items-center justify-center transition-all duration-300 shadow-xl border-4 bg-emerald-50 border-emerald-100 text-emerald-600 hover:bg-emerald-100"
+                                  disabled={isGpsRequiredAndDenied}
+                                  className={`relative w-40 h-40 rounded-full flex flex-col items-center justify-center transition-all duration-300 shadow-xl border-4 bg-emerald-50 border-emerald-100 text-emerald-600 hover:bg-emerald-100 ${isGpsRequiredAndDenied ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 >
                                   <Fingerprint className="w-12 h-12 mb-2 text-emerald-500" />
                                   <span className="font-bold text-lg">Check In</span>
+                                  {isGpsRequiredAndDenied && <span className="absolute bottom-1 text-[7px] font-bold uppercase tracking-wider text-red-600 bg-red-50 px-1 rounded">GPS Required</span>}
                                 </button>
                            )}
 
-                           {config.qrScan && !config.manualPunch && (
+                           {config.qrScan && !config.manualPunch && ( // Only QR Scan allowed
                                 <button
                                   onClick={handleQrScan}
                                   className="w-40 h-40 rounded-full flex flex-col items-center justify-center transition-all duration-300 shadow-xl border-4 bg-blue-50 border-blue-100 text-blue-600 hover:bg-blue-100"
@@ -557,13 +562,24 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
                                 </button>
                            )}
 
-                           {config.qrScan && config.manualPunch && (
-                               <button
-                                  onClick={handleQrScan}
-                                  className="w-full py-3 border-2 border-dashed border-blue-200 rounded-xl text-blue-600 font-medium hover:bg-blue-50 transition-colors flex items-center justify-center gap-2"
-                                >
-                                  <ScanLine className="w-5 h-5" /> Scan Office QR
-                                </button>
+                           {config.manualPunch && config.qrScan && ( // Both Manual Punch and QR Scan allowed
+                               <>
+                                   <button
+                                      onClick={handleManualPunch}
+                                      disabled={isGpsRequiredAndDenied}
+                                      className={`relative w-40 h-40 rounded-full flex flex-col items-center justify-center transition-all duration-300 shadow-xl border-4 bg-emerald-50 border-emerald-100 text-emerald-600 hover:bg-emerald-100 ${isGpsRequiredAndDenied ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    >
+                                      <Fingerprint className="w-12 h-12 mb-2 text-emerald-500" />
+                                      <span className="font-bold text-lg">Check In</span>
+                                      {isGpsRequiredAndDenied && <span className="absolute bottom-1 text-[7px] font-bold uppercase tracking-wider text-red-600 bg-red-50 px-1 rounded">GPS Required</span>}
+                                    </button>
+                                   <button
+                                      onClick={handleQrScan}
+                                      className="w-full py-3 border-2 border-dashed border-blue-200 rounded-xl text-blue-600 font-medium hover:bg-blue-50 transition-colors flex items-center justify-center gap-2"
+                                    >
+                                      <ScanLine className="w-5 h-5" /> Use QR Code
+                                    </button>
+                               </>
                            )}
 
                            {noMethodsEnabled && (
