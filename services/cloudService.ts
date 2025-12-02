@@ -51,7 +51,8 @@ const NAMESPACED_KEYS = [
   'office_expenses',
   'tasks_data',
   'sub_admins', // Office staff per franchise
-  'app_settings' // Per-franchise settings override
+  'app_settings', // Per-franchise settings override
+  'trips_data' // Added trips_data here
 ];
 
 // Helper to initialize DB on the fly

@@ -1,11 +1,7 @@
 
-
-
-
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, MapPin, Calendar, DollarSign, Briefcase, Menu, X, LogOut, UserCircle, Building, Settings, Target, CreditCard, ClipboardList, ReceiptIndianRupee, Navigation, Car, Building2, PhoneIncoming, GripVertical, Edit2, Check, FileText, Layers, PhoneCall, Bus, Bell, Sun, Moon, Monitor, Mail, UserCog, CarFront, BellRing, BarChart3 } from 'lucide-react';
+import { LayoutDashboard, Users, MapPin, Calendar, DollarSign, Briefcase, Menu, X, LogOut, UserCircle, Building, Settings, Target, CreditCard, ClipboardList, ReceiptIndianRupee, Navigation, Car, Building2, PhoneIncoming, GripVertical, Edit2, Check, FileText, Layers, PhoneCall, Bus, Bell, Sun, Moon, Monitor, Mail, UserCog, CarFront, BellRing, BarChart3, Map } from 'lucide-react';
 import { UserRole } from '../types';
 import { useBranding } from '../context/BrandingContext';
 import { useTheme } from '../context/ThemeContext';
@@ -21,10 +17,11 @@ interface LayoutProps {
 // Define the Master List of all possible Admin/Corporate links with unique IDs
 const MASTER_ADMIN_LINKS = [
   { id: 'dashboard', path: '/admin', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'reports', path: '/admin/reports', label: 'Reports', icon: BarChart3 }, // Added Reports
+  { id: 'reports', path: '/admin/reports', label: 'Reports', icon: BarChart3 },
   { id: 'marketing', path: '/admin/marketing', label: 'Email Marketing', icon: Mail },
   { id: 'reception', path: '/admin/reception', label: 'Reception Desk', icon: PhoneCall },
   { id: 'vehicle-enquiries', path: '/admin/vehicle-enquiries', label: 'Vehicle Enquiries', icon: Car },
+  { id: 'trips', path: '/admin/trips', label: 'Trip Booking', icon: Map },
   { id: 'tracking', path: '/admin/tracking', label: 'Live Tracking', icon: Navigation },
   { id: 'leads', path: '/admin/leads', label: 'Franchisee Leads', icon: Layers },
   { id: 'tasks', path: '/admin/tasks', label: 'Tasks', icon: ClipboardList },
@@ -36,7 +33,6 @@ const MASTER_ADMIN_LINKS = [
   { id: 'vendors', path: '/admin/vendors', label: 'Vendor Attachment', icon: CarFront },
   { id: 'payroll', path: '/admin/payroll', label: 'Payroll', icon: DollarSign },
   { id: 'expenses', path: '/admin/expenses', label: 'Office Expenses', icon: ReceiptIndianRupee },
-  { id: 'subscription', path: '/admin/subscription', label: 'Subscription', icon: CreditCard },
   { id: 'corporate', path: '/admin/corporate', label: 'Corporate', icon: Building2 },
   { id: 'settings', path: '/admin/settings', label: 'Settings', icon: Settings },
 ];
@@ -226,16 +222,13 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
     // 1. "Corporate" tab is ONLY for Super Admin
     if (link.id === 'corporate' && role !== UserRole.ADMIN) return false;
     
-    // 2. "Subscription" is hidden for Corporate users
-    if (link.id === 'subscription' && role === UserRole.CORPORATE) return false;
-
-    // 3. "Franchisee Leads" is hidden for Corporate users
+    // 2. "Franchisee Leads" is hidden for Corporate users
     if (link.id === 'leads' && role === UserRole.CORPORATE) return false;
 
-    // 4. "Employee Setting" hidden for Corporate users
+    // 3. "Employee Setting" hidden for Corporate users
     if (link.id === 'employee-settings' && role === UserRole.CORPORATE) return false;
 
-    // 5. "Email Marketing" is hidden for Corporate users
+    // 4. "Email Marketing" is hidden for Corporate users
     if (link.id === 'marketing' && role === UserRole.CORPORATE) return false;
 
     return true;
@@ -440,68 +433,6 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
                 </div>
               )}
             </div>
-
-            {/* Notification Bell (Removed: Notification bell UI) */}
-            {/* <div className="relative" ref={notificationRef}>
-              <button 
-                onClick={() => {
-                    setNotificationsOpen(!notificationsOpen);
-                    if (unreadCount > 0 && !notificationsOpen) {
-                        playAlarmSound();
-                    }
-                }}
-                className="p-2 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 rounded-full transition-colors relative"
-                title="Notifications"
-              >
-                <Bell className="w-5 h-5" />
-                {unreadCount > 0 && (
-                  <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white dark:ring-gray-900"></span>
-                )}
-              </button> */}
-
-              {/* Notification Dropdown (Removed) */}
-              {/* {notificationsOpen && (
-                <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-gray-900 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-                  <div className="px-4 py-2 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
-                    <h3 className="font-bold text-sm text-gray-800 dark:text-gray-100">Notifications</h3>
-                    {unreadCount > 0 && (
-                      <span 
-                        className="text-xs text-emerald-600 font-medium cursor-pointer hover:underline" 
-                        onClick={handleMarkAllRead}
-                      >
-                        Mark all read
-                      </span>
-                    )}
-                  </div>
-                  <div className="max-h-[300px] overflow-y-auto">
-                    {notifications.length > 0 ? (
-                      notifications.map(n => (
-                        <div 
-                            key={n.id} 
-                            onClick={() => handleNotificationClick(n.id, n.link)}
-                            className={`px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border-b border-gray-50 dark:border-gray-800 last:border-0 cursor-pointer ${n.read ? '' : 'bg-blue-50/30 dark:bg-blue-900/10'}`}
-                        >
-                          <div className="flex justify-between items-start mb-1">
-                            <p className={`text-sm font-medium ${n.read ? 'text-gray-600 dark:text-gray-400' : 'text-gray-900 dark:text-white'}`}>
-                                {n.type === 'login' && <span className="mr-1"><BellRing className="w-4 h-4 inline text-emerald-500"/></span>}
-                                {n.type === 'logout' && <span className="mr-1"><LogOut className="w-4 h-4 inline text-red-500"/></span>}
-                                {n.title}
-                            </p>
-                            <span className="text-[10px] text-gray-400">{new Date(n.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                          </div>
-                          <p className="text-xs text-gray-500 dark:text-gray-500 line-clamp-2">{n.message}</p>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="px-4 py-8 text-center text-gray-400 text-sm">No notifications</div>
-                    )}
-                  </div>
-                  <div className="px-4 py-2 border-t border-gray-100 dark:border-gray-800 text-center bg-gray-50/50 dark:bg-gray-800/50">
-                    <button className="text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">View All Activity</button>
-                  </div>
-                </div>
-              )}
-            </div> */}
 
             <div className="h-8 w-[1px] bg-gray-200 dark:bg-gray-700 hidden sm:block"></div>
 

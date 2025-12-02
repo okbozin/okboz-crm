@@ -1,6 +1,4 @@
 
-
-
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
@@ -12,7 +10,6 @@ import StaffList from './pages/admin/StaffList';
 import Payroll from './pages/admin/Payroll';
 import Settings from './pages/admin/Settings';
 import EmployeeSettings from './pages/admin/EmployeeSettings'; 
-import Subscription from './pages/admin/Subscription';
 import Expenses from './pages/admin/Expenses';
 import LiveTracking from './pages/admin/LiveTracking';
 import VendorAttachment from './pages/admin/VendorAttachment';
@@ -20,8 +17,8 @@ import Corporate from './pages/admin/Corporate';
 import Documents from './pages/Documents';
 import Leads from './pages/admin/Leads';
 import Reception from './pages/admin/Reception';
-import Reports from './pages/admin/Reports'; // Import Reports
-// Changed import of `VehicleEnquiries` from a default import to a named import
+import Reports from './pages/admin/Reports'; 
+import TripBooking from './pages/admin/TripBooking'; // Added TripBooking import
 import { VehicleEnquiries } from './pages/admin/VehicleEnquiries'; 
 import UserAttendance from './pages/user/UserAttendance';
 import UserSalary from './pages/user/UserSalary';
@@ -33,15 +30,12 @@ import EmailMarketing from './pages/admin/EmailMarketing';
 import { UserRole } from './types';
 import { BrandingProvider } from './context/BrandingContext';
 import { ThemeProvider } from './context/ThemeContext';
-// import { NotificationProvider } from './context/NotificationContext'; // Removed: Import NotificationProvider
-// import { setupAutoSync, hydrateFromCloud } from './services/cloudService'; // Removed: Cloud service imports
-import { Loader2, Cloud } from 'lucide-react'; // Still used for a generic loader if needed
+import { Loader2, Cloud } from 'lucide-react'; 
 
 const App: React.FC = () => {
   // Initialize state from localStorage
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [userRole, setUserRole] = useState<UserRole>(UserRole.ADMIN);
-  // Removed: const [isCloudInitialized, setIsCloudInitialized] = useState(false);
 
   // Initialize Auth (simplified to local storage check only)
   useEffect(() => {
@@ -52,8 +46,6 @@ const App: React.FC = () => {
       setIsAuthenticated(true);
       setUserRole(savedRole as UserRole);
     }
-
-    // Removed: setIsCloudInitialized(true); // App is always "initialized" if no cloud syncing
   }, []);
 
   // Handle Login
@@ -79,24 +71,6 @@ const App: React.FC = () => {
   Keep answers concise, professional, and helpful.`;
   const hrAssistantInitialMessage = 'Hi! I am your OK BOZ HR Assistant. Ask me about leave policies, labor laws, or how to manage your staff.';
 
-  // Removed: Loading Screen (Hydration Phase)
-  // if (!isCloudInitialized) {
-  //   return (
-  //     <div className="h-screen w-full flex flex-col items-center justify-center bg-gray-50 text-gray-600 gap-4">
-  //       <div className="relative">
-  //          <Cloud className="w-16 h-16 text-emerald-500 animate-bounce" />
-  //          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-  //             <Loader2 className="w-8 h-8 text-white animate-spin" />
-  //          </div>
-  //       </div>
-  //       <div className="text-center">
-  //          <h2 className="text-xl font-bold text-gray-800">OK BOZ Cloud</h2>
-  //          <p className="text-sm">Syncing your total website data...</p>
-  //       </div>
-  //     </div>
-  //   );
-  // }
-
   return (
     <ThemeProvider>
       <BrandingProvider>
@@ -108,7 +82,6 @@ const App: React.FC = () => {
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           ) : (
-            // Removed: <NotificationProvider>
               <Layout role={userRole} onLogout={handleLogout}>
                 <Routes>
                   {/* Redirect root to appropriate home */}
@@ -118,7 +91,7 @@ const App: React.FC = () => {
                   {(userRole === UserRole.ADMIN || userRole === UserRole.CORPORATE) && (
                     <>
                       <Route path="/admin" element={<Dashboard />} />
-                      <Route path="/admin/reports" element={<Reports />} /> {/* Added Reports Route */}
+                      <Route path="/admin/reports" element={<Reports />} />
                       {/* Email Marketing - Only Super Admin */}
                       <Route 
                         path="/admin/marketing" 
@@ -126,6 +99,7 @@ const App: React.FC = () => {
                       />
                       <Route path="/admin/reception" element={<Reception />} />
                       <Route path="/admin/vehicle-enquiries" element={<VehicleEnquiries />} />
+                      <Route path="/admin/trips" element={<TripBooking />} /> {/* Added TripBooking route */}
                       <Route path="/admin/tracking" element={<LiveTracking />} />
                       <Route path="/admin/leads" element={<Leads />} />
                       <Route path="/admin/tasks" element={<TaskManagement role={userRole} />} />
@@ -137,7 +111,6 @@ const App: React.FC = () => {
                       <Route path="/admin/vendors" element={<VendorAttachment />} />
                       <Route path="/admin/payroll" element={<Payroll />} />
                       <Route path="/admin/expenses" element={<Expenses />} />
-                      <Route path="/admin/subscription" element={<Subscription />} />
                       <Route path="/admin/settings" element={<Settings />} />
                       {/* Corporate Management - Only Super Admin */}
                       {userRole === UserRole.ADMIN && (
@@ -152,9 +125,7 @@ const App: React.FC = () => {
                     <>
                       <Route path="/user" element={<UserAttendance />} />
                       <Route path="/user/tasks" element={<TaskManagement role={UserRole.EMPLOYEE} />} />
-                      {/* Removed Reception Desk from Employee portal */}
-                      {/* <Route path="/user/reception" element={<Reception />} */}
-                      <Route path="/user/vehicle-enquiries" element={<VehicleEnquiries />} /> {/* Added Vehicle Enquiries */}
+                      <Route path="/user/vehicle-enquiries" element={<VehicleEnquiries />} /> 
                       <Route path="/user/vendors" element={<VendorAttachment />} />
                       <Route path="/user/salary" element={<UserSalary />} />
                       <Route path="/user/documents" element={<Documents role={UserRole.EMPLOYEE} />} />
@@ -168,7 +139,6 @@ const App: React.FC = () => {
                   <Route path="*" element={<Navigate to={homePath} replace />} />
                 </Routes>
               </Layout>
-            // Removed: </NotificationProvider>
           )}
           
           {/* AI Assistant is available for both roles when authenticated */}
