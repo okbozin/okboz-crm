@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  Plus, Search, Filter, Download, X, Save, Calculator, Calendar, 
-  User, Car, MapPin, DollarSign, FileText, Trash2, Edit2, CheckCircle,
-  PieChart as PieChartIcon, TrendingUp, Building2, RefreshCcw
+  Plus, Search, Download, X, Save,
+  User, Car, MapPin, DollarSign, Trash2, Edit2, 
+  PieChart as PieChartIcon, TrendingUp, Building2, RefreshCcw, Calculator
 } from 'lucide-react';
 import { 
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, 
@@ -32,30 +32,25 @@ interface Trip {
   cancellationCharge: number;
   totalPrice: number;
   remarks?: string;
-  ownerId?: string; // To track who owns this trip (admin vs corporate email)
-  ownerName?: string; // Display name for the owner
+  ownerId?: string;
+  ownerName?: string;
 }
 
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'];
 
 const TripBooking: React.FC = () => {
-  // Session Context
   const sessionId = localStorage.getItem('app_session_id') || 'admin';
   const isSuperAdmin = sessionId === 'admin';
   
-  // State
   const [trips, setTrips] = useState<Trip[]>(() => {
     if (isSuperAdmin) {
-        // --- SUPER ADMIN AGGREGATION ---
         let allTrips: Trip[] = [];
         
-        // 1. Admin Data (Head Office)
         try {
             const adminData = JSON.parse(localStorage.getItem('trips_data') || '[]');
             allTrips = [...allTrips, ...adminData.map((t: any) => ({...t, ownerId: 'admin', ownerName: 'Head Office'}))];
         } catch(e) {}
 
-        // 2. Corporate Data
         try {
             const corporates = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
             corporates.forEach((c: any) => {
@@ -70,8 +65,6 @@ const TripBooking: React.FC = () => {
         
         return allTrips;
     } else {
-        // --- CORPORATE / USER VIEW ---
-        // Check only belong to the corporate
         const key = `trips_data_${sessionId}`;
         try {
             const saved = localStorage.getItem(key);
@@ -85,14 +78,12 @@ const TripBooking: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   
-  // --- Filter States ---
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [branchFilter, setBranchFilter] = useState('All'); 
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
 
-  // Form State
   const initialFormState = {
     branch: '',
     tripId: '',
@@ -117,7 +108,6 @@ const TripBooking: React.FC = () => {
 
   const [formData, setFormData] = useState(initialFormState);
 
-  // Load Branches
   useEffect(() => {
     try {
       const branchKey = isSuperAdmin ? 'branches_data' : `branches_data_${sessionId}`;
@@ -125,7 +115,6 @@ const TripBooking: React.FC = () => {
       let allBranches: any[] = [];
       
       if (isSuperAdmin) {
-          // Aggregate branches for dropdown if Super Admin
           const adminBranches = JSON.parse(localStorage.getItem('branches_data') || '[]');
           allBranches = [...adminBranches];
           const corporates = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
@@ -138,46 +127,33 @@ const TripBooking: React.FC = () => {
           if (saved) allBranches = JSON.parse(saved);
       }
       
-      // Use Set to ensure unique branch names
       const uniqueBranchNames = Array.from(new Set(allBranches.map((b: any) => b.name).filter(Boolean)));
       setBranches(uniqueBranchNames);
     } catch (e) {}
   }, [isSuperAdmin, sessionId]);
 
-  // Persist Trips
   useEffect(() => {
     if (isSuperAdmin) {
-        // SUPER ADMIN SAVE LOGIC
-        // We only save back the 'Head Office' trips to 'trips_data' to prevent overwriting corporate data with a mixed list
         const headOfficeTrips = trips.filter(t => t.ownerId === 'admin');
-        // Strip metadata
         const cleanTrips = headOfficeTrips.map(({ownerId, ownerName, ...rest}) => rest);
         localStorage.setItem('trips_data', JSON.stringify(cleanTrips));
     } else {
-        // CORPORATE SAVE LOGIC
         const key = `trips_data_${sessionId}`;
-        // Strip metadata
         const cleanTrips = trips.map(({ownerId, ownerName, ...rest}) => rest);
         localStorage.setItem(key, JSON.stringify(cleanTrips));
     }
   }, [trips, isSuperAdmin, sessionId]);
 
-  // --- Filtered Data Logic ---
   const filteredTrips = useMemo(() => {
     return trips.filter(t => {
-      // 1. Text Search
       const matchesSearch = 
         t.tripId.toLowerCase().includes(searchTerm.toLowerCase()) ||
         t.userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         t.userMobile.includes(searchTerm);
       
-      // 2. Status Filter
       const matchesStatus = statusFilter === 'All' || t.bookingStatus === statusFilter;
-
-      // 3. Branch Filter
       const matchesBranch = branchFilter === 'All' || (t.branch && t.branch === branchFilter);
       
-      // 4. Date Range Filter
       const tripDate = new Date(t.date);
       const start = fromDate ? new Date(fromDate) : null;
       const end = toDate ? new Date(toDate) : null;
@@ -195,7 +171,6 @@ const TripBooking: React.FC = () => {
     });
   }, [trips, searchTerm, statusFilter, branchFilter, fromDate, toDate]);
 
-  // --- Chart Data (Derived from Filtered Trips) ---
   const chartData = useMemo(() => {
     const statusCounts: Record<string, number> = {};
     const revenueMap: Record<string, number> = {};
@@ -219,7 +194,6 @@ const TripBooking: React.FC = () => {
     return { pieData, barData };
   }, [filteredTrips]);
 
-  // Calculate Total Price Live
   const totalPrice = useMemo(() => {
     const price = Number(formData.tripPrice) || 0;
     const comm = Number(formData.adminCommission) || 0;
@@ -228,7 +202,6 @@ const TripBooking: React.FC = () => {
     const cancel = Number(formData.cancellationCharge) || 0;
     const discount = Number(formData.discount) || 0;
 
-    // Summing everything up including Commission
     return price + comm + tax + waiting + cancel - discount; 
   }, [formData]);
 
@@ -331,7 +304,7 @@ const TripBooking: React.FC = () => {
         </button>
       </div>
 
-      {/* Stats Row - Based on Total Data */}
+      {/* Stats Row */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
            <p className="text-xs font-bold text-gray-500 uppercase">Total Trips</p>
@@ -351,7 +324,7 @@ const TripBooking: React.FC = () => {
         </div>
       </div>
 
-      {/* Analytics Charts - Based on Filtered Data */}
+      {/* Analytics Charts */}
       {filteredTrips.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-4">
             <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">

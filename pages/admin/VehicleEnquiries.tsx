@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { 
-  Settings, Plus, Loader2, ArrowRight, ArrowRightLeft, Navigation, 
-  MessageCircle, Copy, Mail, Car, MapPin, User, Phone, Edit2,
-  CheckCircle, Building2, Calendar as CalendarIcon, X, Save
+  Settings, Loader2, ArrowRight, ArrowRightLeft, 
+  MessageCircle, Copy, Mail, Car, User, Edit2,
+  CheckCircle, Building2, Save, X
 } from 'lucide-react';
 import Autocomplete from '../../components/Autocomplete';
 
@@ -460,10 +460,10 @@ Book now with OK BOZ! 🚕`;
 
               <div className="flex gap-4 pt-2">
                   <button className="flex-1 py-3 border border-blue-200 bg-blue-50 text-blue-600 font-bold rounded-xl hover:bg-blue-100 transition-colors flex items-center justify-center gap-2">
-                      <CalendarIcon className="w-4 h-4" /> Schedule
+                      <ArrowRight className="w-4 h-4" /> Schedule
                   </button>
                   <button className="flex-1 py-3 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 shadow-md transition-colors flex items-center justify-center gap-2">
-                      <CalendarIcon className="w-4 h-4" /> Book Now
+                      <ArrowRight className="w-4 h-4" /> Book Now
                   </button>
               </div>
               <div className="flex gap-4">

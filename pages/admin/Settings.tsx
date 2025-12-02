@@ -1,17 +1,14 @@
+
 import React, { useState, useEffect } from 'react';
 import { 
-  Save, Bell, Building2, Globe, Shield, Plus, Trash2, MapPin, 
-  ExternalLink, CheckCircle, Palette, RefreshCcw, Database as DatabaseIcon, 
-  Download, Upload, Users, X as XIcon, Edit2, Lock, Eye, 
-  EyeOff, Mail, Server, Cloud, UploadCloud, LogOut, AlertTriangle, 
-  Zap, RefreshCw, HardDrive, HelpCircle, Settings as SettingsIcon, 
-  Target, Layers, FileCode, ClipboardList, Phone, Calendar, 
-  DollarSign, MessageCircle, Receipt, Car, CheckSquare 
+  Bell, Building2, Globe, Shield, MapPin, 
+  Palette, Database as DatabaseIcon, 
+  UploadCloud, LogOut, Zap, RefreshCw, HardDrive, HelpCircle, Settings as SettingsIcon, 
+  Target, Layers, FileCode, Car, Users, X as XIcon, Lock, Eye, EyeOff, Mail, Cloud, Plus 
 } from 'lucide-react';
 import { useBranding } from '../../context/BrandingContext';
 import { syncToCloud, restoreFromCloud, FirebaseConfig, getCloudDatabaseStats, DEFAULT_FIREBASE_CONFIG } from '../../services/cloudService';
 
-// Interface for Sub Admin / Office Staff
 interface Permission {
   view: boolean;
   add: boolean;
@@ -53,7 +50,7 @@ const Settings: React.FC = () => {
     { id: 'subadmin', label: 'Sub Admins', icon: Users, visible: true }, 
     { id: 'notifications', label: 'Notifications', icon: Bell, visible: true },
     { id: 'security', label: 'Security', icon: Shield, visible: true },
-    { id: 'dev_docs', label: 'Developer Docs', icon: FileCode, visible: isSuperAdmin },
+    { id: 'dev_docs', label: 'Developer Docs', icon: FileCode, visible: isSuperAdmin }
   ];
 
   const visibleTabs = allTabs.filter(tab => tab.visible);
@@ -89,7 +86,7 @@ const Settings: React.FC = () => {
   const [formData, setFormData] = useState({
     companyName: 'OK BOZ Pvt Ltd', website: 'www.okboz.com', email: 'admin@okboz.com',
     phone: '+91 98765 43210', address: '123, Tech Park, Cyber City, Gurgaon, India',
-    emailAlerts: true, smsAlerts: false, dailyReport: true, leaveUpdates: true,
+    emailAlerts: true, smsAlerts: false, dailyReport: true, leaveUpdates: true
   });
 
   // Sub Admin State
@@ -264,7 +261,7 @@ const Settings: React.FC = () => {
     { label: 'Vehicle Vendors', key: 'vendor_data', icon: Layers },
     { label: 'Office Expenses', key: 'office_expenses', icon: HardDrive },
     { label: 'Branches', key: 'branches_data', icon: MapPin },
-    { label: 'Trips', key: 'trips_data', icon: Car },
+    { label: 'Trips', key: 'trips_data', icon: Car }
   ];
 
   return (
@@ -278,15 +275,18 @@ const Settings: React.FC = () => {
         <div className="w-full md:w-64 flex-shrink-0">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
             <nav className="flex flex-col p-2 space-y-1">
-              {visibleTabs.map(tab => (
-                 <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-colors ${activeTab === tab.id ? 'bg-emerald-50 text-emerald-600' : 'text-gray-600 hover:bg-gray-50'}`}
-                  >
-                    <tab.icon className="w-4 h-4" /> {tab.label}
-                  </button>
-              ))}
+              {visibleTabs.map((tab) => {
+                 const TabIcon = tab.icon;
+                 return (
+                   <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-colors ${activeTab === tab.id ? 'bg-emerald-50 text-emerald-600' : 'text-gray-600 hover:bg-gray-50'}`}
+                    >
+                      <TabIcon className="w-4 h-4" /> {tab.label}
+                    </button>
+                 );
+              })}
             </nav>
           </div>
         </div>
@@ -337,7 +337,7 @@ const Settings: React.FC = () => {
                                 <li>Scroll down to the <strong>"Your apps"</strong> section.</li>
                                 <li>If you haven't created a web app yet, click the <strong>&lt;/&gt;</strong> icon.</li>
                                 <li>Under "SDK setup and configuration", ensure <strong>Config</strong> is selected.</li>
-                                <li>Copy the entire `const firebaseConfig = { ... }` block.</li>
+                                <li>Copy the entire {'`const firebaseConfig = { ... }`'} block.</li>
                                 <li>Paste it into the box below and click <strong>Save Config</strong>.</li>
                             </ol>
                         </div>
@@ -372,17 +372,18 @@ const Settings: React.FC = () => {
                             {dataCollections.map((item) => {
                                 const local = getLocalCount(item.key);
                                 const cloud = cloudStats?.[item.key]?.count || '-';
+                                const Icon = item.icon;
                                 return (
                                     <div key={item.key} className="bg-white p-4 rounded-xl border border-gray-200">
                                         <div className="flex justify-between items-start mb-3">
-                                            <div className="p-2 bg-gray-50 rounded-lg text-gray-600"><item.icon className="w-5 h-5" /></div>
+                                            <div className="p-2 bg-gray-50 rounded-lg text-gray-600"><Icon className="w-5 h-5" /></div>
                                             <span className="text-[10px] font-bold bg-green-50 text-green-700 px-2 py-0.5 rounded-full">Synced</span>
                                         </div>
                                         <h5 className="font-bold text-gray-800 text-sm mb-2">{item.label}</h5>
                                         <div className="flex justify-between text-xs text-gray-500 bg-gray-50 p-2 rounded-lg">
                                             <span>Local: <strong>{local}</strong></span>
                                             <span className="text-gray-300">|</span>
-                                            <span>Cloud: <strong className="text-blue-600">{cloud}</strong></span>
+                                            <span>Cloud: <strong className="text-blue-600">{String(cloud)}</strong></span>
                                         </div>
                                     </div>
                                 )

@@ -5,8 +5,8 @@ import {
   PieChart, Pie, Cell, AreaChart, Area, LineChart, Line
 } from 'recharts';
 import { 
-  Download, Calendar, TrendingUp, Users, DollarSign, 
-  Briefcase, ArrowUpRight, Car, MapPin, Activity, CheckSquare
+  Download, TrendingUp, DollarSign, 
+  Briefcase, ArrowUpRight, Car, MapPin, Activity, CheckSquare, Users
 } from 'lucide-react';
 import { MOCK_EMPLOYEES, getEmployeeAttendance } from '../../constants';
 import { AttendanceStatus } from '../../types';
@@ -174,9 +174,7 @@ const Reports: React.FC = () => {
       let completedTrips = 0;
 
       trips.forEach(t => {
-          // Vehicle Type
           vehicleCounts[t.transportType] = (vehicleCounts[t.transportType] || 0) + 1;
-          // Status
           statusCounts[t.bookingStatus] = (statusCounts[t.bookingStatus] || 0) + 1;
           
           if (t.bookingStatus === 'Completed') {
