@@ -2,11 +2,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
-  PieChart, Pie, Cell, LineChart, Line, AreaChart, Area
+  PieChart, Pie, Cell, AreaChart, Area, LineChart, Line
 } from 'recharts';
 import { 
-  Download, Filter, Calendar, TrendingUp, Users, DollarSign, 
-  PieChart as PieIcon, FileText, ArrowUpRight, ArrowDownRight, Briefcase 
+  Download, Calendar, TrendingUp, Users, DollarSign, 
+  Briefcase, ArrowUpRight, Car, MapPin, Activity, CheckSquare
 } from 'lucide-react';
 import { MOCK_EMPLOYEES, getEmployeeAttendance } from '../../constants';
 import { AttendanceStatus } from '../../types';
@@ -14,43 +14,55 @@ import { AttendanceStatus } from '../../types';
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#6366f1'];
 
 const Reports: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'Financial' | 'Attendance' | 'CRM'>('Financial');
-  const [dateRange, setDateRange] = useState('Last 6 Months');
+  const [activeTab, setActiveTab] = useState<'Financial' | 'Attendance' | 'CRM' | 'Transport'>('Financial');
   
   // Data State
   const [expenses, setExpenses] = useState<any[]>([]);
   const [payroll, setPayroll] = useState<any[]>([]);
   const [leads, setLeads] = useState<any[]>([]);
   const [staff, setStaff] = useState<any[]>([]);
+  const [trips, setTrips] = useState<any[]>([]);
+
+  const isSuperAdmin = (localStorage.getItem('app_session_id') || 'admin') === 'admin';
 
   // Load Data
   useEffect(() => {
     try {
-      // Load Expenses
+      const corporates = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
+
+      // 1. Load Expenses
       const expenseData = JSON.parse(localStorage.getItem('office_expenses') || '[]');
-      const corpExpenses = JSON.parse(localStorage.getItem('corporate_accounts') || '[]').flatMap((c: any) => {
+      const corpExpenses = corporates.flatMap((c: any) => {
          const d = localStorage.getItem(`office_expenses_${c.email}`);
          return d ? JSON.parse(d) : [];
       });
       setExpenses([...expenseData, ...corpExpenses]);
 
-      // Load Payroll History
+      // 2. Load Payroll History
       const payrollData = JSON.parse(localStorage.getItem('payroll_history') || '[]');
       setPayroll(payrollData);
 
-      // Load Leads
+      // 3. Load Leads
       const leadsData = JSON.parse(localStorage.getItem('leads_data') || '[]');
       setLeads(leadsData);
 
-      // Load Staff
+      // 4. Load Staff
       const staffData = JSON.parse(localStorage.getItem('staff_data') || '[]');
-      // Add corporate staff
-      const corpStaff = JSON.parse(localStorage.getItem('corporate_accounts') || '[]').flatMap((c: any) => {
+      const corpStaff = corporates.flatMap((c: any) => {
          const d = localStorage.getItem(`staff_data_${c.email}`);
          return d ? JSON.parse(d) : [];
       });
-      // Fallback mock if empty
       setStaff(staffData.length + corpStaff.length > 0 ? [...staffData, ...corpStaff] : MOCK_EMPLOYEES);
+
+      // 5. Load Trips
+      let allTrips: any[] = [];
+      const adminTrips = JSON.parse(localStorage.getItem('trips_data') || '[]');
+      allTrips = [...adminTrips];
+      corporates.forEach((c: any) => {
+          const cData = localStorage.getItem(`trips_data_${c.email}`);
+          if (cData) allTrips = [...allTrips, ...JSON.parse(cData)];
+      });
+      setTrips(allTrips);
 
     } catch (e) {
       console.error("Error loading report data", e);
@@ -59,7 +71,6 @@ const Reports: React.FC = () => {
 
   // --- Financial Stats ---
   const financialStats = useMemo(() => {
-    // Process last 6 months
     const stats = [];
     const today = new Date();
     
@@ -68,24 +79,31 @@ const Reports: React.FC = () => {
       const monthStr = d.toISOString().slice(0, 7); // YYYY-MM
       const label = d.toLocaleDateString('en-US', { month: 'short' });
 
-      // Calculate Income & Expense
+      // Income Sources
       const monthExpenses = expenses.filter(e => e.date && e.date.startsWith(monthStr));
-      const income = monthExpenses.filter(e => e.type === 'Income').reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
-      const expense = monthExpenses.filter(e => e.type === 'Expense').reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+      const otherIncome = monthExpenses.filter(e => e.type === 'Income').reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
       
-      // Calculate Payroll (Approx based on history date)
+      // Trip Revenue (Only Completed)
+      const tripRevenue = trips
+        .filter(t => t.date.startsWith(monthStr) && t.bookingStatus === 'Completed')
+        .reduce((sum, t) => sum + (Number(t.totalPrice) || 0), 0);
+
+      const totalIncome = otherIncome + tripRevenue;
+
+      // Expenses
+      const expense = monthExpenses.filter(e => e.type === 'Expense').reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
       const monthPayroll = payroll.filter(p => p.date && p.date.startsWith(monthStr)).reduce((sum, p) => sum + (p.totalAmount || 0), 0);
 
       stats.push({
         name: label,
-        Income: income,
+        Income: totalIncome,
         Expense: expense,
         Payroll: monthPayroll,
-        Profit: income - (expense + monthPayroll)
+        Profit: totalIncome - (expense + monthPayroll)
       });
     }
     return stats;
-  }, [expenses, payroll]);
+  }, [expenses, payroll, trips]);
 
   const expenseCategoryData = useMemo(() => {
     const categoryMap: Record<string, number> = {};
@@ -98,8 +116,6 @@ const Reports: React.FC = () => {
   // --- Attendance Stats ---
   const attendanceStats = useMemo(() => {
     if (staff.length === 0) return [];
-    
-    // Last 7 days
     const stats = [];
     const today = new Date();
     
@@ -114,9 +130,6 @@ const Reports: React.FC = () => {
         let late = 0;
 
         staff.forEach(emp => {
-            // Simulate/Fetch attendance
-            // In a real app with full history, we'd query the DB. 
-            // Here we use the helper logic or just randomize slightly for demo if data missing
             const record = getEmployeeAttendance(emp, d.getFullYear(), d.getMonth()).find(r => r.date === dateStr);
             if (record) {
                 if (record.status === AttendanceStatus.PRESENT || record.status === AttendanceStatus.HALF_DAY) {
@@ -127,7 +140,6 @@ const Reports: React.FC = () => {
                 }
             }
         });
-
         stats.push({ name: dayLabel, Present: present, Absent: absent, Late: late });
     }
     return stats;
@@ -151,9 +163,49 @@ const Reports: React.FC = () => {
       ];
 
       const sourceData = Object.keys(sourceCounts).map(k => ({ name: k, value: sourceCounts[k] }));
-
       return { funnelData, sourceData };
   }, [leads]);
+
+  // --- Transport Stats ---
+  const transportStats = useMemo(() => {
+      const vehicleCounts: Record<string, number> = {};
+      const statusCounts: Record<string, number> = {};
+      let totalRevenue = 0;
+      let completedTrips = 0;
+
+      trips.forEach(t => {
+          // Vehicle Type
+          vehicleCounts[t.transportType] = (vehicleCounts[t.transportType] || 0) + 1;
+          // Status
+          statusCounts[t.bookingStatus] = (statusCounts[t.bookingStatus] || 0) + 1;
+          
+          if (t.bookingStatus === 'Completed') {
+              totalRevenue += Number(t.totalPrice) || 0;
+              completedTrips++;
+          }
+      });
+
+      const vehicleData = Object.keys(vehicleCounts).map(k => ({ name: k, value: vehicleCounts[k] }));
+      const statusData = Object.keys(statusCounts).map(k => ({ name: k, value: statusCounts[k] }));
+
+      // Revenue Trend (Daily for last 7 days)
+      const revenueTrend = [];
+      const today = new Date();
+      for (let i = 6; i >= 0; i--) {
+          const d = new Date(today);
+          d.setDate(today.getDate() - i);
+          const dateStr = d.toISOString().split('T')[0];
+          const label = d.toLocaleDateString('en-US', { weekday: 'short' });
+          
+          const dailyRev = trips
+            .filter(t => t.date === dateStr && t.bookingStatus === 'Completed')
+            .reduce((sum, t) => sum + (Number(t.totalPrice) || 0), 0);
+            
+          revenueTrend.push({ name: label, value: dailyRev });
+      }
+
+      return { vehicleData, statusData, revenueTrend, totalRevenue, completedTrips };
+  }, [trips]);
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -164,7 +216,7 @@ const Reports: React.FC = () => {
           <p className="text-gray-500">Insights into your company performance</p>
         </div>
         <div className="flex items-center gap-3">
-            <div className="bg-white border border-gray-200 rounded-lg p-1 flex items-center gap-2">
+            <div className="bg-white border border-gray-200 rounded-lg p-1 flex items-center gap-2 overflow-x-auto">
                 <button 
                     onClick={() => setActiveTab('Financial')}
                     className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${activeTab === 'Financial' ? 'bg-emerald-50 text-emerald-600' : 'text-gray-600 hover:bg-gray-50'}`}
@@ -183,8 +235,14 @@ const Reports: React.FC = () => {
                 >
                     CRM
                 </button>
+                <button 
+                    onClick={() => setActiveTab('Transport')}
+                    className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${activeTab === 'Transport' ? 'bg-orange-50 text-orange-600' : 'text-gray-600 hover:bg-gray-50'}`}
+                >
+                    Transport
+                </button>
             </div>
-            <button className="bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 text-sm">
+            <button className="bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 text-sm whitespace-nowrap">
                 <Download className="w-4 h-4" /> Export
             </button>
         </div>
@@ -242,7 +300,7 @@ const Reports: React.FC = () => {
                   <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
                       <div className="flex justify-between items-center mb-6">
                           <h3 className="font-bold text-gray-800">Financial Performance</h3>
-                          <select className="text-xs border-gray-300 border rounded-lg p-1">
+                          <select className="text-xs border-gray-300 border rounded-lg p-1 outline-none">
                               <option>Last 6 Months</option>
                               <option>This Year</option>
                           </select>
@@ -432,6 +490,94 @@ const Reports: React.FC = () => {
                                       ))}
                                   </Pie>
                                   <Tooltip />
+                              </PieChart>
+                          </ResponsiveContainer>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* TRANSPORT REPORT (NEW) */}
+      {activeTab === 'Transport' && (
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              {/* Trip KPIs */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+                      <div className="flex justify-between items-start mb-2">
+                          <p className="text-xs font-bold text-gray-500 uppercase">Completed Trips</p>
+                          <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg"><CheckSquare className="w-4 h-4"/></div>
+                      </div>
+                      <h3 className="text-2xl font-bold text-gray-900">{transportStats.completedTrips}</h3>
+                  </div>
+                  <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+                      <div className="flex justify-between items-start mb-2">
+                          <p className="text-xs font-bold text-gray-500 uppercase">Total Revenue</p>
+                          <div className="p-2 bg-blue-50 text-blue-600 rounded-lg"><DollarSign className="w-4 h-4"/></div>
+                      </div>
+                      <h3 className="text-2xl font-bold text-gray-900">₹{transportStats.totalRevenue.toLocaleString()}</h3>
+                  </div>
+                  <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+                      <div className="flex justify-between items-start mb-2">
+                          <p className="text-xs font-bold text-gray-500 uppercase">Active Fleet</p>
+                          <div className="p-2 bg-orange-50 text-orange-600 rounded-lg"><Car className="w-4 h-4"/></div>
+                      </div>
+                      <h3 className="text-2xl font-bold text-gray-900">{transportStats.vehicleData.length}</h3>
+                  </div>
+                  <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+                      <div className="flex justify-between items-start mb-2">
+                          <p className="text-xs font-bold text-gray-500 uppercase">Top Route</p>
+                          <div className="p-2 bg-purple-50 text-purple-600 rounded-lg"><MapPin className="w-4 h-4"/></div>
+                      </div>
+                      <h3 className="text-lg font-bold text-gray-900 truncate">Local Trips</h3>
+                  </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Revenue Trend Line Chart */}
+                  <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                      <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2">
+                          <Activity className="w-5 h-5 text-emerald-500" /> Daily Revenue Trend
+                      </h3>
+                      <div className="h-64">
+                          <ResponsiveContainer width="100%" height="100%">
+                              <LineChart data={transportStats.revenueTrend}>
+                                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill:'#9ca3af', fontSize:12}} dy={10} />
+                                  <YAxis axisLine={false} tickLine={false} tick={{fill:'#9ca3af', fontSize:12}} tickFormatter={(val) => `₹${val/1000}k`} />
+                                  <Tooltip 
+                                      contentStyle={{borderRadius:'8px', border:'none', boxShadow:'0 4px 6px -1px rgba(0,0,0,0.1)'}}
+                                      formatter={(val: number) => `₹${val.toLocaleString()}`}
+                                  />
+                                  <Line type="monotone" dataKey="value" stroke="#10b981" strokeWidth={3} dot={{r: 4}} />
+                              </LineChart>
+                          </ResponsiveContainer>
+                      </div>
+                  </div>
+
+                  {/* Vehicle Distribution Pie */}
+                  <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                      <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2">
+                          <Car className="w-5 h-5 text-blue-500" /> Trip Distribution by Vehicle
+                      </h3>
+                      <div className="h-64">
+                          <ResponsiveContainer width="100%" height="100%">
+                              <PieChart>
+                                  <Pie
+                                      data={transportStats.vehicleData}
+                                      cx="50%"
+                                      cy="50%"
+                                      innerRadius={60}
+                                      outerRadius={80}
+                                      paddingAngle={5}
+                                      dataKey="value"
+                                  >
+                                      {transportStats.vehicleData.map((entry, index) => (
+                                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                      ))}
+                                  </Pie>
+                                  <Tooltip />
+                                  <Legend verticalAlign="bottom" height={36}/>
                               </PieChart>
                           </ResponsiveContainer>
                       </div>

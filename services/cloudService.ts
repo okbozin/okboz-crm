@@ -1,6 +1,6 @@
 
-import { initializeApp } from "firebase/app";
-import { getFirestore, doc, getDoc, setDoc, collection, getDocs, Firestore } from "firebase/firestore";
+import { initializeApp, getApps, getApp } from "firebase/app";
+import { getFirestore, doc, setDoc, collection, getDocs, Firestore } from "firebase/firestore";
 
 export interface FirebaseConfig {
   apiKey: string;
@@ -21,7 +21,6 @@ export const DEFAULT_FIREBASE_CONFIG: FirebaseConfig = {
 };
 
 // --- DATA MAPPING ---
-// Keys that are single global lists (mostly Super Admin specific or shared configuration)
 const GLOBAL_KEYS = [
   'corporate_accounts',
   'global_enquiries_data',
@@ -29,9 +28,9 @@ const GLOBAL_KEYS = [
   'reception_recent_transfers',
   'payroll_history',
   'leave_history',
-  'app_settings', // Global fallback settings
-  'transport_pricing_rules_v2', // Global fallback
-  'transport_rental_packages_v2', // Global fallback
+  'app_settings',
+  'transport_pricing_rules_v2',
+  'transport_rental_packages_v2',
   'company_departments',
   'company_roles',
   'company_shifts',
@@ -42,7 +41,6 @@ const GLOBAL_KEYS = [
   'app_theme'
 ];
 
-// Keys that exist for Admin AND are duplicated for each Corporate account (suffixed with _{email})
 const NAMESPACED_KEYS = [
   'staff_data',
   'branches_data',
@@ -50,21 +48,29 @@ const NAMESPACED_KEYS = [
   'vendor_data',
   'office_expenses',
   'tasks_data',
-  'sub_admins', // Office staff per franchise
-  'app_settings', // Per-franchise settings override
-  'trips_data' // Added trips_data here
+  'sub_admins',
+  'app_settings',
+  'trips_data'
 ];
 
-// Helper to initialize DB on the fly
+// Helper to initialize DB safely
 const getDb = (config: FirebaseConfig): Firestore => {
+  if (!config.apiKey) {
+    throw new Error("Firebase API Key is missing");
+  }
+
+  // Check if an app is already initialized to prevent duplicate app errors
+  if (getApps().length > 0) {
+    return getFirestore(getApp());
+  }
+
+  // Initialize new app
   try {
-    // We create a new app instance with a unique name to ensure config updates apply immediately without reload
-    const app = initializeApp(config, "OKBOZ_CLOUD_" + Date.now()); 
+    const app = initializeApp(config); 
     return getFirestore(app);
   } catch (e) {
-    // If standard init fails (e.g. default app exists), use default
-    const app = initializeApp(config);
-    return getFirestore(app);
+    console.error("Firebase Init Error:", e);
+    throw e;
   }
 };
 
@@ -74,7 +80,6 @@ export const syncToCloud = async (config: FirebaseConfig) => {
     const corporateAccountsStr = localStorage.getItem('corporate_accounts');
     const corporates = corporateAccountsStr ? JSON.parse(corporateAccountsStr) : [];
 
-    // 1. Sync Global Keys (and Admin's base versions of Namespaced keys)
     const allBaseKeys = [...GLOBAL_KEYS, ...NAMESPACED_KEYS];
     
     for (const key of allBaseKeys) {
@@ -87,7 +92,6 @@ export const syncToCloud = async (config: FirebaseConfig) => {
       }
     }
 
-    // 2. Sync Namespaced Keys (for each corporate/franchise)
     if (Array.isArray(corporates)) {
       for (const corp of corporates) {
         const email = corp.email;
@@ -106,8 +110,6 @@ export const syncToCloud = async (config: FirebaseConfig) => {
       }
     }
 
-    // 3. Sync Dynamic Attendance Data (keys starting with attendance_data_)
-    // This is crucial for staff attendance records to show up in Admin panel
     for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
         if (key && key.startsWith('attendance_data_')) {
@@ -131,15 +133,12 @@ export const syncToCloud = async (config: FirebaseConfig) => {
 export const restoreFromCloud = async (config: FirebaseConfig) => {
   try {
     const db = getDb(config);
-    
-    // Fetch ALL documents in the collection to ensure we get dynamic keys too
     const snapshot = await getDocs(collection(db, "ok_boz_live_data"));
     
     if (snapshot.empty) {
         return { success: true, message: "Connected, but no data found in Cloud to restore." };
     }
 
-    // Restore each document to localStorage
     snapshot.forEach((doc) => {
         const data = doc.data();
         if (data.content) {
@@ -162,7 +161,6 @@ export const getCloudDatabaseStats = async (config: FirebaseConfig) => {
     
     snapshot.forEach(doc => {
       const data = doc.data();
-      // Calculate simplistic 'count' based on JSON array length if possible
       let count = '-';
       try {
         const parsed = JSON.parse(data.content);
@@ -185,20 +183,9 @@ export const getCloudDatabaseStats = async (config: FirebaseConfig) => {
   }
 };
 
-// --- DUMMY NOTIFICATION EXPORTS (To maintain compatibility) ---
+// Dummies for compatibility
 export const sendSystemNotification = async (...args: any[]) => Promise.resolve();
 export const fetchSystemNotifications = async () => Promise.resolve([]);
 export const markNotificationAsRead = async (...args: any[]) => Promise.resolve();
 export const setupAutoSync = () => {};
 export const hydrateFromCloud = async () => Promise.resolve();
-
-export const cloudService = {
-  syncToCloud,
-  restoreFromCloud,
-  getCloudDatabaseStats,
-  sendSystemNotification,
-  fetchSystemNotifications,
-  markNotificationAsRead,
-  setupAutoSync,
-  hydrateFromCloud
-};
