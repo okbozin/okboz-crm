@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Settings, Loader2, ArrowRight, ArrowRightLeft, 
   MessageCircle, Copy, Mail, Car, User, Edit2,
-  CheckCircle, Building2, Save, X
+  CheckCircle, Building2, Save, X, Phone, Truck
 } from 'lucide-react';
 import Autocomplete from '../../components/Autocomplete';
 
@@ -11,6 +11,8 @@ import Autocomplete from '../../components/Autocomplete';
 type TripType = 'Local' | 'Rental' | 'Outstation';
 type OutstationSubType = 'RoundTrip' | 'OneWay';
 type VehicleType = 'Sedan' | 'SUV';
+type CallerType = 'Customer' | 'Vendor';
+type EnquiryCategory = 'Transport' | 'General';
 
 interface RentalPackage {
   id: string;
@@ -60,6 +62,10 @@ export const VehicleEnquiries: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [settingsVehicleType, setSettingsVehicleType] = useState<VehicleType>('Sedan');
   
+  // Enquiry State
+  const [callerType, setCallerType] = useState<CallerType>('Customer');
+  const [enquiryCategory, setEnquiryCategory] = useState<EnquiryCategory>('Transport');
+
   const [tripType, setTripType] = useState<TripType>('Local');
   const [vehicleType, setVehicleType] = useState<VehicleType>('Sedan');
   const [outstationSubType, setOutstationSubType] = useState<OutstationSubType>('RoundTrip');
@@ -70,7 +76,7 @@ export const VehicleEnquiries: React.FC = () => {
   });
 
   const [customerDetails, setCustomerDetails] = useState({
-    name: '', phone: '', email: '', pickup: ''
+    name: '', phone: '', email: '', pickup: '', requirements: ''
   });
 
   const [isMapReady, setIsMapReady] = useState(false);
@@ -153,7 +159,25 @@ export const VehicleEnquiries: React.FC = () => {
 
       setEstimatedCost(total);
 
-      const msg = `Hello ${customerDetails.name || 'Customer'},
+      // Generate Message Based on Enquiry Type
+      let msg = '';
+
+      if (enquiryCategory === 'General') {
+          msg = `Hello ${customerDetails.name || 'Sir/Madam'},
+Thank you for contacting OK BOZ. 
+
+Regarding your enquiry:
+"${customerDetails.requirements || 'General Requirement'}"
+
+We have received your request and our team will get back to you shortly with more details.
+
+For immediate assistance, feel free to call us.
+
+Regards,
+OK BOZ Support Team`;
+      } else {
+          // Transport Estimate Message
+          msg = `Hello ${customerDetails.name || 'Customer'},
 Here is your ${tripType} estimate from OK BOZ! 🚕
 
 *${tripType} Trip Estimate*
@@ -170,9 +194,11 @@ ${tripType === 'Local' ? `⏳ Waiting Time: ${transportDetails.waitingMins} mins
 Note: Tax, Toll and permit will be extra.
 
 Book now with OK BOZ! 🚕`;
+      }
+
       setGeneratedMessage(msg);
 
-  }, [tripType, vehicleType, outstationSubType, transportDetails, customerDetails, pricing, rentalPackages]);
+  }, [tripType, vehicleType, outstationSubType, transportDetails, customerDetails, pricing, rentalPackages, enquiryCategory, callerType]);
 
   return (
     <div className="flex flex-col lg:flex-row gap-6">
@@ -208,244 +234,292 @@ Book now with OK BOZ! 🚕`;
                       />
                   </div>
               </div>
+              
+              {/* Caller Type Toggle */}
               <div className="flex gap-2">
-                  <button className="flex-1 py-2 text-sm font-medium border border-blue-500 bg-blue-50 text-blue-600 rounded-lg">Customer</button>
-                  <button className="flex-1 py-2 text-sm font-medium border border-gray-200 text-gray-500 rounded-lg hover:bg-gray-50">Vendor</button>
+                  <button 
+                    onClick={() => setCallerType('Customer')}
+                    className={`flex-1 py-2 text-sm font-medium border rounded-lg transition-colors flex items-center justify-center gap-2 ${callerType === 'Customer' ? 'border-blue-500 bg-blue-50 text-blue-600' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                  >
+                    <User className="w-4 h-4" /> Customer
+                  </button>
+                  <button 
+                    onClick={() => setCallerType('Vendor')}
+                    className={`flex-1 py-2 text-sm font-medium border rounded-lg transition-colors flex items-center justify-center gap-2 ${callerType === 'Vendor' ? 'border-orange-500 bg-orange-50 text-orange-600' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                  >
+                    <Truck className="w-4 h-4" /> Vendor
+                  </button>
               </div>
+
+              {/* Enquiry Category Toggle */}
               <div className="flex gap-2">
-                  <button className="flex-1 py-2 text-sm font-medium border border-emerald-500 bg-emerald-50 text-emerald-600 rounded-lg">Transport Enquiry</button>
-                  <button className="flex-1 py-2 text-sm font-medium border border-gray-200 text-gray-500 rounded-lg hover:bg-gray-50">General Enquiry</button>
+                  <button 
+                    onClick={() => setEnquiryCategory('Transport')}
+                    className={`flex-1 py-2 text-sm font-medium border rounded-lg transition-colors ${enquiryCategory === 'Transport' ? 'border-emerald-500 bg-emerald-50 text-emerald-600' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                  >
+                    Transport Enquiry
+                  </button>
+                  <button 
+                    onClick={() => setEnquiryCategory('General')}
+                    className={`flex-1 py-2 text-sm font-medium border rounded-lg transition-colors ${enquiryCategory === 'General' ? 'border-purple-500 bg-purple-50 text-purple-600' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                  >
+                    General Enquiry
+                  </button>
               </div>
+
               <div className="bg-green-50 text-green-700 p-3 rounded-lg flex justify-between items-center text-sm font-medium">
                   <span className="flex items-center gap-2"><CheckCircle className="w-4 h-4" /> Details Locked</span>
                   <button className="text-green-800 hover:underline">Change</button>
               </div>
           </div>
           
+          {/* Conditional Rendering based on Enquiry Type */}
           <div className="space-y-4 pt-4 border-t border-gray-100">
-              {/* Settings Toggle */}
-              <div className="flex justify-between items-center">
-                  <label className="block text-xs font-bold text-gray-500 uppercase">Pickup Location</label>
-                  <button 
-                      type="button"
-                      onClick={() => setShowSettings(!showSettings)}
-                      className="text-xs text-gray-500 hover:text-gray-800 flex items-center gap-1 font-medium border px-2 py-1 rounded"
-                  >
-                      <Settings className="w-3 h-3" /> {showSettings ? 'Close Config' : 'Rates'}
-                  </button>
-              </div>
-
-              {!isMapReady ? (
-                  <div className="p-3 bg-gray-50 text-gray-500 text-sm rounded-lg flex items-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin" /> Loading Google Maps...
+              
+              {enquiryCategory === 'Transport' ? (
+                <>
+                  {/* Settings Toggle */}
+                  <div className="flex justify-between items-center">
+                      <label className="block text-xs font-bold text-gray-500 uppercase">Pickup Location</label>
+                      <button 
+                          type="button"
+                          onClick={() => setShowSettings(!showSettings)}
+                          className="text-xs text-gray-500 hover:text-gray-800 flex items-center gap-1 font-medium border px-2 py-1 rounded"
+                      >
+                          <Settings className="w-3 h-3" /> {showSettings ? 'Close Config' : 'Rates'}
+                      </button>
                   </div>
+
+                  {!isMapReady ? (
+                      <div className="p-3 bg-gray-50 text-gray-500 text-sm rounded-lg flex items-center gap-2">
+                          <Loader2 className="w-4 h-4 animate-spin" /> Loading Google Maps...
+                      </div>
+                  ) : (
+                      <Autocomplete 
+                          placeholder="Search Google Maps for Pickup"
+                          onAddressSelect={addr => setCustomerDetails({...customerDetails, pickup: addr})}
+                          setNewPlace={setPickupCoords}
+                      />
+                  )}
+
+                  {/* SETTINGS PANEL */}
+                  {showSettings && (
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 animate-in fade-in slide-in-from-top-2">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2"><Edit2 className="w-3 h-3" /> Fare Configuration</h3>
+                        <div className="flex bg-white rounded border">
+                            <button onClick={() => setSettingsVehicleType('Sedan')} className={`px-3 py-1 text-xs font-bold ${settingsVehicleType === 'Sedan' ? 'bg-emerald-500 text-white' : 'text-gray-600'}`}>Sedan</button>
+                            <button onClick={() => setSettingsVehicleType('SUV')} className={`px-3 py-1 text-xs font-bold ${settingsVehicleType === 'SUV' ? 'bg-emerald-500 text-white' : 'text-gray-600'}`}>SUV</button>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="space-y-2">
+                          <h4 className="text-[10px] font-bold text-emerald-600 uppercase">Local Rules ({settingsVehicleType})</h4>
+                          <div className="grid grid-cols-1 gap-2">
+                            <div>
+                                <label className="text-[10px] text-gray-500">Base Fare (₹)</label>
+                                <input type="number" name="localBaseFare" value={pricing[settingsVehicleType].localBaseFare} onChange={handlePricingChange} className="w-full p-1.5 border rounded text-xs" />
+                            </div>
+                            <div>
+                                <label className="text-[10px] text-gray-500">Base Km Included</label>
+                                <input type="number" name="localBaseKm" value={pricing[settingsVehicleType].localBaseKm} onChange={handlePricingChange} className="w-full p-1.5 border rounded text-xs" />
+                            </div>
+                            <div>
+                                <label className="text-[10px] text-gray-500">Extra Km Rate (₹/km)</label>
+                                <input type="number" name="localPerKmRate" value={pricing[settingsVehicleType].localPerKmRate} onChange={handlePricingChange} className="w-full p-1.5 border rounded text-xs" />
+                            </div>
+                            <div>
+                                <label className="text-[10px] text-gray-500">Waiting Charge (₹/min)</label>
+                                <input type="number" name="localWaitingRate" value={pricing[settingsVehicleType].localWaitingRate} onChange={handlePricingChange} className="w-full p-1.5 border rounded text-xs" />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <h4 className="text-[10px] font-bold text-orange-600 uppercase">Outstation Rules ({settingsVehicleType})</h4>
+                          <div className="grid grid-cols-1 gap-2">
+                            <div>
+                                <label className="text-[10px] text-gray-500">Min Km / Day</label>
+                                <input type="number" name="outstationMinKmPerDay" value={pricing[settingsVehicleType].outstationMinKmPerDay} onChange={handlePricingChange} className="w-full p-1.5 border rounded text-xs" />
+                            </div>
+                            <div>
+                                <label className="text-[10px] text-gray-500">Per Km Rate (₹/km)</label>
+                                <input type="number" name="outstationExtraKmRate" value={pricing[settingsVehicleType].outstationExtraKmRate} onChange={handlePricingChange} className="w-full p-1.5 border rounded text-xs" />
+                            </div>
+                            <div>
+                                <label className="text-[10px] text-gray-500">Base Rate (One Way Only)</label>
+                                <input type="number" name="outstationBaseRate" value={pricing[settingsVehicleType].outstationBaseRate} onChange={handlePricingChange} className="w-full p-1.5 border rounded text-xs" />
+                            </div>
+                            <div>
+                                <label className="text-[10px] text-gray-500">Driver Allowance (₹/day)</label>
+                                <input type="number" name="outstationDriverAllowance" value={pricing[settingsVehicleType].outstationDriverAllowance} onChange={handlePricingChange} className="w-full p-1.5 border rounded text-xs" />
+                            </div>
+                            <div>
+                                <label className="text-[10px] text-gray-500">Driver Night Allowance (₹/night)</label>
+                                <input type="number" name="outstationNightAllowance" value={pricing[settingsVehicleType].outstationNightAllowance} onChange={handlePricingChange} className="w-full p-1.5 border rounded text-xs" />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <h4 className="text-[10px] font-bold text-blue-600 uppercase">Rental Rules ({settingsVehicleType})</h4>
+                          <div className="grid grid-cols-1 gap-2">
+                            <div>
+                                <label className="text-[10px] text-gray-500">Extra Hr Rate (₹/hr)</label>
+                                <input type="number" name="rentalExtraHrRate" value={pricing[settingsVehicleType].rentalExtraHrRate} onChange={handlePricingChange} className="w-full p-1.5 border rounded text-xs" />
+                            </div>
+                            <div>
+                                <label className="text-[10px] text-gray-500">Extra Km Rate (₹/km)</label>
+                                <input type="number" name="rentalExtraKmRate" value={pricing[settingsVehicleType].rentalExtraKmRate} onChange={handlePricingChange} className="w-full p-1.5 border rounded text-xs" />
+                            </div>
+                          </div>
+                          <div className="pt-4">
+                            <button onClick={() => setShowSettings(false)} className="w-full bg-slate-800 text-white py-1.5 rounded text-xs font-medium hover:bg-slate-900">Done</button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Vehicle & Trip Type */}
+                  <div className="flex gap-4">
+                      <div className="flex bg-gray-100 p-1 rounded-lg flex-1">
+                          {['Local', 'Rental', 'Outstation'].map(type => (
+                              <button
+                                  key={type}
+                                  onClick={() => setTripType(type as TripType)}
+                                  className={`flex-1 py-2 text-xs font-bold transition-colors rounded ${tripType === type ? 'bg-white text-emerald-600 shadow-sm' : 'text-gray-500'}`}
+                              >
+                                  {type}
+                              </button>
+                          ))}
+                      </div>
+                      <div className="flex gap-2">
+                          {['Sedan', 'SUV'].map(type => (
+                              <button
+                                  key={type}
+                                  onClick={() => setVehicleType(type as VehicleType)}
+                                  className={`px-4 py-2 text-xs font-bold rounded-lg border ${vehicleType === type ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-gray-600 border-gray-200'}`}
+                              >
+                                  {type}
+                              </button>
+                          ))}
+                      </div>
+                  </div>
+
+                  {/* Dynamic Inputs */}
+                  {tripType === 'Local' && (
+                      <>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Drop Location</label>
+                            {!isMapReady ? (
+                                <div className="p-3 bg-gray-50 text-gray-500 text-sm rounded-lg flex items-center gap-2">
+                                    <Loader2 className="w-4 h-4 animate-spin" /> Loading Maps...
+                                </div>
+                            ) : (
+                                <Autocomplete 
+                                    placeholder="Search Google Maps for Drop"
+                                    onAddressSelect={(addr) => setTransportDetails(prev => ({ ...prev, drop: addr }))}
+                                    setNewPlace={(place) => setDropCoords(place)}
+                                />
+                            )}
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Est Distance (KM)</label>
+                                <input 
+                                    type="number" 
+                                    value={transportDetails.estKm}
+                                    onChange={e => setTransportDetails({...transportDetails, estKm: e.target.value})}
+                                    className="w-full p-3 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                                    placeholder="0"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Wait Time (Mins)</label>
+                                <input 
+                                    type="number" 
+                                    value={transportDetails.waitingMins}
+                                    onChange={e => setTransportDetails({...transportDetails, waitingMins: e.target.value})}
+                                    className="w-full p-3 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                                    placeholder="0"
+                                />
+                            </div>
+                        </div>
+                      </>
+                  )}
+
+                  {tripType === 'Outstation' && (
+                      <div className="space-y-4">
+                          <div className="flex gap-4">
+                              <button onClick={() => setOutstationSubType('RoundTrip')} className={`flex-1 py-2 text-xs font-bold border rounded-lg ${outstationSubType === 'RoundTrip' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-white text-gray-500'}`}>Round Trip</button>
+                              <button onClick={() => setOutstationSubType('OneWay')} className={`flex-1 py-2 text-xs font-bold border rounded-lg ${outstationSubType === 'OneWay' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-white text-gray-500'}`}>One Way</button>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div className="md:col-span-2">
+                                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Destination</label>
+                                  {!isMapReady ? (
+                                      <div className="p-3 bg-gray-50 text-gray-500 text-sm rounded-lg flex items-center gap-2">
+                                          <Loader2 className="w-4 h-4 animate-spin" /> Loading Maps...
+                                      </div>
+                                  ) : (
+                                      <Autocomplete 
+                                          placeholder="Destination City"
+                                          onAddressSelect={(addr) => setTransportDetails(prev => ({ ...prev, destination: addr }))}
+                                          setNewPlace={(place) => setDestCoords(place)}
+                                      />
+                                  )}
+                              </div>
+                              <div>
+                                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Days</label>
+                                  <input 
+                                      type="number" 
+                                      value={transportDetails.days}
+                                      onChange={e => setTransportDetails({...transportDetails, days: e.target.value})}
+                                      className="w-full p-3 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                                  />
+                              </div>
+                              <div>
+                                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Total Km</label>
+                                  <input 
+                                      type="number" 
+                                      value={transportDetails.estTotalKm}
+                                      onChange={e => setTransportDetails({...transportDetails, estTotalKm: e.target.value})}
+                                      className="w-full p-3 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                                  />
+                              </div>
+                          </div>
+                      </div>
+                  )}
+                </>
               ) : (
-                  <Autocomplete 
-                      placeholder="Search Google Maps for Pickup"
-                      onAddressSelect={addr => setCustomerDetails({...customerDetails, pickup: addr})}
-                      setNewPlace={setPickupCoords}
-                  />
+                 /* GENERAL ENQUIRY VIEW */
+                 <div className="space-y-4">
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Requirements / Query</label>
+                        <textarea 
+                            className="w-full p-3 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-purple-500 h-32 resize-none"
+                            placeholder="Enter detailed requirements here..."
+                            value={customerDetails.requirements}
+                            onChange={e => setCustomerDetails({...customerDetails, requirements: e.target.value})}
+                        />
+                    </div>
+                 </div>
               )}
 
-              {/* SETTINGS PANEL */}
-              {showSettings && (
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 animate-in fade-in slide-in-from-top-2">
-                  <div className="flex items-center justify-between mb-3">
-                     <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2"><Edit2 className="w-3 h-3" /> Fare Configuration</h3>
-                     <div className="flex bg-white rounded border">
-                        <button onClick={() => setSettingsVehicleType('Sedan')} className={`px-3 py-1 text-xs font-bold ${settingsVehicleType === 'Sedan' ? 'bg-emerald-500 text-white' : 'text-gray-600'}`}>Sedan</button>
-                        <button onClick={() => setSettingsVehicleType('SUV')} className={`px-3 py-1 text-xs font-bold ${settingsVehicleType === 'SUV' ? 'bg-emerald-500 text-white' : 'text-gray-600'}`}>SUV</button>
-                     </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="space-y-2">
-                      <h4 className="text-[10px] font-bold text-emerald-600 uppercase">Local Rules ({settingsVehicleType})</h4>
-                      <div className="grid grid-cols-1 gap-2">
-                        <div>
-                            <label className="text-[10px] text-gray-500">Base Fare (₹)</label>
-                            <input type="number" name="localBaseFare" value={pricing[settingsVehicleType].localBaseFare} onChange={handlePricingChange} className="w-full p-1.5 border rounded text-xs" />
-                        </div>
-                        <div>
-                            <label className="text-[10px] text-gray-500">Base Km Included</label>
-                            <input type="number" name="localBaseKm" value={pricing[settingsVehicleType].localBaseKm} onChange={handlePricingChange} className="w-full p-1.5 border rounded text-xs" />
-                        </div>
-                        <div>
-                            <label className="text-[10px] text-gray-500">Extra Km Rate (₹/km)</label>
-                            <input type="number" name="localPerKmRate" value={pricing[settingsVehicleType].localPerKmRate} onChange={handlePricingChange} className="w-full p-1.5 border rounded text-xs" />
-                        </div>
-                        <div>
-                            <label className="text-[10px] text-gray-500">Waiting Charge (₹/min)</label>
-                            <input type="number" name="localWaitingRate" value={pricing[settingsVehicleType].localWaitingRate} onChange={handlePricingChange} className="w-full p-1.5 border rounded text-xs" />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <h4 className="text-[10px] font-bold text-orange-600 uppercase">Outstation Rules ({settingsVehicleType})</h4>
-                      <div className="grid grid-cols-1 gap-2">
-                        <div>
-                            <label className="text-[10px] text-gray-500">Min Km / Day</label>
-                            <input type="number" name="outstationMinKmPerDay" value={pricing[settingsVehicleType].outstationMinKmPerDay} onChange={handlePricingChange} className="w-full p-1.5 border rounded text-xs" />
-                        </div>
-                        <div>
-                            <label className="text-[10px] text-gray-500">Per Km Rate (₹/km)</label>
-                            <input type="number" name="outstationExtraKmRate" value={pricing[settingsVehicleType].outstationExtraKmRate} onChange={handlePricingChange} className="w-full p-1.5 border rounded text-xs" />
-                        </div>
-                        <div>
-                            <label className="text-[10px] text-gray-500">Base Rate (One Way Only)</label>
-                            <input type="number" name="outstationBaseRate" value={pricing[settingsVehicleType].outstationBaseRate} onChange={handlePricingChange} className="w-full p-1.5 border rounded text-xs" />
-                        </div>
-                        <div>
-                            <label className="text-[10px] text-gray-500">Driver Allowance (₹/day)</label>
-                            <input type="number" name="outstationDriverAllowance" value={pricing[settingsVehicleType].outstationDriverAllowance} onChange={handlePricingChange} className="w-full p-1.5 border rounded text-xs" />
-                        </div>
-                        <div>
-                            <label className="text-[10px] text-gray-500">Driver Night Allowance (₹/night)</label>
-                            <input type="number" name="outstationNightAllowance" value={pricing[settingsVehicleType].outstationNightAllowance} onChange={handlePricingChange} className="w-full p-1.5 border rounded text-xs" />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <h4 className="text-[10px] font-bold text-blue-600 uppercase">Rental Rules ({settingsVehicleType})</h4>
-                      <div className="grid grid-cols-1 gap-2">
-                        <div>
-                            <label className="text-[10px] text-gray-500">Extra Hr Rate (₹/hr)</label>
-                            <input type="number" name="rentalExtraHrRate" value={pricing[settingsVehicleType].rentalExtraHrRate} onChange={handlePricingChange} className="w-full p-1.5 border rounded text-xs" />
-                        </div>
-                        <div>
-                            <label className="text-[10px] text-gray-500">Extra Km Rate (₹/km)</label>
-                            <input type="number" name="rentalExtraKmRate" value={pricing[settingsVehicleType].rentalExtraKmRate} onChange={handlePricingChange} className="w-full p-1.5 border rounded text-xs" />
-                        </div>
-                      </div>
-                      <div className="pt-4">
-                         <button onClick={() => setShowSettings(false)} className="w-full bg-slate-800 text-white py-1.5 rounded text-xs font-medium hover:bg-slate-900">Done</button>
-                      </div>
-                    </div>
-                  </div>
+              {enquiryCategory === 'Transport' && (
+                <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Requirement Details</label>
+                    <textarea 
+                        className="w-full p-3 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500 resize-none" 
+                        placeholder="Special requests, extra luggage, etc..."
+                        rows={2}
+                        value={customerDetails.requirements}
+                        onChange={e => setCustomerDetails({...customerDetails, requirements: e.target.value})}
+                    />
                 </div>
               )}
-
-              {/* Vehicle & Trip Type */}
-              <div className="flex gap-4">
-                  <div className="flex bg-gray-100 p-1 rounded-lg flex-1">
-                      {['Local', 'Rental', 'Outstation'].map(type => (
-                          <button
-                              key={type}
-                              onClick={() => setTripType(type as TripType)}
-                              className={`flex-1 py-2 text-xs font-bold transition-colors rounded ${tripType === type ? 'bg-white text-emerald-600 shadow-sm' : 'text-gray-500'}`}
-                          >
-                              {type}
-                          </button>
-                      ))}
-                  </div>
-                  <div className="flex gap-2">
-                      {['Sedan', 'SUV'].map(type => (
-                          <button
-                              key={type}
-                              onClick={() => setVehicleType(type as VehicleType)}
-                              className={`px-4 py-2 text-xs font-bold rounded-lg border ${vehicleType === type ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-gray-600 border-gray-200'}`}
-                          >
-                              {type}
-                          </button>
-                      ))}
-                  </div>
-              </div>
-
-              {/* Dynamic Inputs */}
-              {tripType === 'Local' && (
-                  <>
-                    <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Drop Location</label>
-                        {!isMapReady ? (
-                            <div className="p-3 bg-gray-50 text-gray-500 text-sm rounded-lg flex items-center gap-2">
-                                <Loader2 className="w-4 h-4 animate-spin" /> Loading Maps...
-                            </div>
-                        ) : (
-                            <Autocomplete 
-                                placeholder="Search Google Maps for Drop"
-                                onAddressSelect={(addr) => setTransportDetails(prev => ({ ...prev, drop: addr }))}
-                                setNewPlace={(place) => setDropCoords(place)}
-                            />
-                        )}
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Est Distance (KM)</label>
-                            <input 
-                                type="number" 
-                                value={transportDetails.estKm}
-                                onChange={e => setTransportDetails({...transportDetails, estKm: e.target.value})}
-                                className="w-full p-3 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"
-                                placeholder="0"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Wait Time (Mins)</label>
-                            <input 
-                                type="number" 
-                                value={transportDetails.waitingMins}
-                                onChange={e => setTransportDetails({...transportDetails, waitingMins: e.target.value})}
-                                className="w-full p-3 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"
-                                placeholder="0"
-                            />
-                        </div>
-                    </div>
-                  </>
-              )}
-
-              {tripType === 'Outstation' && (
-                  <div className="space-y-4">
-                      <div className="flex gap-4">
-                          <button onClick={() => setOutstationSubType('RoundTrip')} className={`flex-1 py-2 text-xs font-bold border rounded-lg ${outstationSubType === 'RoundTrip' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-white text-gray-500'}`}>Round Trip</button>
-                          <button onClick={() => setOutstationSubType('OneWay')} className={`flex-1 py-2 text-xs font-bold border rounded-lg ${outstationSubType === 'OneWay' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-white text-gray-500'}`}>One Way</button>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="md:col-span-2">
-                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Destination</label>
-                              {!isMapReady ? (
-                                  <div className="p-3 bg-gray-50 text-gray-500 text-sm rounded-lg flex items-center gap-2">
-                                      <Loader2 className="w-4 h-4 animate-spin" /> Loading Maps...
-                                  </div>
-                              ) : (
-                                  <Autocomplete 
-                                      placeholder="Destination City"
-                                      onAddressSelect={(addr) => setTransportDetails(prev => ({ ...prev, destination: addr }))}
-                                      setNewPlace={(place) => setDestCoords(place)}
-                                  />
-                              )}
-                          </div>
-                          <div>
-                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Days</label>
-                              <input 
-                                  type="number" 
-                                  value={transportDetails.days}
-                                  onChange={e => setTransportDetails({...transportDetails, days: e.target.value})}
-                                  className="w-full p-3 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"
-                              />
-                          </div>
-                          <div>
-                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Total Km</label>
-                              <input 
-                                  type="number" 
-                                  value={transportDetails.estTotalKm}
-                                  onChange={e => setTransportDetails({...transportDetails, estTotalKm: e.target.value})}
-                                  className="w-full p-3 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"
-                              />
-                          </div>
-                      </div>
-                  </div>
-              )}
-
-              <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Requirement Details</label>
-                  <textarea 
-                      className="w-full p-3 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500 resize-none" 
-                      placeholder="Special requests, extra luggage, etc..."
-                      rows={2}
-                  />
-              </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="md:col-span-3">
@@ -480,18 +554,20 @@ Book now with OK BOZ! 🚕`;
 
       {/* Right Column: Estimate Card */}
       <div className="w-full lg:w-96 space-y-6">
-          <div className="bg-slate-900 rounded-xl p-6 text-white shadow-xl relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-5 rounded-full -mr-10 -mt-10"></div>
-              <div className="relative z-10">
-                  <p className="text-xs font-bold text-slate-400 uppercase mb-1">Estimated Cost</p>
-                  <h3 className="text-4xl font-bold mb-4">₹{estimatedCost.toLocaleString()}</h3>
-                  
-                  <div className="border-t border-slate-700 pt-4 flex justify-between items-center text-sm">
-                      <span className="font-bold">Total</span>
-                      <span className="font-bold">₹{estimatedCost.toLocaleString()}</span>
-                  </div>
-              </div>
-          </div>
+          {enquiryCategory === 'Transport' && (
+            <div className="bg-slate-900 rounded-xl p-6 text-white shadow-xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-5 rounded-full -mr-10 -mt-10"></div>
+                <div className="relative z-10">
+                    <p className="text-xs font-bold text-slate-400 uppercase mb-1">Estimated Cost</p>
+                    <h3 className="text-4xl font-bold mb-4">₹{estimatedCost.toLocaleString()}</h3>
+                    
+                    <div className="border-t border-slate-700 pt-4 flex justify-between items-center text-sm">
+                        <span className="font-bold">Total</span>
+                        <span className="font-bold">₹{estimatedCost.toLocaleString()}</span>
+                    </div>
+                </div>
+            </div>
+          )}
 
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
               <div className="flex justify-between items-center mb-3">

@@ -35,12 +35,13 @@ const COLUMNS = [
 
 const TaskManagement: React.FC<TaskManagementProps> = ({ role }) => {
   // Determine Session Context
+  const currentSessionId = localStorage.getItem('app_session_id') || 'admin';
+  
   const getSessionKey = () => {
-    const sessionId = localStorage.getItem('app_session_id') || 'admin';
-    return sessionId === 'admin' ? 'tasks_data' : `tasks_data_${sessionId}`;
+    return currentSessionId === 'admin' ? 'tasks_data' : `tasks_data_${currentSessionId}`;
   };
 
-  const isSuperAdmin = (localStorage.getItem('app_session_id') || 'admin') === 'admin';
+  const isSuperAdmin = currentSessionId === 'admin';
 
   // --- Data Loading (Corporates & Staff) ---
   const [corporates, setCorporates] = useState<CorporateAccount[]>([]);
@@ -81,7 +82,12 @@ const TaskManagement: React.FC<TaskManagementProps> = ({ role }) => {
   const [tasks, setTasks] = useState<Task[]>(() => {
     // For simplicity in this demo, we use a global key if Super Admin to show aggregation capabilities,
     // or specific keys if strict separation is needed. Here we load from current session context.
-    const key = getSessionKey();
+    
+    // If Employee, we need to find which "bucket" of tasks to load. 
+    // Ideally tasks are stored centrally or namespaced by Corporate. 
+    // For this demo, we'll load from a global pool for employees to simplify "My Tasks" view across the mock backend.
+    
+    const key = isSuperAdmin ? 'tasks_data' : `tasks_data`; // Using a shared key for demo simplicity, in prod use strict namespaces
     const saved = localStorage.getItem(key);
     if (saved) {
       try { return JSON.parse(saved); } catch (e) { console.error(e); }
@@ -91,9 +97,9 @@ const TaskManagement: React.FC<TaskManagementProps> = ({ role }) => {
 
   // Save tasks
   useEffect(() => {
-    const key = getSessionKey();
+    const key = isSuperAdmin ? 'tasks_data' : `tasks_data`;
     localStorage.setItem(key, JSON.stringify(tasks));
-  }, [tasks]);
+  }, [tasks, isSuperAdmin]);
 
   // --- UI State ---
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -138,6 +144,24 @@ const TaskManagement: React.FC<TaskManagementProps> = ({ role }) => {
 
   const handleOpenCreate = () => {
     resetForm();
+    
+    // If Employee, pre-fill assignment to self and set correct corporate context
+    if (role === UserRole.EMPLOYEE) {
+        const me = allStaff.find(s => s.id === currentSessionId);
+        if (me) {
+            setFormData(prev => ({
+                ...prev,
+                assignedTo: me.id,
+                corporateId: me.corporateId || 'admin'
+            }));
+        }
+    } else if (role === UserRole.CORPORATE) {
+        setFormData(prev => ({
+            ...prev,
+            corporateId: currentSessionId
+        }));
+    }
+    
     setIsModalOpen(true);
   };
 
@@ -166,6 +190,11 @@ const TaskManagement: React.FC<TaskManagementProps> = ({ role }) => {
        if (c) corpName = c.companyName;
     }
 
+    // Determine who assigned it
+    let assignedByName = 'Admin';
+    if (role === UserRole.CORPORATE) assignedByName = 'Manager';
+    if (role === UserRole.EMPLOYEE) assignedByName = 'Self';
+
     if (editingTask) {
       // Update Existing
       const updatedTasks = tasks.map(t => t.id === editingTask.id ? {
@@ -187,7 +216,7 @@ const TaskManagement: React.FC<TaskManagementProps> = ({ role }) => {
         title: formData.title,
         description: formData.description,
         assignedTo: formData.assignedTo,
-        assignedByName: isSuperAdmin ? 'Admin' : 'Manager',
+        assignedByName: assignedByName,
         corporateId: formData.corporateId,
         corporateName: corpName,
         status: 'Todo',
@@ -226,6 +255,15 @@ const TaskManagement: React.FC<TaskManagementProps> = ({ role }) => {
 
   // Filtering
   const filteredTasks = tasks.filter(t => {
+     // If Employee, only show tasks assigned to them
+     if (role === UserRole.EMPLOYEE && t.assignedTo !== currentSessionId) {
+         return false;
+     }
+     // If Corporate, only show tasks for their franchise
+     if (role === UserRole.CORPORATE && t.corporateId !== currentSessionId) {
+         return false;
+     }
+
      const matchesSearch = t.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
                            getStaffDetails(t.assignedTo).name.toLowerCase().includes(searchQuery.toLowerCase());
      const matchesPriority = filterPriority === 'All' || t.priority === filterPriority;
@@ -238,17 +276,17 @@ const TaskManagement: React.FC<TaskManagementProps> = ({ role }) => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-gray-800">Task Management</h2>
-          <p className="text-gray-500">Assign tasks to corporate staff and track status</p>
+          <p className="text-gray-500">
+              {role === UserRole.EMPLOYEE ? "Manage and track your daily tasks" : "Assign tasks to staff and track status"}
+          </p>
         </div>
-        {(role === UserRole.ADMIN || role === UserRole.CORPORATE) && (
-          <button 
-            onClick={handleOpenCreate}
-            className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 shadow-sm transition-colors"
-          >
-            <Plus className="w-5 h-5" />
-            Create Task
-          </button>
-        )}
+        <button 
+        onClick={handleOpenCreate}
+        className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 shadow-sm transition-colors"
+        >
+        <Plus className="w-5 h-5" />
+        Create Task
+        </button>
       </div>
 
       {/* Toolbar */}
@@ -257,7 +295,7 @@ const TaskManagement: React.FC<TaskManagementProps> = ({ role }) => {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
             <input 
               type="text" 
-              placeholder="Search tasks or staff..." 
+              placeholder="Search tasks..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -313,12 +351,19 @@ const TaskManagement: React.FC<TaskManagementProps> = ({ role }) => {
                         <h4 className="font-bold text-gray-800 mb-1 text-sm leading-snug">{task.title}</h4>
                         <p className="text-xs text-gray-500 mb-3 line-clamp-2">{task.description}</p>
 
-                        {/* Corporate Badge */}
-                        {isSuperAdmin && task.corporateName && (
-                           <div className="mb-3 inline-flex items-center gap-1 bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded text-[10px] font-medium border border-indigo-100">
-                              <Building2 className="w-3 h-3" /> {task.corporateName}
-                           </div>
-                        )}
+                        {/* Badges */}
+                        <div className="flex flex-wrap gap-1 mb-3">
+                            {/* Assigned By Badge */}
+                            <div className="inline-flex items-center gap-1 bg-gray-100 text-gray-500 px-2 py-0.5 rounded text-[10px] font-medium border border-gray-200">
+                                <User className="w-3 h-3" /> By {task.assignedByName}
+                            </div>
+                            {/* Corporate Badge (Admin Only) */}
+                            {isSuperAdmin && task.corporateName && (
+                                <div className="inline-flex items-center gap-1 bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded text-[10px] font-medium border border-indigo-100">
+                                    <Building2 className="w-3 h-3" /> {task.corporateName}
+                                </div>
+                            )}
+                        </div>
 
                         {/* Footer */}
                         <div className="flex items-center justify-between pt-3 border-t border-gray-50">
@@ -395,13 +440,15 @@ const TaskManagement: React.FC<TaskManagementProps> = ({ role }) => {
                        required 
                        value={formData.assignedTo}
                        onChange={(e) => setFormData({...formData, assignedTo: e.target.value})}
-                       className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+                       disabled={role === UserRole.EMPLOYEE} // Disable if employee, as they assign to self
+                       className={`w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 bg-white ${role === UserRole.EMPLOYEE ? 'bg-gray-50 text-gray-500' : ''}`}
                     >
                        <option value="">Select Staff</option>
                        {availableStaff.map(s => (
                           <option key={s.id} value={s.id}>{s.name} - {s.role}</option>
                        ))}
                     </select>
+                    {role === UserRole.EMPLOYEE && <p className="text-xs text-emerald-600 mt-1">Auto-assigned to self</p>}
                  </div>
 
                  <div className="grid grid-cols-2 gap-4">
