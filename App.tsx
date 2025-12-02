@@ -18,7 +18,7 @@ import Documents from './pages/Documents';
 import Leads from './pages/admin/Leads';
 import Reception from './pages/admin/Reception';
 import Reports from './pages/admin/Reports'; 
-import TripBooking from './pages/admin/TripBooking'; // Added TripBooking import
+import TripBooking from './pages/admin/TripBooking'; 
 import { VehicleEnquiries } from './pages/admin/VehicleEnquiries'; 
 import UserAttendance from './pages/user/UserAttendance';
 import UserSalary from './pages/user/UserSalary';
@@ -31,21 +31,33 @@ import { UserRole } from './types';
 import { BrandingProvider } from './context/BrandingContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { Loader2, Cloud } from 'lucide-react'; 
+import { autoLoadFromCloud } from './services/cloudService'; // Import Auto Load
 
 const App: React.FC = () => {
   // Initialize state from localStorage
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [userRole, setUserRole] = useState<UserRole>(UserRole.ADMIN);
+  const [isInitializing, setIsInitializing] = useState(true); // Add loading state
 
-  // Initialize Auth (simplified to local storage check only)
+  // Initialize Auth and Data
   useEffect(() => {
-    const hasSession = !!localStorage.getItem('app_session_id');
-    const savedRole = localStorage.getItem('user_role');
-    
-    if (hasSession && savedRole && Object.values(UserRole).includes(savedRole as UserRole)) {
-      setIsAuthenticated(true);
-      setUserRole(savedRole as UserRole);
-    }
+    const initApp = async () => {
+        // 1. Try to pull latest data from cloud if credentials exist
+        await autoLoadFromCloud();
+
+        // 2. Check Session
+        const hasSession = !!localStorage.getItem('app_session_id');
+        const savedRole = localStorage.getItem('user_role');
+        
+        if (hasSession && savedRole && Object.values(UserRole).includes(savedRole as UserRole)) {
+          setIsAuthenticated(true);
+          setUserRole(savedRole as UserRole);
+        }
+        
+        setIsInitializing(false);
+    };
+
+    initApp();
   }, []);
 
   // Handle Login
@@ -57,10 +69,20 @@ const App: React.FC = () => {
   // Handle Logout
   const handleLogout = () => {
     setIsAuthenticated(false);
-    setUserRole(UserRole.ADMIN); // Reset default
-    localStorage.removeItem('app_session_id'); // Clear session ID
-    localStorage.removeItem('user_role'); // Clear user role
+    setUserRole(UserRole.ADMIN); 
+    localStorage.removeItem('app_session_id'); 
+    localStorage.removeItem('user_role'); 
   };
+
+  if (isInitializing) {
+      return (
+          <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
+              <Loader2 className="w-10 h-10 text-emerald-500 animate-spin mb-4" />
+              <h2 className="text-lg font-bold text-gray-700">Syncing Database...</h2>
+              <p className="text-sm text-gray-500">Connecting to Google Cloud Firebase</p>
+          </div>
+      );
+  }
 
   // Determine home path based on role
   const homePath = userRole === UserRole.EMPLOYEE ? '/user' : '/admin';
@@ -99,7 +121,7 @@ const App: React.FC = () => {
                       />
                       <Route path="/admin/reception" element={<Reception />} />
                       <Route path="/admin/vehicle-enquiries" element={<VehicleEnquiries />} />
-                      <Route path="/admin/trips" element={<TripBooking />} /> {/* Added TripBooking route */}
+                      <Route path="/admin/trips" element={<TripBooking />} /> 
                       <Route path="/admin/tracking" element={<LiveTracking />} />
                       <Route path="/admin/leads" element={<Leads />} />
                       <Route path="/admin/tasks" element={<TaskManagement role={userRole} />} />

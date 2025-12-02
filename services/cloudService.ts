@@ -11,6 +11,18 @@ export interface FirebaseConfig {
   appId: string;
 }
 
+// --- 🟢 PERMANENT CONFIGURATION 🟢 ---
+// Paste your Firebase Config here to avoid entering it in Settings every time.
+// This ensures all computers automatically connect to the database.
+export const HARDCODED_FIREBASE_CONFIG: FirebaseConfig = {
+  apiKey: "", // Paste apiKey here
+  authDomain: "", // Paste authDomain here
+  projectId: "", // Paste projectId here
+  storageBucket: "", // Paste storageBucket here
+  messagingSenderId: "", // Paste messagingSenderId here
+  appId: "" // Paste appId here
+};
+
 export const DEFAULT_FIREBASE_CONFIG: FirebaseConfig = {
   apiKey: '',
   authDomain: '',
@@ -54,9 +66,24 @@ const NAMESPACED_KEYS = [
 ];
 
 // Helper to initialize DB safely
-const getDb = (config: FirebaseConfig): Firestore => {
-  if (!config.apiKey) {
-    throw new Error("Firebase API Key is missing");
+// Prioritizes HARDCODED config, then LocalStorage
+const getDb = (config?: FirebaseConfig): Firestore | null => {
+  let activeConfig = config;
+
+  // 1. Try passed config
+  // 2. Try Hardcoded config
+  if (!activeConfig || !activeConfig.apiKey) {
+     if (HARDCODED_FIREBASE_CONFIG.apiKey) {
+         activeConfig = HARDCODED_FIREBASE_CONFIG;
+     } else {
+         // 3. Try LocalStorage
+         const saved = localStorage.getItem('firebase_config');
+         if (saved) activeConfig = JSON.parse(saved);
+     }
+  }
+
+  if (!activeConfig || !activeConfig.apiKey) {
+    return null; // No valid config found
   }
 
   // Check if an app is already initialized to prevent duplicate app errors
@@ -66,7 +93,7 @@ const getDb = (config: FirebaseConfig): Firestore => {
 
   // Initialize new app
   try {
-    const app = initializeApp(config); 
+    const app = initializeApp(activeConfig); 
     return getFirestore(app);
   } catch (e) {
     console.error("Firebase Init Error:", e);
@@ -77,6 +104,8 @@ const getDb = (config: FirebaseConfig): Firestore => {
 export const syncToCloud = async (config: FirebaseConfig) => {
   try {
     const db = getDb(config);
+    if (!db) throw new Error("No Firebase configuration found.");
+
     const corporateAccountsStr = localStorage.getItem('corporate_accounts');
     const corporates = corporateAccountsStr ? JSON.parse(corporateAccountsStr) : [];
 
@@ -110,19 +139,6 @@ export const syncToCloud = async (config: FirebaseConfig) => {
       }
     }
 
-    for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith('attendance_data_')) {
-             const data = localStorage.getItem(key);
-             if (data) {
-                await setDoc(doc(db, "ok_boz_live_data", key), {
-                  content: data,
-                  lastUpdated: new Date().toISOString()
-                });
-             }
-        }
-    }
-
     return { success: true, message: "Sync complete! All local data pushed to Google Cloud." };
   } catch (error: any) {
     console.error("Sync Error:", error);
@@ -130,9 +146,11 @@ export const syncToCloud = async (config: FirebaseConfig) => {
   }
 };
 
-export const restoreFromCloud = async (config: FirebaseConfig) => {
+export const restoreFromCloud = async (config?: FirebaseConfig) => {
   try {
     const db = getDb(config);
+    if (!db) return { success: false, message: "No Configuration" };
+
     const snapshot = await getDocs(collection(db, "ok_boz_live_data"));
     
     if (snapshot.empty) {
@@ -153,9 +171,27 @@ export const restoreFromCloud = async (config: FirebaseConfig) => {
   }
 };
 
+// New Function: Auto-load data on app start
+export const autoLoadFromCloud = async (): Promise<boolean> => {
+    try {
+        // This forces a check for hardcoded or stored credentials
+        const db = getDb(); 
+        if (!db) return false; // No credentials, can't load
+
+        // Pull data silently
+        await restoreFromCloud();
+        return true;
+    } catch (e) {
+        console.error("Auto-load failed", e);
+        return false;
+    }
+};
+
 export const getCloudDatabaseStats = async (config: FirebaseConfig) => {
   try {
     const db = getDb(config);
+    if (!db) return null;
+    
     const snapshot = await getDocs(collection(db, "ok_boz_live_data"));
     const stats: Record<string, any> = {};
     
