@@ -55,9 +55,7 @@ const Settings: React.FC = () => {
 
   const visibleTabs = allTabs.filter(tab => tab.visible);
   const [activeTab, setActiveTab] = useState(visibleTabs[0]?.id || 'notifications');
-  const [loading, setLoading] = useState(false);
   
-  // Integrations State
   const [mapsApiKey, setMapsApiKey] = useState(() => localStorage.getItem('maps_api_key') || '');
   const [emailSettings, setEmailSettings] = useState(() => {
     const saved = localStorage.getItem('smtp_config');
@@ -67,7 +65,6 @@ const Settings: React.FC = () => {
     };
   });
 
-  // Firebase State
   const [firebaseConfig, setFirebaseConfig] = useState<FirebaseConfig>(() => {
     const saved = localStorage.getItem('firebase_config');
     if (saved) return JSON.parse(saved);
@@ -75,21 +72,18 @@ const Settings: React.FC = () => {
   });
   
   const [configPaste, setConfigPaste] = useState('');
-  const [showHelp, setShowHelp] = useState(false);
   const [isAdvancedMode, setIsAdvancedMode] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<{type: 'success' | 'error' | '', msg: string}>({ type: '', msg: '' });
   const [cloudStats, setCloudStats] = useState<Record<string, any> | null>(null);
   const [loadingStats, setLoadingStats] = useState(false);
 
-  // General Settings
   const [formData, setFormData] = useState({
     companyName: 'OK BOZ Pvt Ltd', website: 'www.okboz.com', email: 'admin@okboz.com',
     phone: '+91 98765 43210', address: '123, Tech Park, Cyber City, Gurgaon, India',
     emailAlerts: true, smsAlerts: false, dailyReport: true, leaveUpdates: true
   });
 
-  // Sub Admin State
   const [subAdmins, setSubAdmins] = useState<SubAdmin[]>(() => {
     const key = getSessionKey('sub_admins');
     const saved = localStorage.getItem(key);
@@ -103,14 +97,9 @@ const Settings: React.FC = () => {
     permissions: MODULES.reduce((acc, m) => ({...acc, [m]: { view: false, add: false, edit: false, delete: false }}), {} as any)
   });
 
-  // Branding Local State
   const [brandingForm, setBrandingForm] = useState({ appName: globalName, logoUrl: globalLogo, primaryColor: globalColor });
-
-  // Security Tab State
   const [securityForm, setSecurityForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
-  const [securityMessage, setSecurityMessage] = useState({ type: '', text: '' });
 
-  // Load Settings
   useEffect(() => {
     const key = getSessionKey('app_settings');
     const savedSettings = localStorage.getItem(key);
@@ -119,13 +108,11 @@ const Settings: React.FC = () => {
     }
   }, []);
 
-  // Persist Sub Admins
   useEffect(() => {
     const key = getSessionKey('sub_admins');
     localStorage.setItem(key, JSON.stringify(subAdmins));
   }, [subAdmins]);
 
-  // Fetch Cloud Stats
   useEffect(() => {
     if (activeTab === 'database' && firebaseConfig.apiKey && isSuperAdmin) {
         refreshCloudStats();
@@ -148,7 +135,6 @@ const Settings: React.FC = () => {
   };
 
   const handleSave = () => {
-    setLoading(true);
     if (isSuperAdmin) {
         const currentKey = mapsApiKey.trim();
         if (currentKey) localStorage.setItem('maps_api_key', currentKey);
@@ -165,7 +151,7 @@ const Settings: React.FC = () => {
     }
     const settingsKey = getSessionKey('app_settings');
     localStorage.setItem(settingsKey, JSON.stringify(formData));
-    setTimeout(() => { setLoading(false); alert("Settings updated successfully!"); }, 800);
+    alert("Settings updated successfully!");
   };
 
   const parsePastedConfig = () => {
@@ -221,7 +207,6 @@ const Settings: React.FC = () => {
       } catch { return 1; }
   };
 
-  // Sub Admin Handlers
   const openSubAdminModal = (admin?: SubAdmin) => {
     if (admin) {
         setEditingSubAdmin(admin);

@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { UserRole } from '../types';
-import { Shield, User, Lock, Mail, ArrowRight, Building2, Eye, EyeOff, AlertTriangle, Cloud } from 'lucide-react';
+import { Lock, Mail, ArrowRight, Eye, EyeOff, AlertTriangle, Cloud } from 'lucide-react';
 import { useBranding } from '../context/BrandingContext';
 import { sendSystemNotification } from '../services/cloudService';
 
@@ -24,6 +24,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setError('');
     setIsLoading(true);
 
+    // Simulate network delay for better UX
     setTimeout(async () => { 
         let success = false;
         let role = UserRole.ADMIN;
@@ -33,6 +34,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         let corporateOwnerId = '';
 
         if (activeTab === 'admin') {
+            // Check against stored admin password or default
             const storedAdminPass = localStorage.getItem('admin_password') || '123456'; 
             const adminEmail = 'okboz.com@gmail.com'; 
 
@@ -43,6 +45,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             }
         } 
         else if (activeTab === 'corporate') {
+            // 1. Check Stored Corporate Accounts
             const corps = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
             const foundCorp = corps.find((c: any) => c.email.toLowerCase() === email.toLowerCase() && c.password === password);
             
@@ -53,6 +56,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             }
         } 
         else if (activeTab === 'employee') {
+            // 1. Search Admin Staff
             let foundEmp = null;
             try {
                 const adminStaff = JSON.parse(localStorage.getItem('staff_data') || '[]');
@@ -60,6 +64,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 if (foundEmp) corporateOwnerId = 'admin';
             } catch(e) {}
 
+            // 2. Search Corporate Staff if not found
             if (!foundEmp) {
                 try {
                     const corps = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
@@ -67,7 +72,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                         const corpStaff = JSON.parse(localStorage.getItem(`staff_data_${corp.email}`) || '[]');
                         foundEmp = corpStaff.find((e: any) => e.email?.toLowerCase() === email.toLowerCase() && e.password === password);
                         if (foundEmp) {
-                            corporateOwnerId = corp.email;
+                            corporateOwnerId = corp.email; // Found in this corporate account
                             break;
                         }
                     }
@@ -87,11 +92,13 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             localStorage.setItem('app_session_id', sessionId);
             localStorage.setItem('user_role', role);
             
+            // Store employee details for logout notification if it's an employee
             if (role === UserRole.EMPLOYEE) {
                 localStorage.setItem('logged_in_employee_name', employeeName);
                 localStorage.setItem('logged_in_employee_id', employeeId);
                 localStorage.setItem('logged_in_employee_corporate_id', corporateOwnerId);
 
+                // Send login notification
                 await sendSystemNotification({
                     id: `login-${Date.now()}`,
                     type: 'login',
@@ -113,59 +120,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         }
         setIsLoading(false);
     }, 800);
-  };
-
-  const handleDemoLogin = (role: 'admin' | 'corporate' | 'employee') => {
-      setError('');
-      if (role === 'admin') {
-          setActiveTab('admin');
-          setEmail('okboz.com@gmail.com');
-          setPassword(localStorage.getItem('admin_password') || '123456');
-      } 
-      else if (role === 'corporate') {
-          setActiveTab('corporate');
-          const corps = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
-          let demoCorp = corps.find((c:any) => c.email === 'demo@franchise.com');
-          
-          if (!demoCorp) {
-              demoCorp = {
-                  id: 'CORP-DEMO',
-                  companyName: 'Demo Franchise',
-                  email: 'demo@franchise.com',
-                  password: '123',
-                  city: 'Mumbai',
-                  status: 'Active',
-                  phone: '9876543210',
-                  createdAt: new Date().toISOString()
-              };
-              localStorage.setItem('corporate_accounts', JSON.stringify([...corps, demoCorp]));
-          }
-          setEmail('demo@franchise.com');
-          setPassword('123');
-      } 
-      else if (role === 'employee') {
-           setActiveTab('employee');
-           const staff = JSON.parse(localStorage.getItem('staff_data') || '[]');
-           let demoEmp = staff.find((e:any) => e.email === 'demo@staff.com');
-           
-           if (!demoEmp) {
-               demoEmp = {
-                   id: 'EMP-DEMO',
-                   name: 'Demo Employee',
-                   email: 'demo@staff.com',
-                   password: '123',
-                   role: 'Sales Executive',
-                   department: 'Sales',
-                   joiningDate: new Date().toISOString(),
-                   status: 'Active',
-                   phone: '9876543210',
-                   avatar: 'https://ui-avatars.com/api/?name=Demo+Employee&background=random'
-               };
-               localStorage.setItem('staff_data', JSON.stringify([...staff, demoEmp]));
-           }
-           setEmail('demo@staff.com');
-           setPassword('123');
-      }
   };
 
   return (
@@ -283,34 +237,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               )}
             </button>
           </form>
-
-          {/* Quick Demo Login Section */}
-          <div className="mt-6 pt-4 border-t border-gray-100 text-center">
-              <p className="text-xs text-gray-400 mb-3 uppercase font-bold tracking-wider">Quick Demo Login</p>
-              <div className="flex justify-center gap-2">
-                  <button 
-                    type="button"
-                    onClick={() => handleDemoLogin('admin')}
-                    className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded text-xs font-medium transition-colors flex items-center gap-1"
-                  >
-                    <Shield className="w-3 h-3" /> Admin
-                  </button>
-                  <button 
-                    type="button"
-                    onClick={() => handleDemoLogin('corporate')}
-                    className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded text-xs font-medium transition-colors flex items-center gap-1"
-                  >
-                    <Building2 className="w-3 h-3" /> Franchise
-                  </button>
-                  <button 
-                    type="button"
-                    onClick={() => handleDemoLogin('employee')}
-                    className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded text-xs font-medium transition-colors flex items-center gap-1"
-                  >
-                    <User className="w-3 h-3" /> Employee
-                  </button>
-              </div>
-          </div>
         </div>
       </div>
     </div>
@@ -318,3 +244,4 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 };
 
 export default Login;
+    

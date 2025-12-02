@@ -174,7 +174,9 @@ const Reports: React.FC = () => {
       let completedTrips = 0;
 
       trips.forEach(t => {
+          // Vehicle Type
           vehicleCounts[t.transportType] = (vehicleCounts[t.transportType] || 0) + 1;
+          // Status
           statusCounts[t.bookingStatus] = (statusCounts[t.bookingStatus] || 0) + 1;
           
           if (t.bookingStatus === 'Completed') {
