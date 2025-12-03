@@ -7,7 +7,7 @@ import {
   Target, Layers, FileCode, Car, Users, X as XIcon, Lock, Eye, EyeOff, Mail, Cloud, Plus 
 } from 'lucide-react';
 import { useBranding } from '../../context/BrandingContext';
-import { syncToCloud, restoreFromCloud, FirebaseConfig, getCloudDatabaseStats, DEFAULT_FIREBASE_CONFIG } from '../../services/cloudService';
+import { syncToCloud, restoreFromCloud, FirebaseConfig, getCloudDatabaseStats, DEFAULT_FIREBASE_CONFIG, HARDCODED_FIREBASE_CONFIG } from '../../services/cloudService';
 
 interface Permission {
   view: boolean;
@@ -68,6 +68,10 @@ const Settings: React.FC = () => {
   const [firebaseConfig, setFirebaseConfig] = useState<FirebaseConfig>(() => {
     const saved = localStorage.getItem('firebase_config');
     if (saved) return JSON.parse(saved);
+    // Check if HARDCODED config is present in code
+    if (HARDCODED_FIREBASE_CONFIG && HARDCODED_FIREBASE_CONFIG.apiKey) {
+        return HARDCODED_FIREBASE_CONFIG;
+    }
     return DEFAULT_FIREBASE_CONFIG;
   });
   
@@ -141,7 +145,11 @@ const Settings: React.FC = () => {
         else localStorage.removeItem('maps_api_key');
 
         localStorage.setItem('smtp_config', JSON.stringify(emailSettings));
-        localStorage.setItem('firebase_config', JSON.stringify(firebaseConfig));
+        
+        // Only save to local storage if it's different from hardcoded
+        if (JSON.stringify(firebaseConfig) !== JSON.stringify(HARDCODED_FIREBASE_CONFIG)) {
+            localStorage.setItem('firebase_config', JSON.stringify(firebaseConfig));
+        }
 
         updateBranding({
             companyName: brandingForm.appName,
@@ -260,7 +268,7 @@ const Settings: React.FC = () => {
         <div className="w-full md:w-64 flex-shrink-0">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
             <nav className="flex flex-col p-2 space-y-1">
-              {visibleTabs.map((tab) => {
+              {visibleTabs.map(tab => {
                  const TabIcon = tab.icon;
                  return (
                    <button

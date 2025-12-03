@@ -1,16 +1,17 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Plus, Search, DollarSign, 
   PieChart, FileText, 
   CheckCircle, X, Download,
-  Smartphone, Zap, Wifi, Users, ArrowUpCircle, ArrowDownCircle, Wallet, TrendingUp, TrendingDown, Building2
+  Smartphone, Zap, Wifi, Users, ArrowUpCircle, ArrowDownCircle, Wallet, TrendingUp, TrendingDown, Building2, Upload, Loader2, Paperclip
 } from 'lucide-react';
 import { PieChart as RePieChart, Pie, Cell, ResponsiveContainer, Tooltip as ReTooltip, Legend } from 'recharts';
+import { uploadFileToCloud } from '../../services/cloudService';
 
 interface Expense {
   id: string;
-  transactionNumber: string; // Added Transaction Number
+  transactionNumber: string; 
   type: 'Income' | 'Expense';
   title: string;
   category: string;
@@ -19,7 +20,8 @@ interface Expense {
   paymentMethod: string;
   status: 'Paid' | 'Pending';
   description?: string;
-  franchiseName?: string; // For Admin view
+  franchiseName?: string; 
+  receiptUrl?: string; // Added for file storage
 }
 
 const EXPENSE_CATEGORIES = [
@@ -97,8 +99,13 @@ const Expenses: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All');
-  const [typeFilter, setTypeFilter] = useState('All'); // Income vs Expense filter
+  const [typeFilter, setTypeFilter] = useState('All'); 
   const [monthFilter, setMonthFilter] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
+
+  // Upload State
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form State
   const [formData, setFormData] = useState<Partial<Expense>>({
@@ -113,7 +120,7 @@ const Expenses: React.FC = () => {
     description: ''
   });
 
-  // Persistence (Only update context-specific data, prevent overwriting aggregation)
+  // Persistence
   useEffect(() => {
     if (!isSuperAdmin) {
         const key = getSessionKey();
@@ -130,11 +137,28 @@ const Expenses: React.FC = () => {
     setFormData(prev => ({ ...prev, [name]: name === 'amount' ? parseFloat(value) : value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files && e.target.files[0]) {
+          setSelectedFile(e.target.files[0]);
+      }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.title || !formData.amount || !formData.transactionNumber) {
         alert("Please fill all required fields including Transaction Number.");
         return;
+    }
+
+    setIsUploading(true);
+    let receiptUrl = '';
+
+    // Upload to Firebase if file exists
+    if (selectedFile) {
+        const sessionId = localStorage.getItem('app_session_id') || 'admin';
+        const path = `receipts/${sessionId}/${Date.now()}_${selectedFile.name}`;
+        const url = await uploadFileToCloud(selectedFile, path);
+        if (url) receiptUrl = url;
     }
 
     const newExpense: Expense = {
@@ -148,11 +172,15 @@ const Expenses: React.FC = () => {
       paymentMethod: formData.paymentMethod || 'Cash',
       status: (formData.status as 'Paid' | 'Pending') || 'Pending',
       description: formData.description,
-      franchiseName: isSuperAdmin ? 'Head Office' : undefined
+      franchiseName: isSuperAdmin ? 'Head Office' : undefined,
+      receiptUrl: receiptUrl
     };
 
     setExpenses([newExpense, ...expenses]);
     setIsModalOpen(false);
+    setIsUploading(false);
+    setSelectedFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = ''; // Clear input
     setFormData({
       type: 'Expense',
       transactionNumber: '',
@@ -311,7 +339,7 @@ const Expenses: React.FC = () => {
                      {isSuperAdmin && <th className="px-6 py-4">Franchise</th>}
                      <th className="px-6 py-4">Date</th>
                      <th className="px-6 py-4">Amount</th>
-                     <th className="px-6 py-4">Method</th>
+                     <th className="px-6 py-4">Receipt</th>
                      <th className="px-6 py-4">Status</th>
                    </tr>
                  </thead>
@@ -351,7 +379,15 @@ const Expenses: React.FC = () => {
                        <td className={`px-6 py-4 font-mono font-bold ${exp.type === 'Income' ? 'text-emerald-600' : 'text-red-600'}`}>
                            {exp.type === 'Income' ? '+' : '-'}₹{exp.amount.toLocaleString()}
                        </td>
-                       <td className="px-6 py-4 text-gray-600">{exp.paymentMethod}</td>
+                       <td className="px-6 py-4 text-gray-600">
+                          {exp.receiptUrl ? (
+                             <a href={exp.receiptUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline flex items-center gap-1 text-xs">
+                                <Paperclip className="w-3 h-3" /> View
+                             </a>
+                          ) : (
+                             <span className="text-gray-400 text-xs">-</span>
+                          )}
+                       </td>
                        <td className="px-6 py-4">
                          <span className={`px-2 py-1 rounded-full text-xs font-bold border ${exp.status === 'Paid' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-yellow-50 text-yellow-700 border-yellow-200'}`}>
                            {exp.status}
@@ -544,6 +580,34 @@ const Expenses: React.FC = () => {
                    </select>
                  </div>
               </div>
+              
+              <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Upload Receipt / File</label>
+                  <div className="flex gap-2 items-center">
+                      <input 
+                          type="file" 
+                          className="hidden" 
+                          ref={fileInputRef}
+                          onChange={handleFileChange}
+                      />
+                      <button 
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="flex-1 border border-dashed border-gray-300 rounded-lg py-2 px-4 text-sm text-gray-500 hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
+                      >
+                          {selectedFile ? (
+                              <span className="text-emerald-600 font-medium truncate max-w-[200px]">{selectedFile.name}</span>
+                          ) : (
+                              <>
+                                  <Upload className="w-4 h-4" /> Select File
+                              </>
+                          )}
+                      </button>
+                      {selectedFile && (
+                          <button onClick={() => setSelectedFile(null)} type="button" className="text-red-500 hover:bg-red-50 p-2 rounded"><X className="w-4 h-4"/></button>
+                      )}
+                  </div>
+              </div>
 
               <div>
                  <label className="block text-sm font-medium text-gray-700 mb-1">Description (Optional)</label>
@@ -559,8 +623,10 @@ const Expenses: React.FC = () => {
               <div className="pt-2">
                  <button 
                     type="submit"
-                    className={`w-full text-white font-bold py-3 rounded-lg shadow-md transition-colors ${formData.type === 'Income' ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-red-500 hover:bg-red-600'}`}
+                    disabled={isUploading}
+                    className={`w-full text-white font-bold py-3 rounded-lg shadow-md transition-colors flex items-center justify-center gap-2 ${formData.type === 'Income' ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-red-500 hover:bg-red-600'}`}
                  >
+                    {isUploading && <Loader2 className="w-4 h-4 animate-spin" />}
                     {formData.type === 'Income' ? 'Record Income' : 'Record Expense'}
                  </button>
               </div>

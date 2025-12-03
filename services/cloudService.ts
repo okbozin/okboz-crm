@@ -1,6 +1,7 @@
 
-import { initializeApp, getApps, getApp } from "firebase/app";
+import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
 import { getFirestore, doc, setDoc, collection, getDocs, Firestore } from "firebase/firestore";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 export interface FirebaseConfig {
   apiKey: string;
@@ -65,9 +66,8 @@ const NAMESPACED_KEYS = [
   'trips_data'
 ];
 
-// Helper to initialize DB safely
-// Prioritizes HARDCODED config, then LocalStorage
-const getDb = (config?: FirebaseConfig): Firestore | null => {
+// Helper to get Config
+const getActiveConfig = (config?: FirebaseConfig): FirebaseConfig | null => {
   let activeConfig = config;
 
   // 1. Try passed config
@@ -81,24 +81,32 @@ const getDb = (config?: FirebaseConfig): Firestore | null => {
          if (saved) activeConfig = JSON.parse(saved);
      }
   }
+  
+  if (!activeConfig || !activeConfig.apiKey) return null;
+  return activeConfig;
+};
 
-  if (!activeConfig || !activeConfig.apiKey) {
-    return null; // No valid config found
-  }
+// Helper to initialize App safely
+const getFirebaseApp = (config?: FirebaseConfig): FirebaseApp | null => {
+  const activeConfig = getActiveConfig(config);
+  if (!activeConfig) return null;
 
-  // Check if an app is already initialized to prevent duplicate app errors
   if (getApps().length > 0) {
-    return getFirestore(getApp());
+    return getApp();
   }
 
-  // Initialize new app
   try {
-    const app = initializeApp(activeConfig); 
-    return getFirestore(app);
+    return initializeApp(activeConfig);
   } catch (e) {
     console.error("Firebase Init Error:", e);
-    throw e;
+    return null;
   }
+};
+
+// Helper to initialize DB safely
+const getDb = (config?: FirebaseConfig): Firestore | null => {
+  const app = getFirebaseApp(config);
+  return app ? getFirestore(app) : null;
 };
 
 export const syncToCloud = async (config: FirebaseConfig) => {
@@ -168,6 +176,26 @@ export const restoreFromCloud = async (config?: FirebaseConfig) => {
   } catch (error: any) {
     console.error("Restore Error:", error);
     return { success: false, message: `Restore failed: ${error.message}` };
+  }
+};
+
+// New Function: Upload File to Firebase Storage
+export const uploadFileToCloud = async (file: File, path: string): Promise<string | null> => {
+  try {
+    const app = getFirebaseApp();
+    if (!app) throw new Error("Firebase not connected");
+
+    const storage = getStorage(app);
+    const storageRef = ref(storage, path);
+
+    const snapshot = await uploadBytes(storageRef, file);
+    const downloadURL = await getDownloadURL(snapshot.ref);
+    
+    return downloadURL;
+  } catch (error) {
+    console.error("Upload Error:", error);
+    alert("Failed to upload file. Check if 'Storage' is enabled in Firebase Console and CORS is configured.");
+    return null;
   }
 };
 
