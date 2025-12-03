@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { 
   Bell, Building2, Globe, Shield, MapPin, 
@@ -7,7 +6,7 @@ import {
   Target, Layers, FileCode, Car, Users, X as XIcon, Lock, Eye, EyeOff, Mail, Cloud, Plus 
 } from 'lucide-react';
 import { useBranding } from '../../context/BrandingContext';
-import { syncToCloud, restoreFromCloud, FirebaseConfig, getCloudDatabaseStats, DEFAULT_FIREBASE_CONFIG, HARDCODED_FIREBASE_CONFIG } from '../../services/cloudService';
+import { syncToCloud, restoreFromCloud, FirebaseConfig, getCloudDatabaseStats, DEFAULT_FIREBASE_CONFIG } from '../../services/cloudService';
 
 interface Permission {
   view: boolean;
@@ -68,10 +67,6 @@ const Settings: React.FC = () => {
   const [firebaseConfig, setFirebaseConfig] = useState<FirebaseConfig>(() => {
     const saved = localStorage.getItem('firebase_config');
     if (saved) return JSON.parse(saved);
-    // Check if HARDCODED config is present in code
-    if (HARDCODED_FIREBASE_CONFIG && HARDCODED_FIREBASE_CONFIG.apiKey) {
-        return HARDCODED_FIREBASE_CONFIG;
-    }
     return DEFAULT_FIREBASE_CONFIG;
   });
   
@@ -145,11 +140,7 @@ const Settings: React.FC = () => {
         else localStorage.removeItem('maps_api_key');
 
         localStorage.setItem('smtp_config', JSON.stringify(emailSettings));
-        
-        // Only save to local storage if it's different from hardcoded
-        if (JSON.stringify(firebaseConfig) !== JSON.stringify(HARDCODED_FIREBASE_CONFIG)) {
-            localStorage.setItem('firebase_config', JSON.stringify(firebaseConfig));
-        }
+        localStorage.setItem('firebase_config', JSON.stringify(firebaseConfig));
 
         updateBranding({
             companyName: brandingForm.appName,
@@ -164,31 +155,40 @@ const Settings: React.FC = () => {
 
   const parsePastedConfig = () => {
       if (!configPaste) return;
-      try {
-          let extractedConfig: any = {};
-          if (configPaste.trim().startsWith('{')) {
-              extractedConfig = JSON.parse(configPaste);
-          } else {
-              const apiKey = configPaste.match(/apiKey:\s*["']([^"']+)["']/)?.[1];
-              const projectId = configPaste.match(/projectId:\s*["']([^"']+)["']/)?.[1];
-              if (apiKey && projectId) {
-                  extractedConfig = { 
-                      apiKey, projectId, 
-                      authDomain: configPaste.match(/authDomain:\s*["']([^"']+)["']/)?.[1] || '',
-                      storageBucket: configPaste.match(/storageBucket:\s*["']([^"']+)["']/)?.[1] || '',
-                      messagingSenderId: configPaste.match(/messagingSenderId:\s*["']([^"']+)["']/)?.[1] || '',
-                      appId: configPaste.match(/appId:\s*["']([^"']+)["']/)?.[1] || ''
-                  };
-              }
-          }
-          if (extractedConfig.apiKey && extractedConfig.projectId) {
-              setFirebaseConfig(prev => ({ ...prev, ...extractedConfig }));
-              setSyncStatus({ type: 'success', msg: 'Configuration detected! Click "Save" below to apply.' });
-          } else {
-              setSyncStatus({ type: 'error', msg: 'Could not parse config. Please paste the full object.' });
-          }
-      } catch (e) {
-          setSyncStatus({ type: 'error', msg: 'Invalid format.' });
+      
+      const text = configPaste;
+      
+      // Helper regex to find value for a key (supports quoted or unquoted keys, and single or double quoted values)
+      const getValue = (key: string) => {
+        const regex = new RegExp(`["']?${key}["']?\\s*:\\s*["']([^"']+)["']`, 'i');
+        const match = text.match(regex);
+        return match ? match[1] : '';
+      };
+
+      const extractedConfig: any = {
+        apiKey: getValue('apiKey'),
+        authDomain: getValue('authDomain'),
+        projectId: getValue('projectId'),
+        storageBucket: getValue('storageBucket'),
+        messagingSenderId: getValue('messagingSenderId'),
+        appId: getValue('appId')
+      };
+
+      if (extractedConfig.apiKey && extractedConfig.projectId) {
+          setFirebaseConfig(prev => ({ ...prev, ...extractedConfig }));
+          setSyncStatus({ type: 'success', msg: 'Configuration detected! Click "Save Config" below to apply.' });
+      } else {
+          // Fallback: try to parse as strict JSON (sometimes users paste pure JSON)
+          try {
+             const json = JSON.parse(text);
+             if (json.apiKey && json.projectId) {
+                 setFirebaseConfig(prev => ({ ...prev, ...json }));
+                 setSyncStatus({ type: 'success', msg: 'JSON Configuration detected!' });
+                 return;
+             }
+          } catch(e) {}
+
+          setSyncStatus({ type: 'error', msg: 'Could not find apiKey or projectId. Please paste the full code block.' });
       }
   };
 
