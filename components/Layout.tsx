@@ -234,6 +234,9 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
     // 5. "Reception Desk" is hidden for Corporate users
     if (link.id === 'reception' && role === UserRole.CORPORATE) return false;
 
+    // 6. "Settings" is hidden for Corporate users (Franchise Panel)
+    if (link.id === 'settings' && role === UserRole.CORPORATE) return false;
+
     return true;
   });
 

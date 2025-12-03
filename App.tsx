@@ -150,11 +150,15 @@ const App: React.FC = () => {
                       <Route path="/admin/vendors" element={<VendorAttachment />} />
                       <Route path="/admin/payroll" element={<Payroll />} />
                       <Route path="/admin/expenses" element={<Expenses />} />
-                      <Route path="/admin/settings" element={<Settings />} />
-                      {/* Corporate Management - Only Super Admin */}
+                      
+                      {/* Corporate Management & Settings - Only Super Admin */}
                       {userRole === UserRole.ADMIN && (
-                        <Route path="/admin/corporate" element={<Corporate />} />
+                        <>
+                          <Route path="/admin/corporate" element={<Corporate />} />
+                          <Route path="/admin/settings" element={<Settings />} />
+                        </>
                       )}
+                      
                       <Route path="/admin/*" element={<div className="p-8 text-center text-gray-500">Page under construction</div>} />
                     </>
                   )}
