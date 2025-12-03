@@ -67,9 +67,9 @@ const App: React.FC = () => {
     // Only run if API key is present
     if (HARDCODED_FIREBASE_CONFIG.apiKey || localStorage.getItem('firebase_config')) {
         const interval = setInterval(async () => {
-            // Silently sync data to cloud every 60 seconds
+            // Silently sync data to cloud every 30 seconds
             await syncToCloud();
-        }, 60000); 
+        }, 30000); 
 
         return () => clearInterval(interval);
     }
