@@ -3,7 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { 
   Settings as SettingsIcon, Lock as LockIcon, 
   LogOut, Cloud, Database, Globe, Palette, Save,
-  UploadCloud, DownloadCloud, Loader2, Map as MapIcon, Check
+  UploadCloud, DownloadCloud, Loader2, Map as MapIcon, Check,
+  Users, Target, Building2, Car, Wallet, MapPin, Truck, Layers, RefreshCw
 } from 'lucide-react';
 import { 
   HARDCODED_FIREBASE_CONFIG, getCloudDatabaseStats,
@@ -17,6 +18,7 @@ const Settings: React.FC = () => {
   const [dbStatus, setDbStatus] = useState<'Connected' | 'Disconnected' | 'Error'>('Disconnected');
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
+  const [collectionStats, setCollectionStats] = useState<any[]>([]);
 
   // Local state for branding form
   const [brandName, setBrandName] = useState(companyName);
@@ -32,8 +34,50 @@ const Settings: React.FC = () => {
     checkConnection();
   }, []);
 
+  const generateCollectionStats = (cloudData: any) => {
+    const collections = [
+        { key: 'staff_data', label: 'Staff Records', icon: Users, color: 'text-gray-600' },
+        { key: 'leads_data', label: 'Active Leads', icon: Target, color: 'text-gray-600' },
+        { key: 'corporate_accounts', label: 'Corporate Accounts', icon: Building2, color: 'text-gray-600' },
+        { key: 'vendor_data', label: 'Vehicle Vendors', icon: Layers, color: 'text-gray-600' },
+        { key: 'office_expenses', label: 'Office Expenses', icon: Wallet, color: 'text-gray-600' },
+        { key: 'branches_data', label: 'Branches', icon: MapPin, color: 'text-gray-600' },
+        { key: 'trips_data', label: 'Trips', icon: Truck, color: 'text-gray-600' },
+    ];
+
+    return collections.map(col => {
+        // Get Local Count
+        let localCount = 0;
+        try {
+            const localStr = localStorage.getItem(col.key);
+            if (localStr) {
+                const parsed = JSON.parse(localStr);
+                localCount = Array.isArray(parsed) ? parsed.length : 0;
+            }
+        } catch(e) {}
+
+        // Get Cloud Count
+        let cloudCount: string | number = '-';
+        if (cloudData && cloudData[col.key]) {
+            cloudCount = cloudData[col.key].count;
+        }
+
+        return {
+            ...col,
+            local: localCount,
+            cloud: cloudCount,
+            status: 'Synced' // Assuming synced if connected for UI demo
+        };
+    });
+  };
+
   const checkConnection = async () => {
     const s = await getCloudDatabaseStats();
+    
+    // Generate stats regardless of connection, cloud will just be '-' if not connected
+    const statsList = generateCollectionStats(s);
+    setCollectionStats(statsList);
+
     if (s) {
       setStats(s);
       setDbStatus('Connected');
@@ -83,7 +127,7 @@ const Settings: React.FC = () => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-6xl mx-auto space-y-8">
       <div>
         <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
           <SettingsIcon className="w-6 h-6 text-gray-600" /> Site Settings
@@ -224,6 +268,52 @@ const Settings: React.FC = () => {
               </div>
           </div>
         </div>
+      </div>
+
+      {/* --- LIVE DATA COLLECTIONS SECTION --- */}
+      <div className="space-y-4">
+          <div className="flex justify-between items-center">
+              <h3 className="text-lg font-bold text-gray-700 flex items-center gap-2">
+                  <Layers className="w-5 h-5 text-gray-500" /> LIVE DATA COLLECTIONS
+              </h3>
+              <button 
+                  onClick={checkConnection}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 bg-white border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors shadow-sm"
+              >
+                  <RefreshCw className={`w-4 h-4 ${dbStatus === 'Connected' && !stats ? 'animate-spin' : ''}`} /> 
+                  Refresh
+              </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {collectionStats.map(stat => (
+                  <div key={stat.key} className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
+                      <div className="flex justify-between items-start mb-4">
+                          <div className="p-3 bg-gray-50 rounded-xl text-gray-600 border border-gray-100">
+                              <stat.icon className="w-6 h-6" />
+                          </div>
+                          <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-green-50 text-green-700 border border-green-100">
+                              {stat.status}
+                          </span>
+                      </div>
+                      
+                      <div>
+                          <h4 className="font-bold text-gray-800 text-lg mb-4">{stat.label}</h4>
+                          <div className="flex items-center text-sm bg-gray-50 rounded-lg p-3 border border-gray-100">
+                              <div className="flex-1">
+                                  <span className="text-gray-500 block text-xs uppercase font-bold mb-1 tracking-wider">Local</span>
+                                  <span className="text-xl font-bold text-gray-800">{stat.local}</span>
+                              </div>
+                              <div className="w-px h-8 bg-gray-200 mx-4"></div>
+                              <div className="flex-1 text-right">
+                                  <span className="text-gray-500 block text-xs uppercase font-bold mb-1 tracking-wider">Cloud</span>
+                                  <span className="text-xl font-bold text-blue-600">{stat.cloud}</span>
+                              </div>
+                          </div>
+                      </div>
+                  </div>
+              ))}
+          </div>
       </div>
       
       {/* Integrations Section */}
