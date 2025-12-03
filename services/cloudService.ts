@@ -13,22 +13,22 @@ export interface FirebaseConfig {
 }
 
 // ============================================================================
-// 🛑 STEP 1: PASTE YOUR FIREBASE KEYS BELOW 🛑
+// 🔒 PERMANENT CONNECTION AREA
 // ============================================================================
-// INSTRUCTIONS:
-// 1. Go to Firebase Console > Project Settings.
-// 2. Copy the values from the 'firebaseConfig' code block.
-// 3. Paste them strictly inside the quotes below. DO NOT add extra commas outside the quotes.
+// Paste your keys inside the quotes below. 
+// Once saved, you will NEVER have to enter them in the app again.
 // ============================================================================
 
 export const HARDCODED_FIREBASE_CONFIG: FirebaseConfig = {
-  apiKey: "",
-  authDomain: "",
-  projectId: "",
-  storageBucket: "",
-  messagingSenderId: "",
-  appId: ""
+  apiKey: "",             // e.g. "AIzaSy..."
+  authDomain: "",         // e.g. "okboz-crm.firebaseapp.com"
+  projectId: "",          // e.g. "okboz-crm"
+  storageBucket: "",      // e.g. "okboz-crm.firebasestorage.app"
+  messagingSenderId: "",  // e.g. "123456789"
+  appId: ""               // e.g. "1:123456:web:abcdef"
 };
+
+// ============================================================================
 
 export const DEFAULT_FIREBASE_CONFIG: FirebaseConfig = {
   apiKey: '',
@@ -75,18 +75,16 @@ const NAMESPACED_KEYS = [
 
 // Helper to get the active configuration
 const getActiveConfig = (config?: FirebaseConfig): FirebaseConfig | null => {
-  let activeConfig = config;
+  // 1. Priority: Hardcoded Config (The Permanent Solution)
+  if (HARDCODED_FIREBASE_CONFIG.apiKey && HARDCODED_FIREBASE_CONFIG.apiKey.length > 5) {
+      return HARDCODED_FIREBASE_CONFIG;
+  }
 
-  // 1. Try passed config
-  // 2. Try Hardcoded config (This enables the "One time setup")
+  // 2. Fallback: Passed config or LocalStorage (The Temporary Solution)
+  let activeConfig = config;
   if (!activeConfig || !activeConfig.apiKey) {
-     if (HARDCODED_FIREBASE_CONFIG.apiKey) {
-         activeConfig = HARDCODED_FIREBASE_CONFIG;
-     } else {
-         // 3. Try LocalStorage (Fallback)
-         const saved = localStorage.getItem('firebase_config');
-         if (saved) activeConfig = JSON.parse(saved);
-     }
+     const saved = localStorage.getItem('firebase_config');
+     if (saved) activeConfig = JSON.parse(saved);
   }
   
   if (!activeConfig || !activeConfig.apiKey) return null;
@@ -158,11 +156,10 @@ export const syncToCloud = async (config?: FirebaseConfig) => {
       }
     }
 
-    console.log("✅ Auto-Sync Successful: " + new Date().toLocaleTimeString());
+    // console.log("✅ Auto-Sync Successful: " + new Date().toLocaleTimeString());
     return { success: true, message: "Sync complete! Data is safe in Cloud." };
   } catch (error: any) {
-    console.error("Sync Error:", error);
-    // Handle permission denied gracefully in sync
+    // console.error("Sync Error:", error);
     if (error.code === 'permission-denied') {
         return { success: false, message: "Permission Denied. Set Firestore rules to Test Mode." };
     }
@@ -206,9 +203,8 @@ export const uploadFileToCloud = async (file: File, path: string): Promise<strin
     const app = getFirebaseApp();
     if (!app) throw new Error("Firebase not connected");
 
-    // Check if storage bucket is configured
     if (!app.options.storageBucket) {
-        alert("Storage Bucket is missing. Check Step 1 in cloudService.ts");
+        alert("Storage Bucket is missing. Check your Firebase Config.");
         return null;
     }
 
@@ -221,7 +217,6 @@ export const uploadFileToCloud = async (file: File, path: string): Promise<strin
     return downloadURL;
   } catch (error) {
     console.error("Upload Error:", error);
-    alert("Failed to upload file. Ensure 'Storage' is enabled in Firebase Console.");
     return null;
   }
 };
@@ -231,12 +226,9 @@ export const autoLoadFromCloud = async (): Promise<boolean> => {
     try {
         const db = getDb(); 
         if (!db) return false;
-
-        // Pull data silently
         await restoreFromCloud();
         return true;
     } catch (e) {
-        console.error("Auto-load failed", e);
         return false;
     }
 };
@@ -271,7 +263,6 @@ export const getCloudDatabaseStats = async (config?: FirebaseConfig) => {
     if (error.code === 'permission-denied' || error.message?.includes('Missing or insufficient permissions')) {
         return { _permissionDenied: true };
     }
-    console.error("Stats Error:", error);
     return null;
   }
 };

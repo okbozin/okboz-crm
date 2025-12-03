@@ -4,7 +4,7 @@ import {
   Bell, Building2, Globe, Shield, MapPin, 
   Palette, Database as DatabaseIcon, 
   UploadCloud, LogOut, Zap, RefreshCw, HardDrive, HelpCircle, Settings as SettingsIcon, 
-  Target, Layers, FileCode, Car, Users, X as XIcon, Lock, Eye, EyeOff, Mail, Cloud, Plus
+  Target, Layers, FileCode, Car, Users, X as XIcon, Lock, Eye, EyeOff, Mail, Cloud, Plus, Lock as LockIcon
 } from 'lucide-react';
 import { useBranding } from '../../context/BrandingContext';
 import { syncToCloud, restoreFromCloud, FirebaseConfig, getCloudDatabaseStats, DEFAULT_FIREBASE_CONFIG, HARDCODED_FIREBASE_CONFIG } from '../../services/cloudService';
@@ -81,6 +81,9 @@ const Settings: React.FC = () => {
   const [loadingStats, setLoadingStats] = useState(false);
   const [permissionError, setPermissionError] = useState(false);
 
+  // Check if using permanent config
+  const isPermanent = !!(HARDCODED_FIREBASE_CONFIG.apiKey && HARDCODED_FIREBASE_CONFIG.apiKey.length > 5);
+
   const [formData, setFormData] = useState({
     companyName: 'OK BOZ Pvt Ltd', website: 'www.okboz.com', email: 'admin@okboz.com',
     phone: '+91 98765 43210', address: '123, Tech Park, Cyber City, Gurgaon, India',
@@ -152,7 +155,7 @@ const Settings: React.FC = () => {
 
         localStorage.setItem('smtp_config', JSON.stringify(emailSettings));
         
-        if (JSON.stringify(firebaseConfig) !== JSON.stringify(HARDCODED_FIREBASE_CONFIG)) {
+        if (!isPermanent && JSON.stringify(firebaseConfig) !== JSON.stringify(HARDCODED_FIREBASE_CONFIG)) {
             localStorage.setItem('firebase_config', JSON.stringify(firebaseConfig));
         }
 
@@ -303,10 +306,12 @@ const Settings: React.FC = () => {
                             <h3 className="text-xl font-bold">Google Cloud Firebase</h3>
                         </div>
                         <p className="text-slate-300 text-sm">Real-time database connection status.</p>
-                        {HARDCODED_FIREBASE_CONFIG.apiKey ? (
-                            <p className="text-xs text-emerald-400 mt-1">Using Persistent Config (Codebase)</p>
+                        {isPermanent ? (
+                            <p className="text-xs text-emerald-400 mt-1 font-bold flex items-center gap-1">
+                                <LockIcon className="w-3 h-3" /> Permanent Connection Active (Code)
+                            </p>
                         ) : (
-                            <p className="text-xs text-orange-300 mt-1">Using Local Storage (Browser)</p>
+                            <p className="text-xs text-orange-300 mt-1">Using Temporary Connection (Browser)</p>
                         )}
                     </div>
                     <div className="text-right">
@@ -323,7 +328,7 @@ const Settings: React.FC = () => {
                     </div>
                 </div>
 
-                {(!firebaseConfig.apiKey || isAdvancedMode) && (
+                {!isPermanent && (!firebaseConfig.apiKey || isAdvancedMode) && (
                     <div className="bg-blue-50 p-6 rounded-xl border border-blue-100 shadow-sm space-y-4">
                         <div className="flex justify-between items-start">
                             <h4 className="text-lg font-bold text-blue-900 flex items-center gap-2">
@@ -401,19 +406,28 @@ const Settings: React.FC = () => {
                         </div>
 
                         <div className="pt-6 border-t border-gray-100 flex flex-wrap gap-4 justify-between items-center mt-4">
-                            <button onClick={() => setIsAdvancedMode(!isAdvancedMode)} className="text-xs font-bold text-gray-400 hover:text-gray-600 uppercase flex items-center gap-1">
-                                <SettingsIcon className="w-3 h-3" /> Connection Settings
-                            </button>
+                            {!isPermanent && (
+                                <button onClick={() => setIsAdvancedMode(!isAdvancedMode)} className="text-xs font-bold text-gray-400 hover:text-gray-600 uppercase flex items-center gap-1">
+                                    <SettingsIcon className="w-3 h-3" /> Connection Settings
+                                </button>
+                            )}
+                            {isPermanent && (
+                                <span className="text-xs text-emerald-600 font-medium flex items-center gap-1">
+                                    <LockIcon className="w-3 h-3" /> Configuration locked by administrator
+                                </span>
+                            )}
                             <div className="flex gap-3">
                                 <button onClick={() => handleCloudSync('up')} disabled={isSyncing} className="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-xs font-bold hover:bg-gray-50 flex items-center gap-2">
                                     <UploadCloud className="w-4 h-4" /> Force Push
                                 </button>
-                                <button 
-                                    onClick={() => { localStorage.removeItem('firebase_config'); window.location.reload(); }}
-                                    className="px-4 py-2 bg-red-50 text-red-600 border border-red-100 rounded-lg text-xs font-bold hover:bg-red-100 flex items-center gap-2"
-                                >
-                                    <LogOut className="w-4 h-4" /> Disconnect
-                                </button>
+                                {!isPermanent && (
+                                    <button 
+                                        onClick={() => { localStorage.removeItem('firebase_config'); window.location.reload(); }}
+                                        className="px-4 py-2 bg-red-50 text-red-600 border border-red-100 rounded-lg text-xs font-bold hover:bg-red-100 flex items-center gap-2"
+                                    >
+                                        <LogOut className="w-4 h-4" /> Disconnect
+                                    </button>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -814,9 +828,9 @@ const Settings: React.FC = () => {
                             </div>
 
                             <div className="border-l-4 border-emerald-500 pl-4">
-                                <h4 className="font-bold text-emerald-400 text-lg mb-1">Step 4: Connect</h4>
+                                <h4 className="font-bold text-emerald-400 text-lg mb-1">Step 4: Permanent Connection</h4>
                                 <p className="text-sm text-slate-300">
-                                    Go to the <strong>Database</strong> tab on this Settings page, paste the config object into the "Easy Connect Wizard", and click Save.
+                                    Open <code>services/cloudService.ts</code> in your editor and paste the keys into <code>HARDCODED_FIREBASE_CONFIG</code>.
                                 </p>
                             </div>
                         </div>
