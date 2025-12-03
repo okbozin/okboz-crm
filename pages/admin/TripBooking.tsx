@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Plus, Search, Download, X, Save,
   User, Car, MapPin, DollarSign, Trash2, Edit2, 
-  PieChart as PieChartIcon, TrendingUp, Building2, RefreshCcw, Calculator
+  PieChart as PieChartIcon, TrendingUp, Building2, RefreshCcw, Calculator, Filter
 } from 'lucide-react';
 import { 
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, 
@@ -78,6 +78,8 @@ const TripBooking: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   
+  // Filter State
+  const [showFilters, setShowFilters] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [branchFilter, setBranchFilter] = useState('All'); 
@@ -154,17 +156,14 @@ const TripBooking: React.FC = () => {
       const matchesStatus = statusFilter === 'All' || t.bookingStatus === statusFilter;
       const matchesBranch = branchFilter === 'All' || (t.branch && t.branch === branchFilter);
       
-      const tripDate = new Date(t.date);
-      const start = fromDate ? new Date(fromDate) : null;
-      const end = toDate ? new Date(toDate) : null;
-      
+      const tripDate = t.date;
       let matchesDate = true;
-      if (start && end) {
-        matchesDate = tripDate >= start && tripDate <= end;
-      } else if (start) {
-        matchesDate = tripDate >= start;
-      } else if (end) {
-        matchesDate = tripDate <= end;
+      if (fromDate && toDate) {
+        matchesDate = tripDate >= fromDate && tripDate <= toDate;
+      } else if (fromDate) {
+        matchesDate = tripDate >= fromDate;
+      } else if (toDate) {
+        matchesDate = tripDate <= toDate;
       }
 
       return matchesSearch && matchesStatus && matchesBranch && matchesDate;
@@ -207,11 +206,7 @@ const TripBooking: React.FC = () => {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    
-    setFormData(prev => {
-        const newData = { ...prev, [name]: value };
-        return newData;
-    });
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
   const handleSave = (e: React.FormEvent) => {
@@ -285,6 +280,40 @@ const TripBooking: React.FC = () => {
       setBranchFilter('All');
       setFromDate('');
       setToDate('');
+  };
+
+  // --- Export Handler ---
+  const handleExport = () => {
+    if (filteredTrips.length === 0) {
+      alert("No trips to export.");
+      return;
+    }
+    
+    const headers = ["Trip ID", "Date", "Branch", "Customer", "Mobile", "Driver", "Type", "Status", "Price"];
+    
+    // Escape strings with commas for CSV format
+    const rows = filteredTrips.map(t => [
+      t.tripId, 
+      t.date, 
+      `"${t.branch}"`, 
+      `"${t.userName}"`, 
+      t.userMobile, 
+      `"${t.driverName || '-'}"`, 
+      t.transportType, 
+      t.bookingStatus, 
+      t.totalPrice
+    ]);
+
+    const csvContent = "data:text/csv;charset=utf-8," 
+        + [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+    
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `trips_export_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   return (
@@ -379,79 +408,95 @@ const TripBooking: React.FC = () => {
 
       {/* Main Content */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        
         {/* Advanced Filter Toolbar */}
-        <div className="p-4 border-b border-gray-200 flex flex-col lg:flex-row gap-4 bg-gray-50 items-end lg:items-center">
-           {/* Search */}
-           <div className="relative flex-1 w-full">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <input 
-                type="text" 
-                placeholder="Search Trip ID, Name or Mobile..." 
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
-              />
-           </div>
-           
-           {/* Filters */}
-           <div className="flex gap-2 w-full lg:w-auto overflow-x-auto pb-1 lg:pb-0">
-               <select 
-                  value={branchFilter}
-                  onChange={(e) => setBranchFilter(e.target.value)}
-                  className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 min-w-[140px]"
-               >
-                  <option value="All">All Branches</option>
-                  {branches.map(b => (
-                    <option key={b} value={b}>{b}</option>
-                  ))}
-               </select>
+        <div className="p-4 border-b border-gray-200 flex flex-col bg-gray-50">
+            <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+                {/* Search */}
+                <div className="relative flex-1 w-full">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                    <input 
+                        type="text" 
+                        placeholder="Search Trip ID, Name or Mobile..." 
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+                    />
+                </div>
+                
+                {/* Action Buttons */}
+                <div className="flex gap-2 w-full md:w-auto">
+                    <button 
+                        onClick={() => setShowFilters(!showFilters)}
+                        className={`px-4 py-2 border rounded-lg text-sm font-medium flex items-center gap-2 transition-colors ${showFilters ? 'bg-indigo-50 text-indigo-600 border-indigo-200' : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'}`}
+                    >
+                        <Filter className="w-4 h-4" /> Filters
+                    </button>
+                    <button 
+                        onClick={handleExport}
+                        className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 text-sm font-medium flex items-center gap-2"
+                    >
+                        <Download className="w-4 h-4" /> Export
+                    </button>
+                </div>
+            </div>
 
-               <select 
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 min-w-[120px]"
-               >
-                  <option value="All">All Status</option>
-                  <option value="Confirmed">Confirmed</option>
-                  <option value="Completed">Completed</option>
-                  <option value="Cancelled">Cancelled</option>
-                  <option value="Pending">Pending</option>
-               </select>
-               
-               <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-2 shadow-sm">
-                  <span className="text-xs text-gray-500 font-medium">From:</span>
-                  <input 
-                    type="date"
-                    value={fromDate}
-                    onChange={(e) => setFromDate(e.target.value)}
-                    className="py-2 text-sm outline-none bg-transparent text-gray-700"
-                  />
-               </div>
+            {/* Collapsible Filters */}
+            {showFilters && (
+                <div className="flex flex-wrap gap-3 mt-4 pt-4 border-t border-gray-200 animate-in fade-in slide-in-from-top-2">
+                    <select 
+                        value={branchFilter}
+                        onChange={(e) => setBranchFilter(e.target.value)}
+                        className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 min-w-[140px]"
+                    >
+                        <option value="All">All Branches</option>
+                        {branches.map(b => (
+                            <option key={b} value={b}>{b}</option>
+                        ))}
+                    </select>
 
-               <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-2 shadow-sm">
-                  <span className="text-xs text-gray-500 font-medium">To:</span>
-                  <input 
-                    type="date"
-                    value={toDate}
-                    onChange={(e) => setToDate(e.target.value)}
-                    className="py-2 text-sm outline-none bg-transparent text-gray-700"
-                  />
-               </div>
+                    <select 
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                        className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 min-w-[120px]"
+                    >
+                        <option value="All">All Status</option>
+                        <option value="Confirmed">Confirmed</option>
+                        <option value="Completed">Completed</option>
+                        <option value="Cancelled">Cancelled</option>
+                        <option value="Pending">Pending</option>
+                    </select>
+                    
+                    <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-1.5">
+                        <span className="text-xs text-gray-500 font-medium">From:</span>
+                        <input 
+                            type="date"
+                            value={fromDate}
+                            onChange={(e) => setFromDate(e.target.value)}
+                            className="text-sm outline-none bg-transparent text-gray-700"
+                        />
+                    </div>
 
-               {(searchTerm || statusFilter !== 'All' || branchFilter !== 'All' || fromDate || toDate) && (
-                   <button 
-                      onClick={handleResetFilters}
-                      className="p-2 text-red-500 hover:bg-red-50 rounded-lg border border-red-100 transition-colors"
-                      title="Reset Filters"
-                   >
-                      <RefreshCcw className="w-4 h-4" />
-                   </button>
-               )}
+                    <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-1.5">
+                        <span className="text-xs text-gray-500 font-medium">To:</span>
+                        <input 
+                            type="date"
+                            value={toDate}
+                            onChange={(e) => setToDate(e.target.value)}
+                            className="text-sm outline-none bg-transparent text-gray-700"
+                        />
+                    </div>
 
-               <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 text-sm font-medium">
-                  <Download className="w-4 h-4" /> Export
-               </button>
-           </div>
+                    {(searchTerm || statusFilter !== 'All' || branchFilter !== 'All' || fromDate || toDate) && (
+                        <button 
+                            onClick={handleResetFilters}
+                            className="px-3 py-2 text-red-500 hover:bg-red-50 rounded-lg text-sm font-medium flex items-center gap-1 transition-colors ml-auto"
+                        >
+                            <RefreshCcw className="w-4 h-4" /> Reset
+                        </button>
+                    )}
+                </div>
+            )}
         </div>
 
         {/* Table */}
