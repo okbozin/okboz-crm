@@ -4,7 +4,7 @@ import {
   Plus, Search, DollarSign, 
   PieChart, FileText, 
   CheckCircle, X, Download,
-  Smartphone, Zap, Wifi, Users, ArrowUpCircle, ArrowDownCircle, Wallet, TrendingUp, TrendingDown, Building2, Upload, Loader2, Paperclip
+  Smartphone, Zap, Wifi, Users, ArrowUpCircle, ArrowDownCircle, Wallet, TrendingUp, TrendingDown, Building2, Upload, Loader2, Paperclip, Eye
 } from 'lucide-react';
 import { PieChart as RePieChart, Pie, Cell, ResponsiveContainer, Tooltip as ReTooltip, Legend } from 'recharts';
 import { uploadFileToCloud } from '../../services/cloudService';
@@ -101,6 +101,7 @@ const Expenses: React.FC = () => {
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [typeFilter, setTypeFilter] = useState('All'); 
   const [monthFilter, setMonthFilter] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
+  const [previewReceipt, setPreviewReceipt] = useState<string | null>(null);
 
   // Upload State
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -398,15 +399,25 @@ const Expenses: React.FC = () => {
                        </td>
                        <td className="px-6 py-4 text-gray-600">
                           {exp.receiptUrl ? (
-                             <a 
-                                href={exp.receiptUrl} 
-                                target="_blank" 
-                                rel="noopener noreferrer" 
-                                download={exp.receiptUrl.startsWith('data:') ? 'receipt.png' : undefined}
-                                className="text-blue-600 hover:underline flex items-center gap-1 text-xs"
-                             >
-                                <Paperclip className="w-3 h-3" /> View
-                             </a>
+                             <div className="flex gap-2">
+                                <button 
+                                   onClick={() => setPreviewReceipt(exp.receiptUrl || null)}
+                                   className="text-blue-600 hover:bg-blue-50 p-1.5 rounded-md transition-colors"
+                                   title="Preview"
+                                >
+                                   <Eye className="w-4 h-4" />
+                                </button>
+                                <a 
+                                   href={exp.receiptUrl} 
+                                   download={`receipt_${exp.id}`}
+                                   target="_blank"
+                                   rel="noopener noreferrer"
+                                   className="text-emerald-600 hover:bg-emerald-50 p-1.5 rounded-md transition-colors"
+                                   title="Download"
+                                >
+                                   <Download className="w-4 h-4" />
+                                </a>
+                             </div>
                           ) : (
                              <span className="text-gray-400 text-xs">-</span>
                           )}
@@ -655,6 +666,41 @@ const Expenses: React.FC = () => {
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* Receipt Preview Modal */}
+      {previewReceipt && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+           <div className="bg-white rounded-xl w-full max-w-4xl h-[85vh] flex flex-col animate-in fade-in zoom-in duration-200">
+              <div className="flex justify-between items-center p-4 border-b border-gray-200">
+                 <h3 className="font-bold text-gray-800">Receipt Preview</h3>
+                 <button onClick={() => setPreviewReceipt(null)} className="p-2 hover:bg-red-50 rounded-lg text-gray-500 hover:text-red-500 transition-colors">
+                    <X className="w-5 h-5" />
+                 </button>
+              </div>
+              <div className="flex-1 bg-gray-100 flex items-center justify-center p-4 overflow-hidden">
+                 {/* Basic detection for image vs other. If cloud URL, might need better detection, but often extensions or MIME are missing in simple string URLs. 
+                     We'll try to show as image first if data URI or common extension, else iframe. 
+                 */}
+                 {previewReceipt.startsWith('data:image') || /\.(jpg|jpeg|png|gif|webp)$/i.test(previewReceipt) ? (
+                    <img src={previewReceipt} alt="Receipt" className="max-w-full max-h-full object-contain shadow-lg rounded-lg" />
+                 ) : (
+                    <iframe src={previewReceipt} className="w-full h-full rounded-lg border border-gray-200 shadow-lg bg-white" title="Receipt Preview"></iframe>
+                 )}
+              </div>
+              <div className="p-4 border-t border-gray-200 flex justify-end">
+                 <a 
+                    href={previewReceipt}
+                    download="receipt"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium flex items-center gap-2 transition-colors shadow-sm"
+                 >
+                    <Download className="w-4 h-4" /> Download Original
+                 </a>
+              </div>
+           </div>
         </div>
       )}
     </div>

@@ -74,7 +74,8 @@ const TripBooking: React.FC = () => {
     }
   });
 
-  const [branches, setBranches] = useState<string[]>([]);
+  const [allBranches, setAllBranches] = useState<any[]>([]); // Store full branch objects
+  const [corporates, setCorporates] = useState<any[]>([]); // Store corporate accounts
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   
@@ -82,11 +83,13 @@ const TripBooking: React.FC = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
-  const [branchFilter, setBranchFilter] = useState('All'); 
+  const [branchFilter, setBranchFilter] = useState('All');
+  const [corporateFilter, setCorporateFilter] = useState('All'); // New Filter
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
 
   const initialFormState = {
+    ownerId: isSuperAdmin ? 'admin' : sessionId, // Default owner
     branch: '',
     tripId: '',
     date: new Date().toISOString().split('T')[0],
@@ -110,30 +113,37 @@ const TripBooking: React.FC = () => {
 
   const [formData, setFormData] = useState(initialFormState);
 
+  // Load Branches and Corporates
   useEffect(() => {
     try {
-      const branchKey = isSuperAdmin ? 'branches_data' : `branches_data_${sessionId}`;
-      
-      let allBranches: any[] = [];
+      // 1. Load Corporates
+      const corps = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
+      setCorporates(corps);
+
+      // 2. Load Branches
+      let loadedBranches: any[] = [];
       
       if (isSuperAdmin) {
           const adminBranches = JSON.parse(localStorage.getItem('branches_data') || '[]');
-          allBranches = [...adminBranches];
-          const corporates = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
-          corporates.forEach((c: any) => {
+          loadedBranches = [...adminBranches.map((b: any) => ({...b, owner: 'admin', ownerName: 'Head Office'}))]; 
+          
+          corps.forEach((c: any) => {
              const cBranches = JSON.parse(localStorage.getItem(`branches_data_${c.email}`) || '[]');
-             allBranches = [...allBranches, ...cBranches];
+             loadedBranches = [...loadedBranches, ...cBranches.map((b: any) => ({...b, owner: c.email, ownerName: c.companyName}))];
           });
       } else {
-          const saved = localStorage.getItem(branchKey);
-          if (saved) allBranches = JSON.parse(saved);
+          const key = `branches_data_${sessionId}`;
+          const saved = localStorage.getItem(key);
+          if (saved) {
+              const parsed = JSON.parse(saved);
+              loadedBranches = parsed.map((b: any) => ({...b, owner: sessionId}));
+          }
       }
-      
-      const uniqueBranchNames = Array.from(new Set(allBranches.map((b: any) => b.name).filter(Boolean)));
-      setBranches(uniqueBranchNames);
+      setAllBranches(loadedBranches);
     } catch (e) {}
   }, [isSuperAdmin, sessionId]);
 
+  // Sync Trips to Storage
   useEffect(() => {
     if (isSuperAdmin) {
         const headOfficeTrips = trips.filter(t => t.ownerId === 'admin');
@@ -156,6 +166,9 @@ const TripBooking: React.FC = () => {
       const matchesStatus = statusFilter === 'All' || t.bookingStatus === statusFilter;
       const matchesBranch = branchFilter === 'All' || (t.branch && t.branch === branchFilter);
       
+      // Corporate Filter (Super Admin Only)
+      const matchesCorporate = corporateFilter === 'All' || (t.ownerId === corporateFilter);
+
       const tripDate = t.date;
       let matchesDate = true;
       if (fromDate && toDate) {
@@ -166,9 +179,9 @@ const TripBooking: React.FC = () => {
         matchesDate = tripDate <= toDate;
       }
 
-      return matchesSearch && matchesStatus && matchesBranch && matchesDate;
+      return matchesSearch && matchesStatus && matchesBranch && matchesCorporate && matchesDate;
     });
-  }, [trips, searchTerm, statusFilter, branchFilter, fromDate, toDate]);
+  }, [trips, searchTerm, statusFilter, branchFilter, corporateFilter, fromDate, toDate]);
 
   const chartData = useMemo(() => {
     const statusCounts: Record<string, number> = {};
@@ -209,12 +222,29 @@ const TripBooking: React.FC = () => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  // Available Branches for Modal Dropdown
+  const formAvailableBranches = useMemo(() => {
+      // Filter branches based on the selected owner in the form
+      const targetOwner = formData.ownerId;
+      return allBranches.filter(b => b.owner === targetOwner);
+  }, [allBranches, formData.ownerId]);
+
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.tripId || !formData.date || !formData.userName) {
       alert("Please fill all required fields (*)");
       return;
+    }
+
+    // Determine Owner Name
+    let ownerName = 'My Branch';
+    if (isSuperAdmin) {
+        if (formData.ownerId === 'admin') ownerName = 'Head Office';
+        else {
+            const corp = corporates.find(c => c.email === formData.ownerId);
+            ownerName = corp ? corp.companyName : 'Corporate';
+        }
     }
 
     const tripData: Trip = {
@@ -227,12 +257,12 @@ const TripBooking: React.FC = () => {
       discount: Number(formData.discount),
       cancellationCharge: Number(formData.cancellationCharge),
       totalPrice: totalPrice,
-      ownerId: isSuperAdmin ? 'admin' : sessionId,
-      ownerName: isSuperAdmin ? 'Head Office' : 'My Branch'
+      ownerId: formData.ownerId, 
+      ownerName: ownerName
     };
 
     if (editingId) {
-      setTrips(prev => prev.map(t => t.id === editingId ? { ...t, ...tripData, ownerId: t.ownerId, ownerName: t.ownerName } : t));
+      setTrips(prev => prev.map(t => t.id === editingId ? { ...t, ...tripData } : t));
     } else {
       setTrips(prev => [tripData, ...prev]);
     }
@@ -245,6 +275,7 @@ const TripBooking: React.FC = () => {
   const handleEdit = (trip: Trip) => {
     setEditingId(trip.id);
     setFormData({
+      ownerId: trip.ownerId || 'admin',
       branch: trip.branch,
       tripId: trip.tripId,
       date: trip.date,
@@ -278,20 +309,17 @@ const TripBooking: React.FC = () => {
       setSearchTerm('');
       setStatusFilter('All');
       setBranchFilter('All');
+      setCorporateFilter('All');
       setFromDate('');
       setToDate('');
   };
 
-  // --- Export Handler ---
   const handleExport = () => {
     if (filteredTrips.length === 0) {
       alert("No trips to export.");
       return;
     }
-    
-    const headers = ["Trip ID", "Date", "Branch", "Customer", "Mobile", "Driver", "Type", "Status", "Price"];
-    
-    // Helper to escape CSV values
+    const headers = ["Trip ID", "Date", "Owner", "Branch", "Booking Type", "Customer", "Driver", "Transport", "Comm", "Tax", "Total", "Status"];
     const escapeCsv = (val: any) => {
         if (val === null || val === undefined) return '';
         const stringVal = String(val);
@@ -300,22 +328,12 @@ const TripBooking: React.FC = () => {
         }
         return stringVal;
     };
-
     const rows = filteredTrips.map(t => [
-      t.tripId, 
-      t.date, 
-      t.branch, 
-      t.userName, 
-      t.userMobile, 
-      t.driverName || '-', 
-      t.transportType, 
-      t.bookingStatus, 
-      t.totalPrice
+      t.tripId, t.date, t.ownerName || '-', t.branch, t.bookingType, t.userName, t.driverName || '-', 
+      `${t.tripCategory} - ${t.transportType}`, t.adminCommission, t.tax, t.totalPrice, t.bookingStatus
     ].map(escapeCsv));
 
-    const csvContent = "data:text/csv;charset=utf-8," 
-        + [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
-    
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
@@ -362,58 +380,52 @@ const TripBooking: React.FC = () => {
         </div>
       </div>
 
-      {/* Analytics Charts */}
-      {filteredTrips.length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-4">
-            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-                <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2">
-                    <PieChartIcon className="w-5 h-5 text-emerald-500" /> Booking Status (Selected Range)
-                </h3>
-                <div className="h-64">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                            <Pie
-                                data={chartData.pieData}
-                                cx="50%"
-                                cy="50%"
-                                innerRadius={60}
-                                outerRadius={80}
-                                paddingAngle={5}
-                                dataKey="value"
-                            >
-                                {chartData.pieData.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={entry.color || COLORS[index % COLORS.length]} />
-                                ))}
-                            </Pie>
-                            <Tooltip />
-                            <Legend verticalAlign="bottom" height={36}/>
-                        </PieChart>
-                    </ResponsiveContainer>
-                </div>
-            </div>
-
-            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-                <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2">
-                    <TrendingUp className="w-5 h-5 text-blue-500" /> Revenue Trend (Selected Range)
-                </h3>
-                <div className="h-64">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={chartData.barData} barSize={40}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill:'#9ca3af', fontSize:12}} dy={10} />
-                            <YAxis axisLine={false} tickLine={false} tick={{fill:'#9ca3af', fontSize:12}} tickFormatter={(val) => `₹${val/1000}k`}/>
-                            <Tooltip 
-                                cursor={{fill: 'transparent'}}
-                                formatter={(value: number) => [`₹${value.toLocaleString()}`, 'Revenue']}
-                                contentStyle={{borderRadius:'8px', border:'none', boxShadow:'0 4px 6px -1px rgba(0,0,0,0.1)'}}
-                            />
-                            <Bar dataKey="revenue" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                        </BarChart>
-                    </ResponsiveContainer>
-                </div>
+      {/* Charts Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+            <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <PieChartIcon className="w-5 h-5 text-indigo-500" /> Booking Status
+            </h3>
+            <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                        <Pie
+                            data={chartData.pieData}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={60}
+                            outerRadius={80}
+                            paddingAngle={5}
+                            dataKey="value"
+                        >
+                            {chartData.pieData.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                        </Pie>
+                        <Tooltip />
+                        <Legend />
+                    </PieChart>
+                </ResponsiveContainer>
             </div>
         </div>
-      )}
+
+        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+            <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <TrendingUp className="w-5 h-5 text-emerald-500" /> Revenue Trend
+            </h3>
+            <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={chartData.barData}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill:'#9ca3af', fontSize:12}} />
+                        <YAxis axisLine={false} tickLine={false} tick={{fill:'#9ca3af', fontSize:12}} />
+                        <Tooltip cursor={{fill: '#f3f4f6'}} />
+                        <Bar dataKey="revenue" fill="#10b981" radius={[4, 4, 0, 0]} barSize={20} />
+                    </BarChart>
+                </ResponsiveContainer>
+            </div>
+        </div>
+      </div>
 
       {/* Main Content */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
@@ -453,14 +465,33 @@ const TripBooking: React.FC = () => {
             {/* Collapsible Filters */}
             {showFilters && (
                <div className="flex flex-wrap gap-3 mt-4 pt-4 border-t border-gray-200 animate-in fade-in slide-in-from-top-2">
+                   
+                   {/* Corporate Filter (Super Admin Only) */}
+                   {isSuperAdmin && (
+                       <select 
+                          value={corporateFilter}
+                          onChange={(e) => setCorporateFilter(e.target.value)}
+                          className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 min-w-[160px]"
+                       >
+                          <option value="All">All Corporates</option>
+                          <option value="admin">Head Office</option>
+                          {corporates.map((c: any) => (
+                             <option key={c.email} value={c.email}>{c.companyName}</option>
+                          ))}
+                       </select>
+                   )}
+
                    <select 
                       value={branchFilter}
                       onChange={(e) => setBranchFilter(e.target.value)}
                       className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 min-w-[140px]"
                    >
                       <option value="All">All Branches</option>
-                      {branches.map(b => (
-                        <option key={b} value={b}>{b}</option>
+                      {/* Show unique branches available in the current context */}
+                      {allBranches.map((b: any) => (
+                        <option key={b.id} value={b.name}>
+                            {b.name} {isSuperAdmin ? `(${b.ownerName || 'Branch'})` : ''}
+                        </option>
                       ))}
                    </select>
 
@@ -496,7 +527,7 @@ const TripBooking: React.FC = () => {
                       />
                    </div>
 
-                   {(searchTerm || statusFilter !== 'All' || branchFilter !== 'All' || fromDate || toDate) && (
+                   {(searchTerm || statusFilter !== 'All' || branchFilter !== 'All' || corporateFilter !== 'All' || fromDate || toDate) && (
                        <button 
                           onClick={handleResetFilters}
                           className="px-3 py-2 text-red-500 hover:bg-red-50 rounded-lg text-sm font-medium flex items-center gap-1 transition-colors ml-auto"
@@ -517,9 +548,11 @@ const TripBooking: React.FC = () => {
                     {isSuperAdmin && <th className="px-6 py-4">Agency / Corporate</th>}
                     <th className="px-6 py-4">Branch</th>
                     <th className="px-6 py-4">Customer</th>
-                    <th className="px-6 py-4">Driver</th>
-                    <th className="px-6 py-4">Type</th>
-                    <th className="px-6 py-4 text-right">Price</th>
+                    <th className="px-6 py-4">Booking Type</th>
+                    <th className="px-6 py-4">Transport</th>
+                    <th className="px-6 py-4 text-right">Commission</th>
+                    <th className="px-6 py-4 text-right">Tax</th>
+                    <th className="px-6 py-4 text-right">Total Price</th>
                     <th className="px-6 py-4 text-center">Status</th>
                     <th className="px-6 py-4 text-right">Actions</th>
                  </tr>
@@ -547,17 +580,23 @@ const TripBooking: React.FC = () => {
                           <div className="text-xs text-gray-500">{trip.userMobile}</div>
                        </td>
                        <td className="px-6 py-4">
-                          <div className="font-medium text-gray-900">{trip.driverName || '-'}</div>
-                          <div className="text-xs text-gray-500">{trip.driverMobile}</div>
+                          <span className="text-gray-700 text-xs font-semibold bg-gray-100 px-2 py-1 rounded">
+                             {trip.bookingType}
+                          </span>
                        </td>
                        <td className="px-6 py-4">
                           <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-blue-50 text-blue-700 text-xs font-medium border border-blue-100">
                              {trip.tripCategory} • {trip.transportType}
                           </span>
                        </td>
+                       <td className="px-6 py-4 text-right text-emerald-600 font-medium">
+                          ₹{trip.adminCommission.toFixed(0)}
+                       </td>
+                       <td className="px-6 py-4 text-right text-gray-600">
+                          ₹{trip.tax.toFixed(0)}
+                       </td>
                        <td className="px-6 py-4 text-right">
                           <div className="font-bold text-gray-900">₹{trip.totalPrice.toLocaleString()}</div>
-                          <div className="text-xs text-emerald-600">Comm: ₹{trip.adminCommission.toFixed(0)}</div>
                        </td>
                        <td className="px-6 py-4 text-center">
                           <span className={`px-2 py-1 rounded-full text-xs font-bold border ${
@@ -578,7 +617,7 @@ const TripBooking: React.FC = () => {
                  ))}
                  {filteredTrips.length === 0 && (
                     <tr>
-                       <td colSpan={isSuperAdmin ? 9 : 8} className="text-center py-12 text-gray-500 bg-gray-50">
+                       <td colSpan={isSuperAdmin ? 11 : 10} className="text-center py-12 text-gray-500 bg-gray-50">
                           <div className="flex flex-col items-center">
                               <Search className="w-10 h-10 text-gray-300 mb-2" />
                               <p>No trips found matching the selected filters.</p>
@@ -606,11 +645,36 @@ const TripBooking: React.FC = () => {
                     <div className="space-y-4">
                        <h4 className="text-sm font-bold text-gray-900 border-b pb-2 flex items-center gap-2"><MapPin className="w-4 h-4 text-emerald-500"/> Trip Info</h4>
                        
+                       {/* Super Admin: Select Owner first */}
+                       {isSuperAdmin && (
+                           <div>
+                               <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Assign to (Corporate/HO)</label>
+                               <select 
+                                   name="ownerId" 
+                                   value={formData.ownerId} 
+                                   onChange={(e) => setFormData({...formData, ownerId: e.target.value, branch: ''})} 
+                                   className="w-full p-2 border border-gray-300 rounded-lg outline-none bg-white text-sm"
+                               >
+                                   <option value="admin">Head Office</option>
+                                   {corporates.map((c: any) => (
+                                       <option key={c.email} value={c.email}>{c.companyName} ({c.city})</option>
+                                   ))}
+                               </select>
+                           </div>
+                       )}
+
                        <div>
                           <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Branch</label>
-                          <select name="branch" value={formData.branch} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none bg-white text-sm">
+                          <select 
+                              name="branch" 
+                              value={formData.branch} 
+                              onChange={handleInputChange} 
+                              className="w-full p-2 border border-gray-300 rounded-lg outline-none bg-white text-sm"
+                          >
                              <option value="">Select Branch</option>
-                             {branches.map(b => <option key={b} value={b}>{b}</option>)}
+                             {formAvailableBranches.map((b: any) => (
+                                <option key={b.id} value={b.name}>{b.name}</option>
+                             ))}
                           </select>
                        </div>
 

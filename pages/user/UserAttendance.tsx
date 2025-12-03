@@ -31,6 +31,7 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
   // Determine Session Context
   const getSessionId = () => localStorage.getItem('app_session_id') || 'admin';
   const currentSessionId = getSessionId();
+  const isSuperAdmin = currentSessionId === 'admin';
   
   // Helper to find an employee by ID across all storage locations
   const findEmployeeById = (id: string): Employee | undefined => {
@@ -58,8 +59,44 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
   // Load employees list (For Admin View Only)
   const [employees, setEmployees] = useState<Employee[]>(() => {
     if (isAdmin) {
-      const saved = localStorage.getItem('staff_data');
-      return saved ? JSON.parse(saved) : MOCK_EMPLOYEES;
+      if (isSuperAdmin) {
+          // --- SUPER ADMIN AGGREGATION ---
+          let allStaff: Employee[] = [];
+          
+          // 1. Admin Data (Head Office)
+          const adminData = localStorage.getItem('staff_data');
+          if (adminData) {
+              try { 
+                  const parsed = JSON.parse(adminData);
+                  allStaff = [...allStaff, ...parsed.map((e: any) => ({...e, name: `${e.name} (Head Office)`}))];
+              } catch (e) {}
+          }
+
+          // 2. Corporate Data
+          try {
+            const corporates = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
+            corporates.forEach((corp: any) => {
+                const cData = localStorage.getItem(`staff_data_${corp.email}`);
+                if (cData) {
+                    try {
+                        const parsed = JSON.parse(cData);
+                        // Append franchise name to employee name for clarity in dropdown
+                        const tagged = parsed.map((e: any) => ({...e, name: `${e.name} (${corp.companyName})`}));
+                        allStaff = [...allStaff, ...tagged];
+                    } catch (e) {}
+                }
+            });
+          } catch(e) {}
+          
+          // 3. Fallback to Mocks if absolutely nothing exists
+          if (allStaff.length === 0) return MOCK_EMPLOYEES;
+          return allStaff;
+      } else {
+          // Regular Franchise/Corporate Admin - Only see their own staff
+          const key = `staff_data_${currentSessionId}`;
+          const saved = localStorage.getItem(key);
+          return saved ? JSON.parse(saved) : [];
+      }
     }
     return [];
   });
@@ -733,9 +770,23 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
                                  <p className="text-xs text-gray-500">{day.status.replace('_', ' ')}</p>
                               </div>
                            </div>
-                           <div className="text-right">
-                              <p className="font-mono text-sm font-bold text-gray-800">{day.checkIn || '--:--'}</p>
-                              <p className="text-xs text-gray-400">Check In</p>
+                           <div className="text-right flex flex-col items-end gap-1 min-w-[80px]">
+                              {day.checkIn ? (
+                                  <>
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="text-[9px] text-gray-400 uppercase tracking-wide">In</span>
+                                        <p className="font-mono text-xs font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">{day.checkIn}</p>
+                                    </div>
+                                    {day.checkOut && (
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="text-[9px] text-gray-400 uppercase tracking-wide">Out</span>
+                                            <p className="font-mono text-xs font-bold text-red-500 bg-red-50 px-1.5 py-0.5 rounded border border-red-100">{day.checkOut}</p>
+                                        </div>
+                                    )}
+                                  </>
+                              ) : (
+                                  <span className="text-xs text-gray-300">--:--</span>
+                              )}
                            </div>
                         </div>
                     ))}
@@ -932,11 +983,18 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
                                         <p className="text-xs font-bold text-gray-700">{new Date(day.date).toLocaleDateString('en-US', { weekday: 'short' })}</p>
                                         <p className="text-[10px] text-gray-500">{day.status.replace('_', ' ')}</p>
                                     </div>
-                                    {day.checkIn && (
-                                        <div className="text-right">
-                                            <p className="text-xs font-mono font-bold text-emerald-600">{day.checkIn}</p>
-                                        </div>
-                                    )}
+                                    <div className="text-right min-w-[80px]">
+                                        {day.checkIn ? (
+                                            <div className="flex flex-col items-end gap-1">
+                                                <span className="text-xs font-mono font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">In: {day.checkIn}</span>
+                                                {day.checkOut && (
+                                                    <span className="text-xs font-mono font-bold text-red-500 bg-red-50 px-1.5 py-0.5 rounded">Out: {day.checkOut}</span>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <span className="text-xs text-gray-300">-</span>
+                                        )}
+                                    </div>
                                 </div>
                             ))}
                         </div>

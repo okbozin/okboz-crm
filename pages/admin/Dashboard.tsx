@@ -1,6 +1,6 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
-import { Users, UserCheck, UserX, MapPin, ArrowRight, Building2, Car, TrendingUp, DollarSign, Clock, BarChart3, Calendar } from 'lucide-react';
+import { Users, UserCheck, UserX, MapPin, ArrowRight, Building2, Car, TrendingUp, DollarSign, Clock, BarChart3, Calendar, Truck, CheckCircle } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, AreaChart, Area } from 'recharts';
 import { useNavigate } from 'react-router-dom';
 import { MOCK_EMPLOYEES, getEmployeeAttendance } from '../../constants';
@@ -16,6 +16,19 @@ interface ExtendedEmployee extends Employee {
 interface ExtendedEnquiry extends Enquiry {
     assignedCorporate?: string;
     assignedBranch?: string;
+}
+
+interface Trip {
+    id: string;
+    tripId: string;
+    date: string;
+    branch: string;
+    bookingStatus: string;
+    totalPrice: number;
+    userName: string;
+    transportType: string;
+    ownerId?: string;
+    ownerName?: string;
 }
 
 const Dashboard = () => {
@@ -36,6 +49,7 @@ const Dashboard = () => {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [employees, setEmployees] = useState<ExtendedEmployee[]>([]);
   const [enquiries, setEnquiries] = useState<ExtendedEnquiry[]>([]);
+  const [trips, setTrips] = useState<Trip[]>([]); // Added Trips State
   const [pendingApprovals, setPendingApprovals] = useState<any[]>([]);
 
   // --- 3. Initial Data Fetching ---
@@ -101,6 +115,37 @@ const Dashboard = () => {
         setEnquiries(enqs);
     } catch(e) {}
 
+    // E. Load Trips (Aggregated) - NEW
+    let allTrips: Trip[] = [];
+    if (isSuperAdmin) {
+        // Admin Trips
+        try {
+            const adminTrips = JSON.parse(localStorage.getItem('trips_data') || '[]');
+            allTrips = [...allTrips, ...adminTrips.map((t: any) => ({...t, ownerId: 'admin', ownerName: 'Head Office'}))];
+        } catch(e) {}
+        
+        // Corporate Trips
+        const corps = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
+        corps.forEach((c: any) => {
+            const cTrips = localStorage.getItem(`trips_data_${c.email}`);
+            if (cTrips) {
+                try {
+                    allTrips = [...allTrips, ...JSON.parse(cTrips).map((t: any) => ({...t, ownerId: c.email, ownerName: c.companyName}))];
+                } catch(e) {}
+            }
+        });
+    } else {
+        const sessionId = localStorage.getItem('app_session_id') || 'admin';
+        const key = `trips_data_${sessionId}`;
+        try {
+            const saved = localStorage.getItem(key);
+            if (saved) {
+                allTrips = JSON.parse(saved).map((t: any) => ({...t, ownerId: sessionId, ownerName: 'My Branch'}));
+            }
+        } catch(e) {}
+    }
+    setTrips(allTrips);
+
     // F. Pending Leaves (Mock removed)
     const savedApprovals = localStorage.getItem(`pending_approvals_${localStorage.getItem('app_session_id') || 'admin'}`);
     if (savedApprovals) setPendingApprovals(JSON.parse(savedApprovals));
@@ -126,6 +171,21 @@ const Dashboard = () => {
       });
   }, [employees, filterCorporate, filterBranch]);
 
+  const filteredTrips = useMemo(() => {
+      return trips.filter(t => {
+          const matchCorp = filterCorporate === 'All' || t.ownerId === filterCorporate || (filterCorporate === 'admin' && t.ownerId === 'admin');
+          const matchBranch = filterBranch === 'All' || t.branch === filterBranch;
+          
+          let matchDate = true;
+          if (filterType === 'Daily') {
+              matchDate = t.date === selectedDate;
+          } else {
+              matchDate = t.date.startsWith(selectedMonth);
+          }
+          return matchCorp && matchBranch && matchDate;
+      });
+  }, [trips, filterCorporate, filterBranch, filterType, selectedDate, selectedMonth]);
+
   const filteredEnquiries = useMemo(() => {
       return enquiries.filter(e => {
           const corpKey = e.assignedCorporate || 'Head Office';
@@ -143,9 +203,7 @@ const Dashboard = () => {
           
           // Date Filtering
           let matchDate = true;
-          const enqDate = e.date || e.createdAt.split(',')[0]; // Fallback
-          // Normalize dates for comparison usually requires better parsing, 
-          // assuming e.date is YYYY-MM-DD from form save
+          const enqDate = e.date || e.createdAt.split(',')[0]; 
           
           if (filterType === 'Daily') {
               matchDate = enqDate === selectedDate;
@@ -197,6 +255,14 @@ const Dashboard = () => {
 
       return { present, absent, late, onField };
   }, [filteredEmployees, filterType, selectedDate, selectedMonth]);
+
+  // Trip Stats
+  const tripStats = useMemo(() => {
+      const total = filteredTrips.length;
+      const completed = filteredTrips.filter(t => t.bookingStatus === 'Completed').length;
+      const revenue = filteredTrips.filter(t => t.bookingStatus === 'Completed').reduce((sum, t) => sum + (Number(t.totalPrice) || 0), 0);
+      return { total, completed, revenue };
+  }, [filteredTrips]);
 
   // Vehicle Stats (Dynamic Revenue Parsing)
   const vehicleStats = useMemo(() => {
@@ -359,20 +425,21 @@ const Dashboard = () => {
             </div>
         </div>
 
-        {/* Field Force Stat */}
-        <div className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+        {/* Trip Booking Stats */}
+        <div className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm cursor-pointer hover:border-emerald-300 transition-colors" onClick={() => navigate('/admin/trips')}>
             <div className="flex justify-between items-start mb-2">
                 <div>
-                    <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Field Force</p>
-                    <h3 className="text-2xl font-bold text-gray-800 dark:text-white mt-1">{attendanceStats.onField}</h3>
+                    <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total Trips</p>
+                    <h3 className="text-2xl font-bold text-gray-800 dark:text-white mt-1">{tripStats.total}</h3>
                 </div>
                 <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-blue-600 dark:text-blue-400">
-                    <MapPin className="w-5 h-5" />
+                    <Truck className="w-5 h-5" />
                 </div>
             </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Active staff currently on field duty or travel.
-            </p>
+            <div className="flex justify-between items-center text-xs text-gray-500 dark:text-gray-400">
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500"></span> {tripStats.completed} Completed</span>
+                <span className="font-bold text-emerald-600 dark:text-emerald-400">₹{tripStats.revenue.toLocaleString()}</span>
+            </div>
         </div>
 
         {/* Vehicle Enquiries Stat */}
@@ -493,39 +560,40 @@ const Dashboard = () => {
           </div>
       </div>
 
-      {/* Recent Enquiries / Quick Actions */}
+      {/* Recent Trips / Quick Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
               <div className="p-5 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
-                  <h3 className="font-bold text-gray-800 dark:text-white">Recent Vehicle Enquiries</h3>
-                  <button onClick={() => navigate('/admin/vehicle-enquiries')} className="text-sm text-emerald-600 hover:underline">View All</button>
+                  <h3 className="font-bold text-gray-800 dark:text-white">Recent Trips</h3>
+                  <button onClick={() => navigate('/admin/trips')} className="text-sm text-emerald-600 hover:underline">View All</button>
               </div>
               <div className="divide-y divide-gray-100 dark:divide-gray-700">
-                  {filteredEnquiries.slice(0, 5).map((enq) => (
-                      <div key={enq.id} className="p-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                  {filteredTrips.slice(0, 5).map((trip) => (
+                      <div key={trip.id} className="p-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                           <div className="flex items-center gap-3">
-                              <div className={`p-2 rounded-full ${enq.type === 'Customer' ? 'bg-blue-100 text-blue-600' : 'bg-orange-100 text-orange-600'}`}>
-                                  {enq.type === 'Customer' ? <Users className="w-4 h-4" /> : <Car className="w-4 h-4" />}
+                              <div className="p-2 rounded-full bg-blue-100 text-blue-600">
+                                  <Truck className="w-4 h-4" />
                               </div>
                               <div>
-                                  <p className="font-bold text-gray-800 dark:text-white text-sm">{enq.name}</p>
-                                  <p className="text-xs text-gray-500 dark:text-gray-400">{enq.city} • {enq.phone}</p>
+                                  <p className="font-bold text-gray-800 dark:text-white text-sm">{trip.userName}</p>
+                                  <p className="text-xs text-gray-500 dark:text-gray-400">{trip.branch} • {trip.tripId}</p>
                               </div>
                           </div>
                           <div className="text-right">
                               <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${
-                                  enq.status === 'Booked' ? 'bg-emerald-100 text-emerald-700' :
-                                  enq.status === 'New' ? 'bg-red-100 text-red-700' :
+                                  trip.bookingStatus === 'Completed' ? 'bg-emerald-100 text-emerald-700' :
+                                  trip.bookingStatus === 'Confirmed' ? 'bg-blue-100 text-blue-700' :
+                                  trip.bookingStatus === 'Cancelled' ? 'bg-red-100 text-red-700' :
                                   'bg-gray-100 text-gray-700'
                               }`}>
-                                  {enq.status}
+                                  {trip.bookingStatus}
                               </span>
-                              <p className="text-[10px] text-gray-400 mt-1">{enq.createdAt.split(',')[0]}</p>
+                              <p className="text-[10px] text-gray-400 mt-1">{trip.date}</p>
                           </div>
                       </div>
                   ))}
-                  {filteredEnquiries.length === 0 && (
-                      <div className="p-8 text-center text-gray-500 dark:text-gray-400 text-sm">No recent enquiries found.</div>
+                  {filteredTrips.length === 0 && (
+                      <div className="p-8 text-center text-gray-500 dark:text-gray-400 text-sm">No recent trips found.</div>
                   )}
               </div>
           </div>
@@ -534,8 +602,8 @@ const Dashboard = () => {
               <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl p-6 text-white shadow-lg">
                   <h4 className="font-bold text-lg mb-2">Quick Actions</h4>
                   <div className="space-y-3">
-                      <button onClick={() => navigate('/admin/staff')} className="w-full py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm font-medium transition-colors text-left px-4 flex items-center gap-2">
-                          <Users className="w-4 h-4 text-emerald-400" /> Add New Staff
+                      <button onClick={() => navigate('/admin/trips')} className="w-full py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm font-medium transition-colors text-left px-4 flex items-center gap-2">
+                          <Truck className="w-4 h-4 text-emerald-400" /> Book New Trip
                       </button>
                       <button onClick={() => navigate('/admin/vehicle-enquiries')} className="w-full py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm font-medium transition-colors text-left px-4 flex items-center gap-2">
                           <Car className="w-4 h-4 text-blue-400" /> Create Transport Quote

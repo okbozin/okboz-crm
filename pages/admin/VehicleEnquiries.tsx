@@ -267,6 +267,25 @@ Book now with OK BOZ! 🚕`;
                   </button>
               </div>
 
+              {/* Pickup Location - Moved Here */}
+              {enquiryCategory === 'Transport' && (
+                  <div>
+                      <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Pickup Location</label>
+                      {!isMapReady ? (
+                          <div className="p-3 bg-gray-50 text-gray-500 text-sm rounded-lg flex items-center gap-2">
+                              <Loader2 className="w-4 h-4 animate-spin" /> Loading Google Maps...
+                          </div>
+                      ) : (
+                          <Autocomplete 
+                              placeholder="Search Google Maps for Pickup"
+                              onAddressSelect={addr => setCustomerDetails({...customerDetails, pickup: addr})}
+                              setNewPlace={setPickupCoords}
+                              defaultValue={customerDetails.pickup}
+                          />
+                      )}
+                  </div>
+              )}
+
               <div className="bg-green-50 text-green-700 p-3 rounded-lg flex justify-between items-center text-sm font-medium">
                   <span className="flex items-center gap-2"><CheckCircle className="w-4 h-4" /> Details Locked</span>
                   <button className="text-green-800 hover:underline">Change</button>
@@ -278,9 +297,11 @@ Book now with OK BOZ! 🚕`;
               
               {enquiryCategory === 'Transport' ? (
                 <>
-                  {/* Settings Toggle */}
+                  {/* Settings Toggle Header */}
                   <div className="flex justify-between items-center">
-                      <label className="block text-xs font-bold text-gray-500 uppercase">Pickup Location</label>
+                      <h4 className="text-sm font-bold text-gray-800 flex items-center gap-2">
+                          <Truck className="w-4 h-4 text-gray-400" /> Trip Details
+                      </h4>
                       <button 
                           type="button"
                           onClick={() => setShowSettings(!showSettings)}
@@ -289,18 +310,6 @@ Book now with OK BOZ! 🚕`;
                           <Settings className="w-3 h-3" /> {showSettings ? 'Close Config' : 'Rates'}
                       </button>
                   </div>
-
-                  {!isMapReady ? (
-                      <div className="p-3 bg-gray-50 text-gray-500 text-sm rounded-lg flex items-center gap-2">
-                          <Loader2 className="w-4 h-4 animate-spin" /> Loading Google Maps...
-                      </div>
-                  ) : (
-                      <Autocomplete 
-                          placeholder="Search Google Maps for Pickup"
-                          onAddressSelect={addr => setCustomerDetails({...customerDetails, pickup: addr})}
-                          setNewPlace={setPickupCoords}
-                      />
-                  )}
 
                   {/* SETTINGS PANEL */}
                   {showSettings && (
@@ -415,7 +424,7 @@ Book now with OK BOZ! 🚕`;
                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Drop Location</label>
                             {!isMapReady ? (
                                 <div className="p-3 bg-gray-50 text-gray-500 text-sm rounded-lg flex items-center gap-2">
-                                    <Loader2 className="w-4 h-4 animate-spin" /> Loading Maps...
+                                    <Loader2 className="w-4 h-4 animate-spin" /> Loading Google Maps...
                                 </div>
                             ) : (
                                 <Autocomplete 

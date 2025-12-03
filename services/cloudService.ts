@@ -59,7 +59,8 @@ const GLOBAL_KEYS = [
   'company_global_payout_day',
   'salary_advances',
   'app_branding',
-  'app_theme'
+  'app_theme',
+  'maps_api_key'
 ];
 
 const NAMESPACED_KEYS = [

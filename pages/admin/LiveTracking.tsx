@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Loader2, Settings } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -22,8 +23,8 @@ const LiveTracking: React.FC = () => {
   const isSuperAdminUser = userRole === 'ADMIN';
   const isCorporateUser = userRole === 'CORPORATE';
 
-  // Center of New Delhi for default view
-  const center = { lat: 28.6139, lng: 77.2090 };
+  // Center of Coimbatore for default view
+  const center = { lat: 11.0168, lng: 76.9558 };
 
   // Staff Locations state - initialized as empty (no mock data)
   const [staffLocations, setStaffLocations] = useState<any[]>([]);
