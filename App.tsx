@@ -31,13 +31,13 @@ import { UserRole } from './types';
 import { BrandingProvider } from './context/BrandingContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { Loader2, Cloud } from 'lucide-react'; 
-import { autoLoadFromCloud } from './services/cloudService'; // Import Auto Load
+import { autoLoadFromCloud, syncToCloud, HARDCODED_FIREBASE_CONFIG } from './services/cloudService'; // Import Sync
 
 const App: React.FC = () => {
   // Initialize state from localStorage
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [userRole, setUserRole] = useState<UserRole>(UserRole.ADMIN);
-  const [isInitializing, setIsInitializing] = useState(true); // Add loading state
+  const [isInitializing, setIsInitializing] = useState(true);
 
   // Initialize Auth and Data
   useEffect(() => {
@@ -59,6 +59,21 @@ const App: React.FC = () => {
 
     initApp();
   }, []);
+
+  // --- AUTO SYNC (Start Collecting Data) ---
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    // Only run if API key is present
+    if (HARDCODED_FIREBASE_CONFIG.apiKey || localStorage.getItem('firebase_config')) {
+        const interval = setInterval(async () => {
+            // Silently sync data to cloud every 60 seconds
+            await syncToCloud();
+        }, 60000); 
+
+        return () => clearInterval(interval);
+    }
+  }, [isAuthenticated]);
 
   // Handle Login
   const handleLogin = (role: UserRole) => {

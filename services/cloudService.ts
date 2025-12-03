@@ -12,16 +12,20 @@ export interface FirebaseConfig {
   appId: string;
 }
 
-// --- 🟢 PERMANENT CONFIGURATION 🟢 ---
-// PASTE YOUR FIREBASE CONFIG HERE inside the quotes.
-// Once you do this, you never have to enter it in the settings again.
+// ============================================================================
+// 🛑 STEP 1: PASTE YOUR FIREBASE KEYS BELOW 🛑
+// ============================================================================
+// 1. Go to Firebase Console > Project Settings > General > Your Apps
+// 2. Copy the values and paste them inside the quotes "" below.
+// ============================================================================
+
 export const HARDCODED_FIREBASE_CONFIG: FirebaseConfig = {
-  apiKey: "", // Paste apiKey here
-  authDomain: "", // Paste authDomain here
-  projectId: "", // Paste projectId here
-  storageBucket: "", // Paste storageBucket here
-  messagingSenderId: "", // Paste messagingSenderId here
-  appId: "" // Paste appId here
+  apiKey: "",              // 👈 Paste apiKey here (e.g. "AIzaSy...")
+  authDomain: "",          // 👈 Paste authDomain here
+  projectId: "",           // 👈 Paste projectId here (e.g. "okboz-crm")
+  storageBucket: "",       // 👈 Paste storageBucket here
+  messagingSenderId: "",   // 👈 Paste messagingSenderId here
+  appId: ""                // 👈 Paste appId here
 };
 
 export const DEFAULT_FIREBASE_CONFIG: FirebaseConfig = {
@@ -34,6 +38,7 @@ export const DEFAULT_FIREBASE_CONFIG: FirebaseConfig = {
 };
 
 // --- DATA MAPPING ---
+// These keys will be automatically synced to the database
 const GLOBAL_KEYS = [
   'corporate_accounts',
   'global_enquiries_data',
@@ -110,16 +115,18 @@ const getDb = (config?: FirebaseConfig): Firestore | null => {
   return app ? getFirestore(app) : null;
 };
 
+// --- SYNC FUNCTION (Saves data to Cloud) ---
 export const syncToCloud = async (config?: FirebaseConfig) => {
   try {
     const db = getDb(config);
-    if (!db) throw new Error("No Firebase configuration found. Please update services/cloudService.ts or Settings.");
+    if (!db) return { success: false, message: "Not Connected" };
 
     const corporateAccountsStr = localStorage.getItem('corporate_accounts');
     const corporates = corporateAccountsStr ? JSON.parse(corporateAccountsStr) : [];
 
     const allBaseKeys = [...GLOBAL_KEYS, ...NAMESPACED_KEYS];
     
+    // Save Global Data
     for (const key of allBaseKeys) {
       const data = localStorage.getItem(key);
       if (data) {
@@ -130,6 +137,7 @@ export const syncToCloud = async (config?: FirebaseConfig) => {
       }
     }
 
+    // Save Corporate Specific Data
     if (Array.isArray(corporates)) {
       for (const corp of corporates) {
         const email = corp.email;
@@ -148,17 +156,19 @@ export const syncToCloud = async (config?: FirebaseConfig) => {
       }
     }
 
-    return { success: true, message: "Sync complete! All local data pushed to Google Cloud." };
+    console.log("✅ Auto-Sync Successful: " + new Date().toLocaleTimeString());
+    return { success: true, message: "Sync complete! Data is safe in Cloud." };
   } catch (error: any) {
     console.error("Sync Error:", error);
     // Handle permission denied gracefully in sync
     if (error.code === 'permission-denied') {
-        return { success: false, message: "Permission Denied. Check Firebase Security Rules." };
+        return { success: false, message: "Permission Denied. Set Firestore rules to Test Mode." };
     }
     return { success: false, message: `Sync failed: ${error.message}` };
   }
 };
 
+// --- RESTORE FUNCTION (Loads data from Cloud) ---
 export const restoreFromCloud = async (config?: FirebaseConfig) => {
   try {
     const db = getDb(config);
@@ -167,7 +177,7 @@ export const restoreFromCloud = async (config?: FirebaseConfig) => {
     const snapshot = await getDocs(collection(db, "ok_boz_live_data"));
     
     if (snapshot.empty) {
-        return { success: true, message: "Connected, but no data found in Cloud to restore." };
+        return { success: true, message: "Connected, but database is empty." };
     }
 
     snapshot.forEach((doc) => {
@@ -177,11 +187,12 @@ export const restoreFromCloud = async (config?: FirebaseConfig) => {
         }
     });
 
-    return { success: true, message: "Restore complete! All databases updated from Cloud." };
+    console.log("✅ Data Loaded from Cloud");
+    return { success: true, message: "Restore complete! Data loaded from Cloud." };
   } catch (error: any) {
     console.error("Restore Error:", error);
     if (error.code === 'permission-denied') {
-        return { success: false, message: "Permission Denied. Check Firebase Security Rules." };
+        return { success: false, message: "Permission Denied. Set Firestore rules to Test Mode." };
     }
     return { success: false, message: `Restore failed: ${error.message}` };
   }
@@ -195,7 +206,7 @@ export const uploadFileToCloud = async (file: File, path: string): Promise<strin
 
     // Check if storage bucket is configured
     if (!app.options.storageBucket) {
-        alert("Storage Bucket is missing in configuration. Check HARDCODED_FIREBASE_CONFIG in cloudService.ts");
+        alert("Storage Bucket is missing. Check Step 1 in cloudService.ts");
         return null;
     }
 
@@ -208,7 +219,7 @@ export const uploadFileToCloud = async (file: File, path: string): Promise<strin
     return downloadURL;
   } catch (error) {
     console.error("Upload Error:", error);
-    alert("Failed to upload file. Ensure 'Storage' is enabled in Firebase Console and CORS is configured.");
+    alert("Failed to upload file. Ensure 'Storage' is enabled in Firebase Console.");
     return null;
   }
 };
@@ -216,9 +227,8 @@ export const uploadFileToCloud = async (file: File, path: string): Promise<strin
 // Auto-load data on app start
 export const autoLoadFromCloud = async (): Promise<boolean> => {
     try {
-        // This forces a check for hardcoded or stored credentials
         const db = getDb(); 
-        if (!db) return false; // No credentials, can't load
+        if (!db) return false;
 
         // Pull data silently
         await restoreFromCloud();
@@ -256,7 +266,6 @@ export const getCloudDatabaseStats = async (config?: FirebaseConfig) => {
     
     return stats;
   } catch (error: any) {
-    // Handle permission denied gracefully
     if (error.code === 'permission-denied' || error.message?.includes('Missing or insufficient permissions')) {
         return { _permissionDenied: true };
     }
