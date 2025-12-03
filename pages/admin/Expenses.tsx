@@ -153,12 +153,29 @@ const Expenses: React.FC = () => {
     setIsUploading(true);
     let receiptUrl = '';
 
-    // Upload to Firebase if file exists
+    // Handle File Upload with Local Fallback
     if (selectedFile) {
         const sessionId = localStorage.getItem('app_session_id') || 'admin';
         const path = `receipts/${sessionId}/${Date.now()}_${selectedFile.name}`;
-        const url = await uploadFileToCloud(selectedFile, path);
-        if (url) receiptUrl = url;
+        
+        // 1. Try Cloud Upload
+        const cloudUrl = await uploadFileToCloud(selectedFile, path);
+        
+        if (cloudUrl) {
+            receiptUrl = cloudUrl;
+        } else {
+            // 2. Fallback to Local Base64 if cloud upload fails (e.g. permission error)
+            try {
+                receiptUrl = await new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result as string);
+                    reader.readAsDataURL(selectedFile);
+                });
+                console.log("Used local fallback for receipt.");
+            } catch (err) {
+                console.error("Local fallback failed", err);
+            }
+        }
     }
 
     const newExpense: Expense = {
@@ -381,7 +398,13 @@ const Expenses: React.FC = () => {
                        </td>
                        <td className="px-6 py-4 text-gray-600">
                           {exp.receiptUrl ? (
-                             <a href={exp.receiptUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline flex items-center gap-1 text-xs">
+                             <a 
+                                href={exp.receiptUrl} 
+                                target="_blank" 
+                                rel="noopener noreferrer" 
+                                download={exp.receiptUrl.startsWith('data:') ? 'receipt.png' : undefined}
+                                className="text-blue-600 hover:underline flex items-center gap-1 text-xs"
+                             >
                                 <Paperclip className="w-3 h-3" /> View
                              </a>
                           ) : (

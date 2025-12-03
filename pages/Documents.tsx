@@ -5,6 +5,7 @@ import {
   File, Image as ImageIcon, FileSpreadsheet, MoreVertical, X, CheckCircle 
 } from 'lucide-react';
 import { DocumentFile, UserRole } from '../types';
+import { uploadFileToCloud } from '../services/cloudService';
 
 interface DocumentsProps {
   role: UserRole;
@@ -49,31 +50,60 @@ const Documents: React.FC<DocumentsProps> = ({ role }) => {
     }
   };
 
-  const handleUpload = () => {
+  const handleUpload = async () => {
     if (!uploadFile) return;
     
     setIsUploading(true);
 
-    // Simulate Network Delay
-    setTimeout(() => {
-      const newDoc: DocumentFile = {
-        id: `DOC-${Date.now()}`,
-        name: uploadFile.name,
-        type: uploadFile.type,
-        size: (uploadFile.size / 1024 / 1024).toFixed(2) + ' MB',
-        category: uploadCategory as any,
-        uploadedBy: role === UserRole.ADMIN ? 'Super Admin' : role === UserRole.CORPORATE ? 'Corporate Admin' : 'Employee',
-        uploadDate: new Date().toISOString().split('T')[0],
-        url: URL.createObjectURL(uploadFile), // Temporary Browser URL for preview
-        visibility: uploadVisibility as any,
-        ownerId: sessionId
-      };
+    try {
+        let fileUrl = '';
+        
+        // 1. Try Cloud Upload (Firebase)
+        const cloudUrl = await uploadFileToCloud(uploadFile, `documents/${Date.now()}_${uploadFile.name}`);
+        
+        if (cloudUrl) {
+            fileUrl = cloudUrl;
+        } else {
+            // 2. Fallback to Base64 (Local Storage Persistence)
+            // This ensures files work even without a backend for the demo
+            fileUrl = await new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result as string);
+                reader.readAsDataURL(uploadFile);
+            });
+        }
 
-      setDocuments([newDoc, ...documents]);
-      setIsUploading(false);
-      setIsUploadModalOpen(false);
-      setUploadFile(null);
-    }, 1500);
+        const newDoc: DocumentFile = {
+            id: `DOC-${Date.now()}`,
+            name: uploadFile.name,
+            type: uploadFile.type,
+            size: (uploadFile.size / 1024 / 1024).toFixed(2) + ' MB',
+            category: uploadCategory as any,
+            uploadedBy: role === UserRole.ADMIN ? 'Super Admin' : role === UserRole.CORPORATE ? 'Corporate Admin' : 'Employee',
+            uploadDate: new Date().toISOString().split('T')[0],
+            url: fileUrl,
+            visibility: uploadVisibility as any,
+            ownerId: sessionId
+        };
+
+        setDocuments([newDoc, ...documents]);
+        setIsUploadModalOpen(false);
+        setUploadFile(null);
+    } catch (error) {
+        console.error("Upload failed", error);
+        alert("Failed to upload document. Please try again.");
+    } finally {
+        setIsUploading(false);
+    }
+  };
+
+  const handleDownload = (doc: DocumentFile) => {
+    const link = document.createElement('a');
+    link.href = doc.url;
+    link.download = doc.name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const handleDelete = (id: string) => {
@@ -97,7 +127,7 @@ const Documents: React.FC<DocumentsProps> = ({ role }) => {
     if (isSuperAdmin) {
       hasAccess = true; // Super Admin sees all
     } else if (role === UserRole.CORPORATE) {
-      // Corporate sees Public, their own, or documents uploaded by their employees (mocked via ownerId check logic)
+      // Corporate sees Public, their own, or documents uploaded by their employees
       hasAccess = doc.visibility === 'Public' || doc.ownerId === sessionId || doc.visibility === 'Private'; 
     } else {
       // Employee sees Public or their own
@@ -199,7 +229,10 @@ const Documents: React.FC<DocumentsProps> = ({ role }) => {
                    >
                       <Eye className="w-4 h-4" /> View
                    </button>
-                   <button className="flex-1 py-3 flex items-center justify-center gap-2 text-gray-600 hover:bg-white hover:text-blue-600 text-xs font-medium transition-colors">
+                   <button 
+                     onClick={() => handleDownload(doc)}
+                     className="flex-1 py-3 flex items-center justify-center gap-2 text-gray-600 hover:bg-white hover:text-blue-600 text-xs font-medium transition-colors"
+                   >
                       <Download className="w-4 h-4" /> Download
                    </button>
                    {(isSuperAdmin || doc.ownerId === sessionId) && (
@@ -306,7 +339,7 @@ const Documents: React.FC<DocumentsProps> = ({ role }) => {
       {/* Preview Modal */}
       {previewDoc && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-           <div className="bg-white rounded-xl w-full max-w-4xl h-[80vh] flex flex-col animate-in fade-in zoom-in duration-200">
+           <div className="bg-white rounded-xl w-full max-w-4xl h-[85vh] flex flex-col animate-in fade-in zoom-in duration-200">
               <div className="flex justify-between items-center p-4 border-b border-gray-200">
                  <div className="flex items-center gap-3">
                     <div className="p-2 bg-gray-100 rounded-lg">
@@ -318,7 +351,11 @@ const Documents: React.FC<DocumentsProps> = ({ role }) => {
                     </div>
                  </div>
                  <div className="flex gap-2">
-                    <button className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors" title="Download">
+                    <button 
+                        onClick={() => handleDownload(previewDoc)}
+                        className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors" 
+                        title="Download"
+                    >
                        <Download className="w-5 h-5" />
                     </button>
                     <button onClick={() => setPreviewDoc(null)} className="p-2 hover:bg-red-50 rounded-lg text-gray-500 hover:text-red-500 transition-colors">
@@ -328,12 +365,20 @@ const Documents: React.FC<DocumentsProps> = ({ role }) => {
               </div>
               <div className="flex-1 bg-gray-100 flex items-center justify-center p-4 overflow-hidden">
                  {previewDoc.type.includes('image') ? (
-                    <img src={previewDoc.url} alt="Preview" className="max-w-full max-h-full object-contain shadow-lg" />
+                    <img src={previewDoc.url} alt="Preview" className="max-w-full max-h-full object-contain shadow-lg rounded-lg" />
+                 ) : previewDoc.type.includes('pdf') ? (
+                    <iframe src={previewDoc.url} className="w-full h-full rounded-lg border border-gray-200 shadow-lg" title="PDF Preview"></iframe>
                  ) : (
-                    <div className="text-center text-gray-500">
+                    <div className="text-center text-gray-500 bg-white p-10 rounded-2xl shadow-sm">
                        <FileText className="w-24 h-24 mx-auto mb-4 text-gray-300" />
-                       <p className="text-lg">Preview not available for this file type.</p>
-                       <button className="mt-4 text-blue-600 hover:underline font-medium">Download to view</button>
+                       <p className="text-lg font-medium text-gray-700">Preview not available</p>
+                       <p className="text-sm text-gray-500 mb-6">This file type cannot be viewed in the browser.</p>
+                       <button 
+                           onClick={() => handleDownload(previewDoc)}
+                           className="bg-blue-50 text-blue-600 hover:bg-blue-100 px-6 py-2.5 rounded-lg font-medium flex items-center gap-2 mx-auto transition-colors"
+                       >
+                           <Download className="w-4 h-4" /> Download to view
+                       </button>
                     </div>
                  )}
               </div>

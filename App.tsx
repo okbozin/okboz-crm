@@ -68,6 +68,8 @@ const App: React.FC = () => {
     if (HARDCODED_FIREBASE_CONFIG.apiKey || localStorage.getItem('firebase_config')) {
         const interval = setInterval(async () => {
             // Silently sync data to cloud every 30 seconds
+            // Note: syncToCloud has a built-in safety guard to skip if it detects Mock Data (like "John Doe").
+            // This prevents polluting the production database with test data during deployment.
             await syncToCloud();
         }, 30000); 
 

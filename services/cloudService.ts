@@ -74,6 +74,18 @@ const NAMESPACED_KEYS = [
   'trips_data'
 ];
 
+// Helper to check for mock data to prevent pollution of production DB
+const isMockDataPresent = (): boolean => {
+  const staffData = localStorage.getItem('staff_data');
+  
+  // Check for known mock data signatures (e.g. from constants.ts or initial state)
+  // If the user hasn't cleared the default data, we shouldn't sync.
+  if (staffData && (staffData.includes('John Doe') || staffData.includes('"id":"E001"'))) {
+    return true;
+  }
+  return false;
+};
+
 // Helper to get the active configuration
 const getActiveConfig = (config?: FirebaseConfig): FirebaseConfig | null => {
   // 1. Priority: Hardcoded Config (The Permanent Solution)
@@ -118,6 +130,14 @@ const getDb = (config?: FirebaseConfig): Firestore | null => {
 
 // --- SYNC FUNCTION (Saves data to Cloud) ---
 export const syncToCloud = async (config?: FirebaseConfig) => {
+  // SAFETY GUARD: Prevent syncing if mock data is detected
+  if (isMockDataPresent()) {
+    // Return a success-like response to stop the UI from retrying aggressively or showing errors,
+    // but log it internally.
+    console.log("☁️ Sync Skipped: Mock data detected. Clear data before syncing to production.");
+    return { success: true, message: "Sync Skipped: Mock Data Present" };
+  }
+
   try {
     const db = getDb(config);
     if (!db) return { success: false, message: "Not Connected" };
@@ -205,7 +225,8 @@ export const uploadFileToCloud = async (file: File, path: string): Promise<strin
     if (!app) throw new Error("Firebase not connected");
 
     if (!app.options.storageBucket) {
-        alert("Storage Bucket is missing. Check your Firebase Config.");
+        // alert("Storage Bucket is missing. Check your Firebase Config.");
+        // Quiet fail to allow fallback
         return null;
     }
 
@@ -216,8 +237,9 @@ export const uploadFileToCloud = async (file: File, path: string): Promise<strin
     const downloadURL = await getDownloadURL(snapshot.ref);
     
     return downloadURL;
-  } catch (error) {
-    console.error("Upload Error:", error);
+  } catch (error: any) {
+    // Log detailed error for debugging but return null to trigger fallback
+    console.error("Cloud Upload Failed (Falling back to local):", error.code, error.message);
     return null;
   }
 };
