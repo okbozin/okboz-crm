@@ -1,9 +1,9 @@
 
 import React, { useState } from 'react';
 import { UserRole } from '../types';
-import { Lock, Mail, ArrowRight, Eye, EyeOff, AlertTriangle, Cloud } from 'lucide-react';
+import { Shield, User, Lock, Mail, ArrowRight, Building2, Eye, EyeOff, AlertTriangle, Cloud, BadgeCheck } from 'lucide-react';
 import { useBranding } from '../context/BrandingContext';
-import { sendSystemNotification } from '../services/cloudService';
+import { sendSystemNotification } from '../services/cloudService'; // Fixed path from ./ to ../
 
 interface LoginProps {
   onLogin: (role: UserRole) => void;
@@ -31,7 +31,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         let sessionId = '';
         let employeeName = '';
         let employeeId = '';
-        let corporateOwnerId = '';
+        let corporateOwnerId = ''; // To store corporate email if employee belongs to one
 
         if (activeTab === 'admin') {
             // Check against stored admin password or default
@@ -107,7 +107,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                     timestamp: new Date().toISOString(),
                     read: false,
                     targetRoles: [UserRole.ADMIN, UserRole.CORPORATE],
-                    corporateId: corporateOwnerId,
+                    corporateId: corporateOwnerId, // Admin sees all, Corporate only sees their own staff's logins
                     employeeName: employeeName,
                     employeeId: employeeId,
                     link: `/admin/staff` 
@@ -244,4 +244,3 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 };
 
 export default Login;
-    

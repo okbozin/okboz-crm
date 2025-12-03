@@ -78,7 +78,7 @@ const TripBooking: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   
-  // Filter State
+  // Filter States
   const [showFilters, setShowFilters] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -146,6 +146,7 @@ const TripBooking: React.FC = () => {
     }
   }, [trips, isSuperAdmin, sessionId]);
 
+  // --- Robust Filtering Logic ---
   const filteredTrips = useMemo(() => {
     return trips.filter(t => {
       const matchesSearch = 
@@ -156,6 +157,7 @@ const TripBooking: React.FC = () => {
       const matchesStatus = statusFilter === 'All' || t.bookingStatus === statusFilter;
       const matchesBranch = branchFilter === 'All' || (t.branch && t.branch === branchFilter);
       
+      // String comparison for dates (YYYY-MM-DD) matches reliably
       const tripDate = t.date;
       let matchesDate = true;
       if (fromDate && toDate) {
@@ -290,15 +292,13 @@ const TripBooking: React.FC = () => {
     }
     
     const headers = ["Trip ID", "Date", "Branch", "Customer", "Mobile", "Driver", "Type", "Status", "Price"];
-    
-    // Escape strings with commas for CSV format
     const rows = filteredTrips.map(t => [
       t.tripId, 
       t.date, 
-      `"${t.branch}"`, 
-      `"${t.userName}"`, 
+      t.branch, 
+      t.userName, 
       t.userMobile, 
-      `"${t.driverName || '-'}"`, 
+      t.driverName || '-', 
       t.transportType, 
       t.bookingStatus, 
       t.totalPrice
@@ -440,62 +440,62 @@ const TripBooking: React.FC = () => {
                     </button>
                 </div>
             </div>
-
+            
             {/* Collapsible Filters */}
             {showFilters && (
-                <div className="flex flex-wrap gap-3 mt-4 pt-4 border-t border-gray-200 animate-in fade-in slide-in-from-top-2">
-                    <select 
-                        value={branchFilter}
-                        onChange={(e) => setBranchFilter(e.target.value)}
-                        className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 min-w-[140px]"
-                    >
-                        <option value="All">All Branches</option>
-                        {branches.map(b => (
-                            <option key={b} value={b}>{b}</option>
-                        ))}
-                    </select>
+               <div className="flex flex-wrap gap-3 mt-4 pt-4 border-t border-gray-200 animate-in fade-in slide-in-from-top-2">
+                   <select 
+                      value={branchFilter}
+                      onChange={(e) => setBranchFilter(e.target.value)}
+                      className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 min-w-[140px]"
+                   >
+                      <option value="All">All Branches</option>
+                      {branches.map(b => (
+                        <option key={b} value={b}>{b}</option>
+                      ))}
+                   </select>
 
-                    <select 
-                        value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value)}
-                        className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 min-w-[120px]"
-                    >
-                        <option value="All">All Status</option>
-                        <option value="Confirmed">Confirmed</option>
-                        <option value="Completed">Completed</option>
-                        <option value="Cancelled">Cancelled</option>
-                        <option value="Pending">Pending</option>
-                    </select>
-                    
-                    <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-1.5">
-                        <span className="text-xs text-gray-500 font-medium">From:</span>
-                        <input 
-                            type="date"
-                            value={fromDate}
-                            onChange={(e) => setFromDate(e.target.value)}
-                            className="text-sm outline-none bg-transparent text-gray-700"
-                        />
-                    </div>
+                   <select 
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                      className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 min-w-[120px]"
+                   >
+                      <option value="All">All Status</option>
+                      <option value="Confirmed">Confirmed</option>
+                      <option value="Completed">Completed</option>
+                      <option value="Cancelled">Cancelled</option>
+                      <option value="Pending">Pending</option>
+                   </select>
+                   
+                   <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-1.5">
+                      <span className="text-xs text-gray-500 font-medium">From:</span>
+                      <input 
+                        type="date"
+                        value={fromDate}
+                        onChange={(e) => setFromDate(e.target.value)}
+                        className="text-sm outline-none bg-transparent text-gray-700"
+                      />
+                   </div>
 
-                    <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-1.5">
-                        <span className="text-xs text-gray-500 font-medium">To:</span>
-                        <input 
-                            type="date"
-                            value={toDate}
-                            onChange={(e) => setToDate(e.target.value)}
-                            className="text-sm outline-none bg-transparent text-gray-700"
-                        />
-                    </div>
+                   <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-1.5">
+                      <span className="text-xs text-gray-500 font-medium">To:</span>
+                      <input 
+                        type="date"
+                        value={toDate}
+                        onChange={(e) => setToDate(e.target.value)}
+                        className="text-sm outline-none bg-transparent text-gray-700"
+                      />
+                   </div>
 
-                    {(searchTerm || statusFilter !== 'All' || branchFilter !== 'All' || fromDate || toDate) && (
-                        <button 
-                            onClick={handleResetFilters}
-                            className="px-3 py-2 text-red-500 hover:bg-red-50 rounded-lg text-sm font-medium flex items-center gap-1 transition-colors ml-auto"
-                        >
-                            <RefreshCcw className="w-4 h-4" /> Reset
-                        </button>
-                    )}
-                </div>
+                   {(searchTerm || statusFilter !== 'All' || branchFilter !== 'All' || fromDate || toDate) && (
+                       <button 
+                          onClick={handleResetFilters}
+                          className="px-3 py-2 text-red-500 hover:bg-red-50 rounded-lg text-sm font-medium flex items-center gap-1 transition-colors ml-auto"
+                       >
+                          <RefreshCcw className="w-4 h-4" /> Reset
+                       </button>
+                   )}
+               </div>
             )}
         </div>
 

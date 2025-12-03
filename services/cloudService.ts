@@ -13,8 +13,8 @@ export interface FirebaseConfig {
 }
 
 // --- 🟢 PERMANENT CONFIGURATION 🟢 ---
-// Paste your Firebase Config here to avoid entering it in Settings every time.
-// This ensures all computers automatically connect to the database.
+// PASTE YOUR FIREBASE CONFIG HERE inside the quotes.
+// Once you do this, you never have to enter it in the settings again.
 export const HARDCODED_FIREBASE_CONFIG: FirebaseConfig = {
   apiKey: "", // Paste apiKey here
   authDomain: "", // Paste authDomain here
@@ -66,17 +66,17 @@ const NAMESPACED_KEYS = [
   'trips_data'
 ];
 
-// Helper to get Config
+// Helper to get the active configuration
 const getActiveConfig = (config?: FirebaseConfig): FirebaseConfig | null => {
   let activeConfig = config;
 
   // 1. Try passed config
-  // 2. Try Hardcoded config
+  // 2. Try Hardcoded config (This enables the "One time setup")
   if (!activeConfig || !activeConfig.apiKey) {
      if (HARDCODED_FIREBASE_CONFIG.apiKey) {
          activeConfig = HARDCODED_FIREBASE_CONFIG;
      } else {
-         // 3. Try LocalStorage
+         // 3. Try LocalStorage (Fallback)
          const saved = localStorage.getItem('firebase_config');
          if (saved) activeConfig = JSON.parse(saved);
      }
@@ -91,6 +91,7 @@ const getFirebaseApp = (config?: FirebaseConfig): FirebaseApp | null => {
   const activeConfig = getActiveConfig(config);
   if (!activeConfig) return null;
 
+  // Avoid duplicate app initialization error
   if (getApps().length > 0) {
     return getApp();
   }
@@ -109,10 +110,10 @@ const getDb = (config?: FirebaseConfig): Firestore | null => {
   return app ? getFirestore(app) : null;
 };
 
-export const syncToCloud = async (config: FirebaseConfig) => {
+export const syncToCloud = async (config?: FirebaseConfig) => {
   try {
     const db = getDb(config);
-    if (!db) throw new Error("No Firebase configuration found.");
+    if (!db) throw new Error("No Firebase configuration found. Please update services/cloudService.ts or Settings.");
 
     const corporateAccountsStr = localStorage.getItem('corporate_accounts');
     const corporates = corporateAccountsStr ? JSON.parse(corporateAccountsStr) : [];
@@ -150,6 +151,10 @@ export const syncToCloud = async (config: FirebaseConfig) => {
     return { success: true, message: "Sync complete! All local data pushed to Google Cloud." };
   } catch (error: any) {
     console.error("Sync Error:", error);
+    // Handle permission denied gracefully in sync
+    if (error.code === 'permission-denied') {
+        return { success: false, message: "Permission Denied. Check Firebase Security Rules." };
+    }
     return { success: false, message: `Sync failed: ${error.message}` };
   }
 };
@@ -175,15 +180,24 @@ export const restoreFromCloud = async (config?: FirebaseConfig) => {
     return { success: true, message: "Restore complete! All databases updated from Cloud." };
   } catch (error: any) {
     console.error("Restore Error:", error);
+    if (error.code === 'permission-denied') {
+        return { success: false, message: "Permission Denied. Check Firebase Security Rules." };
+    }
     return { success: false, message: `Restore failed: ${error.message}` };
   }
 };
 
-// New Function: Upload File to Firebase Storage
+// Upload File to Firebase Storage
 export const uploadFileToCloud = async (file: File, path: string): Promise<string | null> => {
   try {
     const app = getFirebaseApp();
     if (!app) throw new Error("Firebase not connected");
+
+    // Check if storage bucket is configured
+    if (!app.options.storageBucket) {
+        alert("Storage Bucket is missing in configuration. Check HARDCODED_FIREBASE_CONFIG in cloudService.ts");
+        return null;
+    }
 
     const storage = getStorage(app);
     const storageRef = ref(storage, path);
@@ -194,12 +208,12 @@ export const uploadFileToCloud = async (file: File, path: string): Promise<strin
     return downloadURL;
   } catch (error) {
     console.error("Upload Error:", error);
-    alert("Failed to upload file. Check if 'Storage' is enabled in Firebase Console and CORS is configured.");
+    alert("Failed to upload file. Ensure 'Storage' is enabled in Firebase Console and CORS is configured.");
     return null;
   }
 };
 
-// New Function: Auto-load data on app start
+// Auto-load data on app start
 export const autoLoadFromCloud = async (): Promise<boolean> => {
     try {
         // This forces a check for hardcoded or stored credentials
@@ -215,7 +229,7 @@ export const autoLoadFromCloud = async (): Promise<boolean> => {
     }
 };
 
-export const getCloudDatabaseStats = async (config: FirebaseConfig) => {
+export const getCloudDatabaseStats = async (config?: FirebaseConfig) => {
   try {
     const db = getDb(config);
     if (!db) return null;
@@ -241,7 +255,11 @@ export const getCloudDatabaseStats = async (config: FirebaseConfig) => {
     });
     
     return stats;
-  } catch (error) {
+  } catch (error: any) {
+    // Handle permission denied gracefully
+    if (error.code === 'permission-denied' || error.message?.includes('Missing or insufficient permissions')) {
+        return { _permissionDenied: true };
+    }
     console.error("Stats Error:", error);
     return null;
   }

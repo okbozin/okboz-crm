@@ -16,7 +16,6 @@ const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'
 const Reports: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'Financial' | 'Attendance' | 'CRM' | 'Transport'>('Financial');
   
-  // Data State
   const [expenses, setExpenses] = useState<any[]>([]);
   const [payroll, setPayroll] = useState<any[]>([]);
   const [leads, setLeads] = useState<any[]>([]);
@@ -25,12 +24,10 @@ const Reports: React.FC = () => {
 
   const isSuperAdmin = (localStorage.getItem('app_session_id') || 'admin') === 'admin';
 
-  // Load Data
   useEffect(() => {
     try {
       const corporates = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
 
-      // 1. Load Expenses
       const expenseData = JSON.parse(localStorage.getItem('office_expenses') || '[]');
       const corpExpenses = corporates.flatMap((c: any) => {
          const d = localStorage.getItem(`office_expenses_${c.email}`);
@@ -38,15 +35,12 @@ const Reports: React.FC = () => {
       });
       setExpenses([...expenseData, ...corpExpenses]);
 
-      // 2. Load Payroll History
       const payrollData = JSON.parse(localStorage.getItem('payroll_history') || '[]');
       setPayroll(payrollData);
 
-      // 3. Load Leads
       const leadsData = JSON.parse(localStorage.getItem('leads_data') || '[]');
       setLeads(leadsData);
 
-      // 4. Load Staff
       const staffData = JSON.parse(localStorage.getItem('staff_data') || '[]');
       const corpStaff = corporates.flatMap((c: any) => {
          const d = localStorage.getItem(`staff_data_${c.email}`);
@@ -54,7 +48,6 @@ const Reports: React.FC = () => {
       });
       setStaff(staffData.length + corpStaff.length > 0 ? [...staffData, ...corpStaff] : MOCK_EMPLOYEES);
 
-      // 5. Load Trips
       let allTrips: any[] = [];
       const adminTrips = JSON.parse(localStorage.getItem('trips_data') || '[]');
       allTrips = [...adminTrips];
@@ -69,7 +62,6 @@ const Reports: React.FC = () => {
     }
   }, []);
 
-  // --- Financial Stats ---
   const financialStats = useMemo(() => {
     const stats = [];
     const today = new Date();
@@ -79,18 +71,15 @@ const Reports: React.FC = () => {
       const monthStr = d.toISOString().slice(0, 7); // YYYY-MM
       const label = d.toLocaleDateString('en-US', { month: 'short' });
 
-      // Income Sources
       const monthExpenses = expenses.filter(e => e.date && e.date.startsWith(monthStr));
       const otherIncome = monthExpenses.filter(e => e.type === 'Income').reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
       
-      // Trip Revenue (Only Completed)
       const tripRevenue = trips
         .filter(t => t.date.startsWith(monthStr) && t.bookingStatus === 'Completed')
         .reduce((sum, t) => sum + (Number(t.totalPrice) || 0), 0);
 
       const totalIncome = otherIncome + tripRevenue;
 
-      // Expenses
       const expense = monthExpenses.filter(e => e.type === 'Expense').reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
       const monthPayroll = payroll.filter(p => p.date && p.date.startsWith(monthStr)).reduce((sum, p) => sum + (p.totalAmount || 0), 0);
 
@@ -113,7 +102,6 @@ const Reports: React.FC = () => {
     return Object.keys(categoryMap).map(key => ({ name: key, value: categoryMap[key] })).sort((a,b) => b.value - a.value).slice(0, 5);
   }, [expenses]);
 
-  // --- Attendance Stats ---
   const attendanceStats = useMemo(() => {
     if (staff.length === 0) return [];
     const stats = [];
@@ -145,7 +133,6 @@ const Reports: React.FC = () => {
     return stats;
   }, [staff]);
 
-  // --- CRM Stats ---
   const crmStats = useMemo(() => {
       const statusCounts: Record<string, number> = {};
       const sourceCounts: Record<string, number> = {};
@@ -166,7 +153,6 @@ const Reports: React.FC = () => {
       return { funnelData, sourceData };
   }, [leads]);
 
-  // --- Transport Stats ---
   const transportStats = useMemo(() => {
       const vehicleCounts: Record<string, number> = {};
       const statusCounts: Record<string, number> = {};
@@ -174,9 +160,7 @@ const Reports: React.FC = () => {
       let completedTrips = 0;
 
       trips.forEach(t => {
-          // Vehicle Type
           vehicleCounts[t.transportType] = (vehicleCounts[t.transportType] || 0) + 1;
-          // Status
           statusCounts[t.bookingStatus] = (statusCounts[t.bookingStatus] || 0) + 1;
           
           if (t.bookingStatus === 'Completed') {
@@ -188,7 +172,6 @@ const Reports: React.FC = () => {
       const vehicleData = Object.keys(vehicleCounts).map(k => ({ name: k, value: vehicleCounts[k] }));
       const statusData = Object.keys(statusCounts).map(k => ({ name: k, value: statusCounts[k] }));
 
-      // Revenue Trend (Daily for last 7 days)
       const revenueTrend = [];
       const today = new Date();
       for (let i = 6; i >= 0; i--) {
@@ -209,7 +192,6 @@ const Reports: React.FC = () => {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
-      {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-center gap-4">
         <div>
           <h2 className="text-2xl font-bold text-gray-800">Reports & Analytics</h2>
@@ -248,10 +230,8 @@ const Reports: React.FC = () => {
         </div>
       </div>
 
-      {/* FINANCIAL REPORT */}
       {activeTab === 'Financial' && (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              {/* KPI Cards */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
                       <div className="flex justify-between items-start mb-2">
@@ -295,7 +275,6 @@ const Reports: React.FC = () => {
                   </div>
               </div>
 
-              {/* Main Chart */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                   <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
                       <div className="flex justify-between items-center mb-6">
@@ -308,16 +287,6 @@ const Reports: React.FC = () => {
                       <div className="h-80">
                           <ResponsiveContainer width="100%" height="100%">
                               <AreaChart data={financialStats}>
-                                  <defs>
-                                      <linearGradient id="colorIncome" x1="0" y1="0" x2="0" y2="1">
-                                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.1}/>
-                                          <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                                      </linearGradient>
-                                      <linearGradient id="colorExp" x1="0" y1="0" x2="0" y2="1">
-                                          <stop offset="5%" stopColor="#ef4444" stopOpacity={0.1}/>
-                                          <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
-                                      </linearGradient>
-                                  </defs>
                                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
                                   <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill:'#9ca3af', fontSize:12}} dy={10} />
                                   <YAxis axisLine={false} tickLine={false} tick={{fill:'#9ca3af', fontSize:12}} tickFormatter={(val) => `₹${val/1000}k`} />
@@ -398,47 +367,6 @@ const Reports: React.FC = () => {
                       </ResponsiveContainer>
                   </div>
               </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-                      <h3 className="font-bold text-gray-800 mb-4">Punctuality Score</h3>
-                      <div className="flex items-center justify-center h-48">
-                          {/* Mock Gauge */}
-                          <div className="relative w-40 h-40">
-                              <svg className="w-full h-full transform -rotate-90">
-                                  <circle cx="80" cy="80" r="70" stroke="#e5e7eb" strokeWidth="15" fill="none" />
-                                  <circle cx="80" cy="80" r="70" stroke="#10b981" strokeWidth="15" fill="none" strokeDasharray="440" strokeDashoffset="66" strokeLinecap="round" />
-                              </svg>
-                              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                  <span className="text-3xl font-bold text-gray-800">85%</span>
-                                  <span className="text-xs text-gray-500">On Time</span>
-                              </div>
-                          </div>
-                      </div>
-                      <p className="text-center text-sm text-gray-500">Most employees arrive by 9:45 AM.</p>
-                  </div>
-
-                  <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-                      <h3 className="font-bold text-gray-800 mb-4">Top Absentees (This Month)</h3>
-                      <div className="space-y-4">
-                          {[1,2,3].map((_, i) => (
-                              <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                                  <div className="flex items-center gap-3">
-                                      <div className="w-8 h-8 rounded-full bg-gray-200"></div>
-                                      <div>
-                                          <p className="text-sm font-bold text-gray-900">Employee {i+1}</p>
-                                          <p className="text-xs text-gray-500">Sales Dept</p>
-                                      </div>
-                                  </div>
-                                  <div className="text-right">
-                                      <p className="text-sm font-bold text-red-600">{4-i} Days</p>
-                                      <p className="text-xs text-gray-400">Absent</p>
-                                  </div>
-                              </div>
-                          ))}
-                      </div>
-                  </div>
-              </div>
           </div>
       )}
 
@@ -501,7 +429,6 @@ const Reports: React.FC = () => {
       {/* TRANSPORT REPORT (NEW) */}
       {activeTab === 'Transport' && (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              {/* Trip KPIs */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
                       <div className="flex justify-between items-start mb-2">
