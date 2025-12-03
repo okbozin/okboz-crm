@@ -108,6 +108,46 @@ export const VehicleEnquiries: React.FC = () => {
     }
   }, []);
 
+  // --- Auto Distance Calculation Effect ---
+  useEffect(() => {
+    if (!isMapReady || !window.google || !pickupCoords) return;
+
+    const calculateDistance = (destination: google.maps.LatLngLiteral, isRoundTripCalculation: boolean, isOutstationState: boolean) => {
+        const service = new window.google.maps.DistanceMatrixService();
+        service.getDistanceMatrix(
+            {
+                origins: [pickupCoords],
+                destinations: [destination],
+                travelMode: window.google.maps.TravelMode.DRIVING,
+                unitSystem: window.google.maps.UnitSystem.METRIC,
+            },
+            (response: any, status: any) => {
+                if (status === "OK" && response.rows[0].elements[0].status === "OK") {
+                    const distanceInMeters = response.rows[0].elements[0].distance.value;
+                    let distanceInKm = distanceInMeters / 1000;
+                    
+                    if (isRoundTripCalculation) distanceInKm = distanceInKm * 2; 
+
+                    const formattedDist = distanceInKm.toFixed(1);
+
+                    setTransportDetails(prev => ({ 
+                        ...prev, 
+                        [isOutstationState ? 'estTotalKm' : 'estKm']: formattedDist 
+                    }));
+                }
+            }
+        );
+    };
+
+    if (tripType === 'Local' && dropCoords) {
+        calculateDistance(dropCoords, false, false);
+    } else if (tripType === 'Outstation' && destCoords) {
+        const isRoundTrip = outstationSubType === 'RoundTrip';
+        calculateDistance(destCoords, isRoundTrip, true); 
+    }
+
+  }, [pickupCoords, dropCoords, destCoords, isMapReady, tripType, outstationSubType]);
+
   const handlePricingChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setPricing(prev => ({
