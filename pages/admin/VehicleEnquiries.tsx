@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { 
   Settings, Loader2, ArrowRight, ArrowRightLeft, 
@@ -92,6 +91,13 @@ export const VehicleEnquiries: React.FC = () => {
 
   const [generatedMessage, setGeneratedMessage] = useState('');
   const [estimatedCost, setEstimatedCost] = useState(0);
+
+  // Initialize rental package selection
+  useEffect(() => {
+      if (rentalPackages.length > 0 && !transportDetails.packageId) {
+          setTransportDetails(prev => ({...prev, packageId: rentalPackages[0].id}));
+      }
+  }, [rentalPackages]);
 
   // Map loader
   useEffect(() => {
@@ -307,24 +313,27 @@ Book now with OK BOZ! 🚕`;
                   </button>
               </div>
 
-              {/* Pickup Location - Moved Here */}
-              {enquiryCategory === 'Transport' && (
-                  <div>
-                      <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Pickup Location</label>
-                      {!isMapReady ? (
-                          <div className="p-3 bg-gray-50 text-gray-500 text-sm rounded-lg flex items-center gap-2">
-                              <Loader2 className="w-4 h-4 animate-spin" /> Loading Google Maps...
-                          </div>
-                      ) : (
-                          <Autocomplete 
-                              placeholder="Search Google Maps for Pickup"
-                              onAddressSelect={addr => setCustomerDetails({...customerDetails, pickup: addr})}
-                              setNewPlace={setPickupCoords}
-                              defaultValue={customerDetails.pickup}
-                          />
-                      )}
-                  </div>
-              )}
+              {/* Customer Info Section (Always Visible) */}
+              <div className="space-y-4">
+                  {/* Pickup Location - Moved above Drop/Destination for layout preference */}
+                  {enquiryCategory === 'Transport' && (
+                      <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Pickup Location</label>
+                          {!isMapReady ? (
+                              <div className="p-3 bg-gray-50 text-gray-500 text-sm rounded-lg flex items-center gap-2">
+                                  <Loader2 className="w-4 h-4 animate-spin" /> Loading Google Maps...
+                              </div>
+                          ) : (
+                              <Autocomplete 
+                                  placeholder="Search Google Maps for Pickup"
+                                  onAddressSelect={addr => setCustomerDetails({...customerDetails, pickup: addr})}
+                                  setNewPlace={setPickupCoords}
+                                  defaultValue={customerDetails.pickup}
+                              />
+                          )}
+                      </div>
+                  )}
+              </div>
 
               <div className="bg-green-50 text-green-700 p-3 rounded-lg flex justify-between items-center text-sm font-medium">
                   <span className="flex items-center gap-2"><CheckCircle className="w-4 h-4" /> Details Locked</span>
@@ -497,6 +506,38 @@ Book now with OK BOZ! 🚕`;
                             </div>
                         </div>
                       </>
+                  )}
+
+                  {tripType === 'Rental' && (
+                      <div className="space-y-4">
+                          <div>
+                              <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Select Rental Package</label>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-60 overflow-y-auto pr-1">
+                                  {rentalPackages.map(pkg => (
+                                      <div 
+                                          key={pkg.id}
+                                          onClick={() => setTransportDetails(prev => ({...prev, packageId: pkg.id}))}
+                                          className={`relative p-3 rounded-xl border-2 cursor-pointer transition-all group ${transportDetails.packageId === pkg.id ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 hover:border-emerald-200'}`}
+                                      >
+                                          <div className="flex justify-between items-center">
+                                              <div>
+                                                 <span className="font-bold text-gray-800 block text-sm">{pkg.name}</span>
+                                                 <span className="text-xs text-gray-500">{pkg.hours} Hr / {pkg.km} Km</span>
+                                              </div>
+                                              <div className="text-right">
+                                                  <span className="text-emerald-600 font-bold block text-sm">₹{vehicleType === 'Sedan' ? pkg.priceSedan : pkg.priceSuv}</span>
+                                                  <span className="text-[10px] text-gray-400 uppercase">{vehicleType}</span>
+                                              </div>
+                                          </div>
+                                      </div>
+                                  ))}
+                              </div>
+                          </div>
+                          
+                          <div className="text-xs text-gray-500 italic bg-blue-50 p-2 rounded border border-blue-100">
+                              Extra Charges: Hours (₹{pricing[vehicleType].rentalExtraHrRate}/hr) & Km (₹{pricing[vehicleType].rentalExtraKmRate}/km) applies.
+                          </div>
+                      </div>
                   )}
 
                   {tripType === 'Outstation' && (
