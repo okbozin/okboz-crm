@@ -78,7 +78,7 @@ const TripBooking: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   
-  // Filter States
+  // Filter State
   const [showFilters, setShowFilters] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -146,7 +146,6 @@ const TripBooking: React.FC = () => {
     }
   }, [trips, isSuperAdmin, sessionId]);
 
-  // --- Robust Filtering Logic ---
   const filteredTrips = useMemo(() => {
     return trips.filter(t => {
       const matchesSearch = 
@@ -157,7 +156,6 @@ const TripBooking: React.FC = () => {
       const matchesStatus = statusFilter === 'All' || t.bookingStatus === statusFilter;
       const matchesBranch = branchFilter === 'All' || (t.branch && t.branch === branchFilter);
       
-      // String comparison for dates (YYYY-MM-DD) matches reliably
       const tripDate = t.date;
       let matchesDate = true;
       if (fromDate && toDate) {
@@ -292,6 +290,17 @@ const TripBooking: React.FC = () => {
     }
     
     const headers = ["Trip ID", "Date", "Branch", "Customer", "Mobile", "Driver", "Type", "Status", "Price"];
+    
+    // Helper to escape CSV values
+    const escapeCsv = (val: any) => {
+        if (val === null || val === undefined) return '';
+        const stringVal = String(val);
+        if (stringVal.includes(',') || stringVal.includes('"') || stringVal.includes('\n')) {
+            return `"${stringVal.replace(/"/g, '""')}"`;
+        }
+        return stringVal;
+    };
+
     const rows = filteredTrips.map(t => [
       t.tripId, 
       t.date, 
@@ -302,7 +311,7 @@ const TripBooking: React.FC = () => {
       t.transportType, 
       t.bookingStatus, 
       t.totalPrice
-    ]);
+    ].map(escapeCsv));
 
     const csvContent = "data:text/csv;charset=utf-8," 
         + [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
