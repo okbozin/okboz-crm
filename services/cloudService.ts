@@ -15,17 +15,19 @@ export interface FirebaseConfig {
 // ============================================================================
 // 🛑 STEP 1: PASTE YOUR FIREBASE KEYS BELOW 🛑
 // ============================================================================
-// 1. Go to Firebase Console > Project Settings > General > Your Apps
-// 2. Copy the values and paste them inside the quotes "" below.
+// INSTRUCTIONS:
+// 1. Go to Firebase Console > Project Settings.
+// 2. Copy the values from the 'firebaseConfig' code block.
+// 3. Paste them strictly inside the quotes below. DO NOT add extra commas outside the quotes.
 // ============================================================================
 
 export const HARDCODED_FIREBASE_CONFIG: FirebaseConfig = {
-  apiKey: "",              // 👈 Paste apiKey here (e.g. "AIzaSy...")
-  authDomain: "",          // 👈 Paste authDomain here
-  projectId: "",           // 👈 Paste projectId here (e.g. "okboz-crm")
-  storageBucket: "",       // 👈 Paste storageBucket here
-  messagingSenderId: "",   // 👈 Paste messagingSenderId here
-  appId: ""                // 👈 Paste appId here
+  apiKey: "",
+  authDomain: "",
+  projectId: "",
+  storageBucket: "",
+  messagingSenderId: "",
+  appId: ""
 };
 
 export const DEFAULT_FIREBASE_CONFIG: FirebaseConfig = {

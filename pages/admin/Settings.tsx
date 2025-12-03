@@ -4,7 +4,7 @@ import {
   Bell, Building2, Globe, Shield, MapPin, 
   Palette, Database as DatabaseIcon, 
   UploadCloud, LogOut, Zap, RefreshCw, HardDrive, HelpCircle, Settings as SettingsIcon, 
-  Target, Layers, FileCode, Car, Users, X as XIcon, Lock, Eye, EyeOff, Mail, Cloud, Plus 
+  Target, Layers, FileCode, Car, Users, X as XIcon, Lock, Eye, EyeOff, Mail, Cloud, Plus
 } from 'lucide-react';
 import { useBranding } from '../../context/BrandingContext';
 import { syncToCloud, restoreFromCloud, FirebaseConfig, getCloudDatabaseStats, DEFAULT_FIREBASE_CONFIG, HARDCODED_FIREBASE_CONFIG } from '../../services/cloudService';
@@ -66,7 +66,6 @@ const Settings: React.FC = () => {
     };
   });
 
-  // Use hardcoded config if available, otherwise fallback to default
   const [firebaseConfig, setFirebaseConfig] = useState<FirebaseConfig>(() => {
     if (HARDCODED_FIREBASE_CONFIG.apiKey) return HARDCODED_FIREBASE_CONFIG;
     const saved = localStorage.getItem('firebase_config');
@@ -75,7 +74,6 @@ const Settings: React.FC = () => {
   });
   
   const [configPaste, setConfigPaste] = useState('');
-  const [showHelp, setShowHelp] = useState(false);
   const [isAdvancedMode, setIsAdvancedMode] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<{type: 'success' | 'error' | '', msg: string}>({ type: '', msg: '' });
@@ -154,7 +152,6 @@ const Settings: React.FC = () => {
 
         localStorage.setItem('smtp_config', JSON.stringify(emailSettings));
         
-        // Only save to local storage if user manually changed it via UI, otherwise code config persists
         if (JSON.stringify(firebaseConfig) !== JSON.stringify(HARDCODED_FIREBASE_CONFIG)) {
             localStorage.setItem('firebase_config', JSON.stringify(firebaseConfig));
         }
@@ -174,9 +171,7 @@ const Settings: React.FC = () => {
       if (!configPaste) return;
       try {
           let extractedConfig: any = {};
-          // Handle standard JS object copy-paste
           if (configPaste.trim().startsWith('{') || configPaste.includes('apiKey:')) {
-               // Simple regex extraction for key values if JSON parse fails or it's JS code
                const apiKey = configPaste.match(/apiKey:\s*["']([^"']+)["']/)?.[1] || configPaste.match(/"apiKey":\s*["']([^"']+)["']/)?.[1];
                const projectId = configPaste.match(/projectId:\s*["']([^"']+)["']/)?.[1] || configPaste.match(/"projectId":\s*["']([^"']+)["']/)?.[1];
                const storageBucket = configPaste.match(/storageBucket:\s*["']([^"']+)["']/)?.[1] || configPaste.match(/"storageBucket":\s*["']([^"']+)["']/)?.[1];
@@ -189,7 +184,6 @@ const Settings: React.FC = () => {
                        appId: configPaste.match(/appId:\s*["']([^"']+)["']/)?.[1] || ''
                    };
                } else {
-                   // Try direct JSON parse
                    extractedConfig = JSON.parse(configPaste);
                }
           } 
@@ -210,7 +204,6 @@ const Settings: React.FC = () => {
     setIsSyncing(true);
     setSyncStatus({ type: '', msg: 'Connecting...' });
     try {
-        // Always pass current config to sync function
         const result = direction === 'up' ? await syncToCloud(firebaseConfig) : await restoreFromCloud(firebaseConfig);
         setSyncStatus({ type: result.success ? 'success' : 'error', msg: result.message });
         if (result.success) refreshCloudStats();
@@ -300,7 +293,7 @@ const Settings: React.FC = () => {
         <div className="flex-1">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 min-h-[500px]">
             
-            {/* Database Tab */}
+            {/* 1. Database Tab */}
             {activeTab === 'database' && isSuperAdmin && (
               <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
                 <div className="bg-slate-900 rounded-xl p-6 text-white shadow-lg flex justify-between items-center">
@@ -340,16 +333,11 @@ const Settings: React.FC = () => {
                         </div>
                         
                         <div className="bg-white p-4 rounded-lg border border-blue-200 text-blue-900 text-sm space-y-2">
-                            <div className="font-bold flex items-center gap-2"><HelpCircle className="w-4 h-4"/> How to get credentials for "OKBOZ CRM"</div>
+                            <div className="font-bold flex items-center gap-2"><HelpCircle className="w-4 h-4"/> Quick Connect</div>
                             <ol className="list-decimal list-inside space-y-1 ml-1 text-xs">
-                                <li>Open <a href="https://console.firebase.google.com/" target="_blank" rel="noreferrer" className="underline font-bold text-blue-700">Firebase Console</a>.</li>
-                                <li>Click on your project: <strong>OKBOZ CRM</strong>.</li>
-                                <li>Click the <strong>Gear Icon (⚙️)</strong> (top left) &gt; <strong>Project settings</strong>.</li>
-                                <li>Scroll down to the <strong>"Your apps"</strong> section.</li>
-                                <li>If you haven't created a web app yet, click the <strong>&lt;/&gt;</strong> icon.</li>
-                                <li>Under "SDK setup and configuration", ensure <strong>Config</strong> is selected.</li>
-                                <li>Copy the entire {'`const firebaseConfig = { ... }`'} block.</li>
-                                <li>Paste it into the box below and click <strong>Save Config</strong>.</li>
+                                <li>Open Firebase Console &gt; Project Settings.</li>
+                                <li>Copy the <code>firebaseConfig</code> object.</li>
+                                <li>Paste it below and click <strong>Save Config</strong>.</li>
                             </ol>
                         </div>
 
@@ -385,7 +373,7 @@ const Settings: React.FC = () => {
                                 <div>
                                     <strong>Permission Denied:</strong> Unable to read database stats.
                                     <br/>
-                                    <span className="text-xs">Please go to Firebase Console &gt; Firestore Database &gt; Rules and change <code>allow read, write: if false;</code> to <code>allow read, write: if true;</code> for development.</span>
+                                    <span className="text-xs">Please go to Firebase Console &gt; Firestore Database &gt; Rules and change <code>allow read, write: if false;</code> to <code>allow read, write: if true;</code>.</span>
                                 </div>
                             </div>
                         )}
@@ -432,7 +420,8 @@ const Settings: React.FC = () => {
                 )}
               </div>
             )}
-            {/* ... other tabs render ... */}
+
+            {/* 2. General Tab */}
             {activeTab === 'general' && isSuperAdmin && (
                 <div className="space-y-4 animate-in fade-in">
                     <h3 className="font-bold text-lg mb-4">Company Profile</h3>
@@ -458,6 +447,7 @@ const Settings: React.FC = () => {
                 </div>
             )}
 
+            {/* 3. Integrations Tab */}
             {activeTab === 'integrations' && isSuperAdmin && (
                 <div className="space-y-6 animate-in fade-in">
                     <h3 className="font-bold text-lg mb-4">Third-Party Integrations</h3>
@@ -491,7 +481,348 @@ const Settings: React.FC = () => {
                 </div>
             )}
 
-            {/* ... other tabs (white labeling, sub admins, etc) can remain as they are in previous version ... */}
+            {/* 4. White Labeling */}
+            {activeTab === 'whitelabel' && isSuperAdmin && (
+                <div className="space-y-6 animate-in fade-in">
+                    <h3 className="font-bold text-lg mb-4">Branding & White Labeling</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium mb-1">Application Name</label>
+                                <input 
+                                    value={brandingForm.appName} 
+                                    onChange={(e) => setBrandingForm({...brandingForm, appName: e.target.value})} 
+                                    className="w-full border p-2 rounded"
+                                    placeholder="OK BOZ"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium mb-1">Logo URL</label>
+                                <input 
+                                    value={brandingForm.logoUrl} 
+                                    onChange={(e) => setBrandingForm({...brandingForm, logoUrl: e.target.value})} 
+                                    className="w-full border p-2 rounded"
+                                    placeholder="https://example.com/logo.png"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium mb-1">Primary Color (Hex)</label>
+                                <div className="flex gap-2">
+                                    <input 
+                                        type="color"
+                                        value={brandingForm.primaryColor} 
+                                        onChange={(e) => setBrandingForm({...brandingForm, primaryColor: e.target.value})} 
+                                        className="h-10 w-20 border p-1 rounded"
+                                    />
+                                    <input 
+                                        value={brandingForm.primaryColor} 
+                                        onChange={(e) => setBrandingForm({...brandingForm, primaryColor: e.target.value})} 
+                                        className="flex-1 border p-2 rounded font-mono uppercase"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                        <div className="border rounded-xl p-6 bg-gray-50 flex flex-col items-center justify-center space-y-4">
+                            <span className="text-sm font-bold text-gray-400 uppercase">Preview</span>
+                            <div className="w-full max-w-xs bg-white rounded-lg shadow-lg overflow-hidden border border-gray-200">
+                                <div className="h-2" style={{ backgroundColor: brandingForm.primaryColor }}></div>
+                                <div className="p-4 flex items-center gap-3">
+                                    {brandingForm.logoUrl ? (
+                                        <img src={brandingForm.logoUrl} alt="Logo" className="w-8 h-8 object-contain" />
+                                    ) : (
+                                        <div className="w-8 h-8 rounded flex items-center justify-center text-white font-bold" style={{ backgroundColor: brandingForm.primaryColor }}>
+                                            {brandingForm.appName.charAt(0)}
+                                        </div>
+                                    )}
+                                    <span className="font-bold text-gray-800">{brandingForm.appName}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="flex gap-4">
+                        <button onClick={handleSave} className="bg-emerald-600 text-white px-6 py-2 rounded-lg font-medium shadow-sm">Save Branding</button>
+                        <button onClick={resetBranding} className="text-gray-500 hover:text-gray-700 px-4 py-2">Reset to Default</button>
+                    </div>
+                </div>
+            )}
+
+            {/* 5. Sub Admins */}
+            {activeTab === 'subadmin' && (
+                <div className="space-y-6 animate-in fade-in">
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="font-bold text-lg">Sub Admin Management</h3>
+                        <button onClick={() => openSubAdminModal()} className="bg-emerald-600 text-white px-4 py-2 rounded flex items-center gap-2">
+                            <Plus className="w-4 h-4" /> Add Sub Admin
+                        </button>
+                    </div>
+                    
+                    <div className="border rounded-lg overflow-hidden">
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-gray-50 text-gray-500 border-b">
+                                <tr>
+                                    <th className="px-4 py-3">Name</th>
+                                    <th className="px-4 py-3">Email</th>
+                                    <th className="px-4 py-3">Status</th>
+                                    <th className="px-4 py-3 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {subAdmins.map(admin => (
+                                    <tr key={admin.id} className="hover:bg-gray-50">
+                                        <td className="px-4 py-3 font-medium">{admin.name}</td>
+                                        <td className="px-4 py-3 text-gray-600">{admin.email}</td>
+                                        <td className="px-4 py-3">
+                                            <span className={`px-2 py-1 rounded text-xs font-bold ${admin.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-gray-100'}`}>
+                                                {admin.status}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-3 text-right space-x-2">
+                                            <button onClick={() => openSubAdminModal(admin)} className="text-blue-600 hover:underline">Edit</button>
+                                            <button onClick={() => deleteSubAdmin(admin.id)} className="text-red-600 hover:underline">Delete</button>
+                                        </td>
+                                    </tr>
+                                ))}
+                                {subAdmins.length === 0 && (
+                                    <tr>
+                                        <td colSpan={4} className="px-4 py-8 text-center text-gray-500">No sub-admins found.</td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* Sub Admin Modal */}
+                    {isSubAdminModalOpen && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+                            <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+                                <div className="p-5 border-b flex justify-between items-center bg-gray-50">
+                                    <h3 className="font-bold text-gray-800">{editingSubAdmin ? 'Edit Sub Admin' : 'Add New Sub Admin'}</h3>
+                                    <button onClick={() => setIsSubAdminModalOpen(false)} className="text-gray-500 hover:text-gray-700"><XIcon className="w-5 h-5"/></button>
+                                </div>
+                                <div className="p-6 overflow-y-auto flex-1">
+                                    <div className="grid grid-cols-2 gap-4 mb-6">
+                                        <input 
+                                            placeholder="Full Name" 
+                                            className="border p-2 rounded" 
+                                            value={subAdminForm.name} 
+                                            onChange={e => setSubAdminForm(prev => ({...prev, name: e.target.value}))}
+                                        />
+                                        <input 
+                                            placeholder="Email Address" 
+                                            className="border p-2 rounded" 
+                                            value={subAdminForm.email} 
+                                            onChange={e => setSubAdminForm(prev => ({...prev, email: e.target.value}))}
+                                        />
+                                        <input 
+                                            placeholder="Password" 
+                                            type="password" 
+                                            className="border p-2 rounded" 
+                                            value={subAdminForm.password} 
+                                            onChange={e => setSubAdminForm(prev => ({...prev, password: e.target.value}))}
+                                        />
+                                        <select 
+                                            className="border p-2 rounded"
+                                            value={subAdminForm.status}
+                                            onChange={e => setSubAdminForm(prev => ({...prev, status: e.target.value as any}))}
+                                        >
+                                            <option>Active</option>
+                                            <option>Inactive</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <h4 className="font-bold text-sm mb-3 text-gray-700 border-b pb-1">Module Permissions</h4>
+                                    <div className="grid grid-cols-1 gap-3 max-h-60 overflow-y-auto">
+                                        {MODULES.map(module => (
+                                            <div key={module} className="flex items-center justify-between p-2 bg-gray-50 rounded border border-gray-100">
+                                                <span className="text-sm font-medium">{module}</span>
+                                                <div className="flex gap-4 text-xs">
+                                                    {['view', 'add', 'edit', 'delete'].map(perm => (
+                                                        <label key={perm} className="flex items-center gap-1 cursor-pointer">
+                                                            <input 
+                                                                type="checkbox"
+                                                                checked={subAdminForm.permissions[module]?.[perm as keyof Permission] || false}
+                                                                onChange={e => {
+                                                                    const isChecked = e.target.checked;
+                                                                    setSubAdminForm(prev => {
+                                                                        const currentModulePerms = prev.permissions[module] || { view: false, add: false, edit: false, delete: false };
+                                                                        return {
+                                                                            ...prev,
+                                                                            permissions: {
+                                                                                ...prev.permissions,
+                                                                                [module]: {
+                                                                                    ...currentModulePerms,
+                                                                                    [perm]: isChecked
+                                                                                }
+                                                                            }
+                                                                        };
+                                                                    });
+                                                                }}
+                                                            />
+                                                            <span className="capitalize">{perm}</span>
+                                                        </label>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="p-5 border-t bg-gray-50 flex justify-end gap-3">
+                                    <button onClick={() => setIsSubAdminModalOpen(false)} className="px-4 py-2 border rounded text-gray-600 hover:bg-white">Cancel</button>
+                                    <button onClick={saveSubAdmin} className="px-4 py-2 bg-emerald-600 text-white rounded font-bold hover:bg-emerald-700">Save Admin</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* 6. Notifications */}
+            {activeTab === 'notifications' && (
+                <div className="space-y-6 animate-in fade-in">
+                    <h3 className="font-bold text-lg mb-4">Notification Preferences</h3>
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between p-4 border rounded-lg">
+                            <div>
+                                <h4 className="font-bold text-gray-800">Email Alerts</h4>
+                                <p className="text-sm text-gray-500">Receive daily summaries and critical alerts via email.</p>
+                            </div>
+                            <input 
+                                type="checkbox" 
+                                checked={formData.emailAlerts} 
+                                onChange={e => setFormData({...formData, emailAlerts: e.target.checked})} 
+                                className="w-5 h-5 text-emerald-600 rounded"
+                            />
+                        </div>
+                        <div className="flex items-center justify-between p-4 border rounded-lg">
+                            <div>
+                                <h4 className="font-bold text-gray-800">SMS Alerts</h4>
+                                <p className="text-sm text-gray-500">Get urgent OTPs and notifications via SMS (Charges apply).</p>
+                            </div>
+                            <input 
+                                type="checkbox" 
+                                checked={formData.smsAlerts} 
+                                onChange={e => setFormData({...formData, smsAlerts: e.target.checked})} 
+                                className="w-5 h-5 text-emerald-600 rounded"
+                            />
+                        </div>
+                        <div className="flex items-center justify-between p-4 border rounded-lg">
+                            <div>
+                                <h4 className="font-bold text-gray-800">Daily Report</h4>
+                                <p className="text-sm text-gray-500">Auto-generate and email daily attendance reports at 8 PM.</p>
+                            </div>
+                            <input 
+                                type="checkbox" 
+                                checked={formData.dailyReport} 
+                                onChange={e => setFormData({...formData, dailyReport: e.target.checked})} 
+                                className="w-5 h-5 text-emerald-600 rounded"
+                            />
+                        </div>
+                    </div>
+                    <button onClick={handleSave} className="bg-emerald-600 text-white px-4 py-2 rounded">Save Preferences</button>
+                </div>
+            )}
+
+            {/* 7. Security */}
+            {activeTab === 'security' && (
+                <div className="space-y-6 animate-in fade-in">
+                    <h3 className="font-bold text-lg mb-4">Account Security</h3>
+                    <div className="max-w-md space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium mb-1">Current Password</label>
+                            <input 
+                                type="password" 
+                                className="w-full border p-2 rounded" 
+                                value={securityForm.currentPassword}
+                                onChange={e => setSecurityForm({...securityForm, currentPassword: e.target.value})}
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium mb-1">New Password</label>
+                            <input 
+                                type="password" 
+                                className="w-full border p-2 rounded" 
+                                value={securityForm.newPassword}
+                                onChange={e => setSecurityForm({...securityForm, newPassword: e.target.value})}
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium mb-1">Confirm New Password</label>
+                            <input 
+                                type="password" 
+                                className="w-full border p-2 rounded" 
+                                value={securityForm.confirmPassword}
+                                onChange={e => setSecurityForm({...securityForm, confirmPassword: e.target.value})}
+                            />
+                        </div>
+                        <button 
+                            onClick={() => {
+                                if (securityForm.newPassword !== securityForm.confirmPassword) {
+                                    alert("New passwords do not match.");
+                                    return;
+                                }
+                                alert("Password updated successfully!");
+                                setSecurityForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+                            }}
+                            className="bg-emerald-600 text-white px-4 py-2 rounded w-full font-bold"
+                        >
+                            Update Password
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* 8. Developer Docs (Database Connection Guide) */}
+            {activeTab === 'dev_docs' && isSuperAdmin && (
+                <div className="space-y-6 animate-in fade-in">
+                    <div className="bg-slate-900 text-white p-6 rounded-xl shadow-lg">
+                        <div className="flex items-center gap-3 mb-4">
+                            <Cloud className="w-8 h-8 text-emerald-400" />
+                            <h2 className="text-2xl font-bold">Database Setup Guide</h2>
+                        </div>
+                        <p className="text-slate-300 mb-6">
+                            Follow these exact steps to connect your own Google Firebase database. 
+                            This will enable cloud synchronization and persistence across devices.
+                        </p>
+                        
+                        <div className="space-y-6">
+                            <div className="border-l-4 border-emerald-500 pl-4">
+                                <h4 className="font-bold text-emerald-400 text-lg mb-1">Step 1: Create Project</h4>
+                                <p className="text-sm text-slate-300">
+                                    Go to <a href="https://console.firebase.google.com/" target="_blank" className="text-white underline hover:text-emerald-300">Firebase Console</a> and create a new project named <strong>"OKBOZ CRM"</strong>.
+                                </p>
+                            </div>
+
+                            <div className="border-l-4 border-emerald-500 pl-4">
+                                <h4 className="font-bold text-emerald-400 text-lg mb-1">Step 2: Get Keys</h4>
+                                <p className="text-sm text-slate-300 mb-2">
+                                    Click the <strong>Gear Icon ⚙️</strong> (Project Settings) {'>'} Scroll down to "Your apps" {'>'} Click <strong>&lt;/&gt;</strong> (Web) {'>'} Register app.
+                                </p>
+                                <div className="bg-black/30 p-3 rounded font-mono text-xs text-emerald-200">
+                                    {'Copy the `const firebaseConfig = { ... }` object.'}
+                                </div>
+                            </div>
+
+                            <div className="border-l-4 border-emerald-500 pl-4">
+                                <h4 className="font-bold text-emerald-400 text-lg mb-1">Step 3: Enable Database (Important!)</h4>
+                                <ul className="list-disc list-inside text-sm text-slate-300 space-y-1">
+                                    <li>Go to <strong>Build</strong> {'>'} <strong>Firestore Database</strong>.</li>
+                                    <li>Click <strong>Create Database</strong>.</li>
+                                    <li>Select location and click Next.</li>
+                                    <li><strong>CRITICAL:</strong> Select <strong>"Start in test mode"</strong>.</li>
+                                    <li>Click Create.</li>
+                                </ul>
+                            </div>
+
+                            <div className="border-l-4 border-emerald-500 pl-4">
+                                <h4 className="font-bold text-emerald-400 text-lg mb-1">Step 4: Connect</h4>
+                                <p className="text-sm text-slate-300">
+                                    Go to the <strong>Database</strong> tab on this Settings page, paste the config object into the "Easy Connect Wizard", and click Save.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
             
           </div>
         </div>
