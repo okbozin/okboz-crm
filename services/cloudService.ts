@@ -10,22 +10,23 @@ export interface FirebaseConfig {
   storageBucket: string;
   messagingSenderId: string;
   appId: string;
+  measurementId?: string;
 }
 
 // ============================================================================
 // 🔒 PERMANENT CONNECTION AREA
 // ============================================================================
-// Paste your keys inside the quotes below. 
-// Once saved, you will NEVER have to enter them in the app again.
+// Keys provided by user.
 // ============================================================================
 
 export const HARDCODED_FIREBASE_CONFIG: FirebaseConfig = {
-  apiKey: "",             // e.g. "AIzaSy..."
-  authDomain: "",         // e.g. "okboz-crm.firebaseapp.com"
-  projectId: "",          // e.g. "okboz-crm"
-  storageBucket: "",      // e.g. "okboz-crm.firebasestorage.app"
-  messagingSenderId: "",  // e.g. "123456789"
-  appId: ""               // e.g. "1:123456:web:abcdef"
+  apiKey: "AIzaSyBJv0PwlvTk8QY9Wm9R58C_EDF5bipo5pQ",
+  authDomain: "okboz-crm-f53b0.firebaseapp.com",
+  projectId: "okboz-crm-f53b0",
+  storageBucket: "okboz-crm-f53b0.firebasestorage.app",
+  messagingSenderId: "35317119280",
+  appId: "1:35317119280:web:d5dc9193b3116e6cae70f5",
+  measurementId: "G-73X2MLBTW6"
 };
 
 // ============================================================================
