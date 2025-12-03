@@ -157,7 +157,9 @@ const Expenses: React.FC = () => {
     // Handle File Upload with Local Fallback
     if (selectedFile) {
         const sessionId = localStorage.getItem('app_session_id') || 'admin';
-        const path = `receipts/${sessionId}/${Date.now()}_${selectedFile.name}`;
+        // Sanitize filename to prevent path issues
+        const safeName = selectedFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const path = `receipts/${sessionId}/${Date.now()}_${safeName}`;
         
         // 1. Try Cloud Upload
         const cloudUrl = await uploadFileToCloud(selectedFile, path);

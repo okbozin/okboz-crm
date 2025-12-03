@@ -2,6 +2,7 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
 import { getFirestore, doc, setDoc, collection, getDocs, Firestore } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { getAuth, signInAnonymously } from "firebase/auth";
 
 export interface FirebaseConfig {
   apiKey: string;
@@ -123,25 +124,37 @@ const getFirebaseApp = (config?: FirebaseConfig): FirebaseApp | null => {
   }
 };
 
+// Helper to authenticate anonymously if needed
+const ensureAuth = async (app: FirebaseApp) => {
+  try {
+    const auth = getAuth(app);
+    if (!auth.currentUser) {
+      await signInAnonymously(auth);
+    }
+  } catch (e) {
+    // console.warn("Firebase Auth: Anonymous sign-in failed (Rules might require open access)", e);
+  }
+};
+
 // Helper to initialize DB safely
-const getDb = (config?: FirebaseConfig): Firestore | null => {
-  const app = getFirebaseApp(config);
-  return app ? getFirestore(app) : null;
+const getDb = (app: FirebaseApp): Firestore => {
+  return getFirestore(app);
 };
 
 // --- SYNC FUNCTION (Saves data to Cloud) ---
 export const syncToCloud = async (config?: FirebaseConfig) => {
   // SAFETY GUARD: Prevent syncing if mock data is detected
   if (isMockDataPresent()) {
-    // Return a success-like response to stop the UI from retrying aggressively or showing errors,
-    // but log it internally.
     console.log("☁️ Sync Skipped: Mock data detected. Clear data before syncing to production.");
     return { success: true, message: "Sync Skipped: Mock Data Present" };
   }
 
   try {
-    const db = getDb(config);
-    if (!db) return { success: false, message: "Not Connected" };
+    const app = getFirebaseApp(config);
+    if (!app) return { success: false, message: "Not Connected" };
+
+    await ensureAuth(app); // Ensure authenticated
+    const db = getDb(app);
 
     const corporateAccountsStr = localStorage.getItem('corporate_accounts');
     const corporates = corporateAccountsStr ? JSON.parse(corporateAccountsStr) : [];
@@ -178,10 +191,8 @@ export const syncToCloud = async (config?: FirebaseConfig) => {
       }
     }
 
-    // console.log("✅ Auto-Sync Successful: " + new Date().toLocaleTimeString());
     return { success: true, message: "Sync complete! Data is safe in Cloud." };
   } catch (error: any) {
-    // console.error("Sync Error:", error);
     if (error.code === 'permission-denied') {
         return { success: false, message: "Permission Denied. Set Firestore rules to Test Mode." };
     }
@@ -192,8 +203,11 @@ export const syncToCloud = async (config?: FirebaseConfig) => {
 // --- RESTORE FUNCTION (Loads data from Cloud) ---
 export const restoreFromCloud = async (config?: FirebaseConfig) => {
   try {
-    const db = getDb(config);
-    if (!db) return { success: false, message: "No Configuration" };
+    const app = getFirebaseApp(config);
+    if (!app) return { success: false, message: "No Configuration" };
+
+    await ensureAuth(app); // Ensure authenticated
+    const db = getDb(app);
 
     const snapshot = await getDocs(collection(db, "ok_boz_live_data"));
     
@@ -225,9 +239,9 @@ export const uploadFileToCloud = async (file: File, path: string): Promise<strin
     const app = getFirebaseApp();
     if (!app) throw new Error("Firebase not connected");
 
+    await ensureAuth(app); // Ensure authenticated
+
     if (!app.options.storageBucket) {
-        // alert("Storage Bucket is missing. Check your Firebase Config.");
-        // Quiet fail to allow fallback
         return null;
     }
 
@@ -239,7 +253,6 @@ export const uploadFileToCloud = async (file: File, path: string): Promise<strin
     
     return downloadURL;
   } catch (error: any) {
-    // Log detailed error for debugging but return null to trigger fallback
     console.error("Cloud Upload Failed (Falling back to local):", error.code, error.message);
     return null;
   }
@@ -248,8 +261,8 @@ export const uploadFileToCloud = async (file: File, path: string): Promise<strin
 // Auto-load data on app start
 export const autoLoadFromCloud = async (): Promise<boolean> => {
     try {
-        const db = getDb(); 
-        if (!db) return false;
+        const app = getFirebaseApp();
+        if (!app) return false;
         await restoreFromCloud();
         return true;
     } catch (e) {
@@ -259,8 +272,11 @@ export const autoLoadFromCloud = async (): Promise<boolean> => {
 
 export const getCloudDatabaseStats = async (config?: FirebaseConfig) => {
   try {
-    const db = getDb(config);
-    if (!db) return null;
+    const app = getFirebaseApp(config);
+    if (!app) return null;
+    
+    await ensureAuth(app); // Ensure authenticated
+    const db = getDb(app);
     
     const snapshot = await getDocs(collection(db, "ok_boz_live_data"));
     const stats: Record<string, any> = {};
