@@ -1,7 +1,9 @@
 
+
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, MapPin, Calendar, DollarSign, Briefcase, Menu, X, LogOut, UserCircle, Building, Settings, Target, CreditCard, ClipboardList, ReceiptIndianRupee, Navigation, Car, Building2, PhoneIncoming, GripVertical, Edit2, Check, FileText, Layers, PhoneCall, Bus, Bell, Sun, Moon, Monitor, Mail, UserCog, CarFront, BellRing, BarChart3, Map, Headset, BellDot } from 'lucide-react';
+import { LayoutDashboard, Users, MapPin, Calendar, DollarSign, Briefcase, Menu, X, LogOut, UserCircle, Building, Settings, Target, CreditCard, ClipboardList, ReceiptIndianRupee, Navigation, Car, Building2, PhoneIncoming, GripVertical, Edit2, Check, FileText, Layers, PhoneCall, Bus, Bell, Sun, Moon, Monitor, Mail, UserCog, CarFront, BellRing, BarChart3, Map, Headset, BellDot, Pencil } from 'lucide-react';
 import { UserRole, Enquiry, CorporateAccount, Employee } from '../types';
 import { useBranding } from '../context/BrandingContext';
 import { useTheme } from '../context/ThemeContext';
@@ -22,6 +24,7 @@ const MASTER_ADMIN_LINKS = [
   { id: 'customer-care', path: '/admin/customer-care', label: 'Customer Care', icon: Headset },
   { id: 'trips', path: '/admin/trips', label: 'Trip Booking', icon: Map },
   { id: 'tracking', path: '/admin/tracking', label: 'Live Tracking', icon: Navigation },
+  
   { id: 'leads', path: '/admin/leads', label: 'Franchisee Leads', icon: Layers },
   { id: 'tasks', path: '/admin/tasks', label: 'Tasks', icon: ClipboardList },
   { id: 'attendance', path: '/admin/attendance', label: 'Attendance', icon: Calendar },
@@ -35,6 +38,7 @@ const MASTER_ADMIN_LINKS = [
   { id: 'finance-and-expenses', path: '/admin/finance-and-expenses', label: 'Finance & Expenses', icon: CreditCard }, // NEW: Duplicate Finance Tab
   { id: 'corporate', path: '/admin/corporate', label: 'Corporate', icon: Building2 },
   { id: 'settings', path: '/admin/settings', label: 'Settings', icon: Settings },
+  { id: 'cms', path: '/admin/cms', label: 'CMS', icon: Pencil }, // NEW: CMS link
 ];
 
 const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
@@ -282,6 +286,13 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
     
     // 9. "Vehicle Enquiries" is hidden for ALL Admin roles (previously removed)
     if (link.id === 'vehicle-enquiries') return false;
+
+    // 10. "Driver Monitoring" is ONLY for Super Admin - REMOVED
+    if (link.id === 'driver-monitoring') return false;
+
+    // 11. "CMS" is ONLY for Super Admin
+    if (link.id === 'cms' && role !== UserRole.ADMIN) return false;
+
 
     return true;
   });

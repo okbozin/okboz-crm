@@ -3,10 +3,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   User, Mail, Phone, MapPin, Briefcase, Calendar, CreditCard, Shield, 
   Edit2, AlertCircle, Lock, CheckCircle, Eye, EyeOff, Building, Heart, Baby, BookUser, Home,
-  Clock, Settings // Added Clock and Settings imports
+  Clock, Settings, Upload, Download, Loader2, Paperclip, X, UserX, FileText // Added FileText
 } from 'lucide-react';
 import { MOCK_EMPLOYEES } from '../../constants';
 import { Employee, CorporateAccount } from '../../types';
+import { uploadFileToCloud } from '../../services/cloudService'; // Import uploadFileToCloud
 
 const UserProfile: React.FC = () => {
   const [user, setUser] = useState<Employee | null>(null);
@@ -24,6 +25,12 @@ const UserProfile: React.FC = () => {
   });
   const [showPasswords, setShowPasswords] = useState({ current: false, new: false, newConfirm: false });
   const [msg, setMsg] = useState({ type: '', text: '' }); // General messages for profile and password
+
+  // File Upload States for ID Proofs
+  const aadharInputRef = useRef<HTMLInputElement>(null);
+  const panInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingAadhar, setUploadingAadhar] = useState(false);
+  const [uploadingPan, setUploadingPan] = useState(false);
 
   // Helper to find employee by ID across all storage locations
   const findEmployeeById = (id: string): Employee | undefined => {
@@ -53,18 +60,18 @@ const UserProfile: React.FC = () => {
       if (storedSessionId) {
           const found = findEmployeeById(storedSessionId);
           setUser(found || MOCK_EMPLOYEES[0]);
-          // Initialize form data with user's current profile
-          setProfileFormData(found || {});
+          // Initialize form data with user's current profile, ensure date is in YYYY-MM-DD
+          setProfileFormData(found ? { ...found, dob: found.dob ? found.dob.split('T')[0] : '' } : {});
       } else {
           setUser(MOCK_EMPLOYEES[0]);
-          setProfileFormData(MOCK_EMPLOYEES[0]);
+          setProfileFormData({ ...MOCK_EMPLOYEES[0], dob: MOCK_EMPLOYEES[0].dob ? MOCK_EMPLOYEES[0].dob.split('T')[0] : '' });
       }
   }, []);
 
   // Update form data if user prop changes (e.g., after a successful save)
   useEffect(() => {
     if (user) {
-        setProfileFormData(user);
+        setProfileFormData({ ...user, dob: user.dob ? user.dob.split('T')[0] : '' });
     }
   }, [user]);
 
@@ -75,12 +82,12 @@ const UserProfile: React.FC = () => {
   };
 
   // Handle saving profile changes
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
 
     // Basic validation
-    if (!profileFormData.email) { // Name and phone are now read-only
+    if (!profileFormData.email) {
         setMsg({ type: 'error', text: 'Email is required.' });
         return;
     }
@@ -120,10 +127,6 @@ const UserProfile: React.FC = () => {
       e.preventDefault();
       if (!user) return;
 
-      // Very basic validation since we don't have a real backend validation for "current" password in this context 
-      // unless we check against the loaded user object which might be stale if not refetched.
-      // For this demo, we'll assume the loaded user.password is correct.
-      
       if (passwords.current !== user.password) {
           setMsg({ type: 'error', text: 'Current password is incorrect.' });
           return;
@@ -172,6 +175,56 @@ const UserProfile: React.FC = () => {
       }
   };
 
+  const handleIdProofUpload = async (file: File | null, field: 'idProof1Url' | 'idProof2Url') => {
+      if (!file || !user) return;
+
+      const setter = field === 'idProof1Url' ? setUploadingAadhar : setUploadingPan;
+      setter(true);
+      setMsg({ type: '', text: '' });
+
+      try {
+          const path = `employee_docs/${user.id}/${field}_${file.name}`;
+          const url = await uploadFileToCloud(file, path);
+
+          if (url) {
+              setProfileFormData(prev => ({ ...prev, [field]: url }));
+              setMsg({ type: 'success', text: `${field.replace('idProof', 'ID Proof ').replace('Url', '')} uploaded successfully!` });
+          } else {
+              // Fallback to Base64 if cloud upload fails
+              const base64 = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result as string);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+              });
+              setProfileFormData(prev => ({ ...prev, [field]: base64 }));
+              setMsg({ type: 'success', text: `${field.replace('idProof', 'ID Proof ').replace('Url', '')} uploaded (local fallback).` });
+          }
+      } catch (error) {
+          console.error("Upload failed:", error);
+          setMsg({ type: 'error', text: `Failed to upload ${field.replace('idProof', 'ID Proof ').replace('Url', '')}.` });
+      } finally {
+          setter(false);
+          setTimeout(() => setMsg({ type: '', text: '' }), 3000);
+      }
+  };
+
+  const handleRemoveIdProof = (field: 'idProof1Url' | 'idProof2Url') => {
+    if (!user || !window.confirm("Are you sure you want to remove this document?")) return;
+
+    setProfileFormData(prev => ({ ...prev, [field]: '' }));
+    setMsg({ type: 'success', text: `${field.replace('idProof', 'ID Proof ').replace('Url', '')} removed.` });
+    setTimeout(() => setMsg({ type: '', text: '' }), 3000);
+  };
+
+  const openFileViewer = (url: string, name: string) => {
+    // Simple viewer: open in new tab
+    if (url) {
+        window.open(url, '_blank');
+    }
+  }
+
+
   if (!user) return <div className="p-8 text-center text-gray-500">Loading profile...</div>;
 
   return (
@@ -192,7 +245,7 @@ const UserProfile: React.FC = () => {
         ) : (
             <div className="flex gap-2">
                 <button 
-                    onClick={() => { setIsEditingProfile(false); setMsg({ type: '', text: '' }); setProfileFormData(user); }} // Reset form data to current user on cancel
+                    onClick={() => { setIsEditingProfile(false); setMsg({ type: '', text: '' }); setProfileFormData({ ...user, dob: user.dob ? user.dob.split('T')[0] : '' }); }} // Reset form data to current user on cancel
                     className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors"
                 >
                     Cancel
@@ -326,13 +379,17 @@ const UserProfile: React.FC = () => {
                <User className="w-5 h-5 text-gray-400 mt-0.5" />
                <div className="flex-1">
                   <p className="text-xs text-gray-500 mb-0.5">Full Name</p>
-                  <input 
-                      type="text" 
-                      name="name"
-                      value={user.name || ''} 
-                      readOnly={true}
-                      className="w-full p-1 border-b border-gray-300 focus:outline-none focus:border-emerald-500 bg-transparent text-gray-800 font-medium"
-                  />
+                  {isEditingProfile ? (
+                      <input 
+                          type="text" 
+                          name="name"
+                          value={profileFormData.name || ''} 
+                          onChange={handleProfileInputChange}
+                          className="w-full p-1 border-b border-gray-300 focus:outline-none focus:border-emerald-500 bg-transparent text-gray-800 font-medium"
+                      />
+                  ) : (
+                      <p className="text-gray-800 font-medium">{user.name}</p>
+                  )}
                </div>
             </div>
             <div className="flex items-start gap-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
@@ -356,13 +413,17 @@ const UserProfile: React.FC = () => {
                <Phone className="w-5 h-5 text-gray-400 mt-0.5" />
                <div className="flex-1">
                   <p className="text-xs text-gray-500 mb-0.5">Phone Number</p>
-                  <input 
-                      type="tel" 
-                      name="phone"
-                      value={user.phone || ''} 
-                      readOnly={true}
-                      className="w-full p-1 border-b border-gray-300 focus:outline-none focus:border-emerald-500 bg-transparent text-gray-800 font-medium"
-                  />
+                  {isEditingProfile ? (
+                      <input 
+                          type="tel" 
+                          name="phone"
+                          value={profileFormData.phone || ''} 
+                          onChange={handleProfileInputChange}
+                          className="w-full p-1 border-b border-gray-300 focus:outline-none focus:border-emerald-500 bg-transparent text-gray-800 font-medium"
+                      />
+                  ) : (
+                      <p className="text-gray-800 font-medium">{user.phone || 'Not Provided'}</p>
+                  )}
                </div>
             </div>
             <div className="flex items-start gap-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
@@ -489,7 +550,7 @@ const UserProfile: React.FC = () => {
                  Work & Home Address
                </h4>
                <div className="space-y-4">
-                  <div className="flex items-start gap-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
+                  <div className="flex items-start gap-4 p-3 bg-gray-50 rounded-lg">
                      <MapPin className="w-5 h-5 text-gray-400 mt-0.5" />
                      <div className="flex-1">
                         <p className="text-xs text-gray-500 mb-0.5">Work Branch</p>
@@ -518,14 +579,14 @@ const UserProfile: React.FC = () => {
 
             <section className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2 pb-2 border-b border-gray-100">
-                 <Phone className="w-4 h-4 text-emerald-500" />
+                 <Phone className="w-4 h-4 text-orange-500" />
                  Emergency Contact
                </h4>
                <div className="space-y-4">
                   <div className="flex items-start gap-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
                      <User className="w-5 h-5 text-gray-400 mt-0.5" />
                      <div className="flex-1">
-                        <p className="text-xs text-gray-500 mb-0.5">Contact Person</p>
+                        <p className="text-xs text-gray-500 mb-0.5">Contact Name</p>
                         {isEditingProfile ? (
                             <input 
                                 type="text" 
@@ -582,46 +643,169 @@ const UserProfile: React.FC = () => {
 
       {/* Banking & KYC */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-         <div className="flex justify-between items-center mb-6">
-            <h3 className="font-bold text-gray-800 flex items-center gap-2">
-              <Shield className="w-5 h-5 text-emerald-500" />
-              KYC & Banking
-            </h3>
-            <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded font-medium flex items-center gap-1">
-               <Shield className="w-3 h-3" /> Verified
-            </span>
-         </div>
+         <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2">
+           <Shield className="w-5 h-5 text-emerald-500" />
+           KYC & Banking
+         </h3>
          
          <div className="space-y-4">
-            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100">
-               <div className="flex items-center gap-3">
-                  <div className="bg-white p-2 rounded-md shadow-sm">
-                    <CreditCard className="w-5 h-5 text-emerald-600" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500">Bank Account</p>
-                    <p className="text-sm font-bold text-gray-800 font-mono">
-                       •••• {user.accountNumber?.slice(-4) || 'XXXX'}
-                    </p>
-                  </div>
-               </div>
-               <span className="text-xs font-mono text-gray-400">{user.ifsc}</span>
-            </div>
-
             <div className="grid grid-cols-2 gap-4">
                <div className="p-3 bg-gray-50 rounded-lg border border-gray-100">
                   <p className="text-xs text-gray-500 mb-1">PAN Number</p>
-                  <p className="text-sm font-bold text-gray-800 font-mono">{user.pan || 'Not Provided'}</p>
+                  {isEditingProfile ? (
+                      <input 
+                          type="text" 
+                          name="pan"
+                          value={profileFormData.pan || ''} 
+                          onChange={handleProfileInputChange}
+                          className="w-full p-1 border-b border-gray-300 focus:outline-none focus:border-emerald-500 bg-transparent text-gray-800 font-medium"
+                      />
+                  ) : (
+                      <p className="text-sm font-bold text-gray-800 font-mono">{user.pan || 'Not Provided'}</p>
+                  )}
                </div>
                <div className="p-3 bg-gray-50 rounded-lg border border-gray-100">
                   <p className="text-xs text-gray-500 mb-1">Aadhar Number</p>
-                  <p className="text-sm font-bold text-gray-800 font-mono">{user.aadhar || 'Not Provided'}</p>
+                  {isEditingProfile ? (
+                      <input 
+                          type="text" 
+                          name="aadhar"
+                          value={profileFormData.aadhar || ''} 
+                          onChange={handleProfileInputChange}
+                          className="w-full p-1 border-b border-gray-300 focus:outline-none focus:border-emerald-500 bg-transparent text-gray-800 font-medium"
+                      />
+                  ) : (
+                      <p className="text-sm font-bold text-gray-800 font-mono">{user.aadhar || 'Not Provided'}</p>
+                  )}
                </div>
             </div>
-            
+
+            <div className="p-3 bg-gray-50 rounded-lg border border-gray-100">
+                  <p className="text-xs text-gray-500 mb-1">Bank Account Number</p>
+                  {isEditingProfile ? (
+                      <input 
+                          type="text" 
+                          name="accountNumber"
+                          value={profileFormData.accountNumber || ''} 
+                          onChange={handleProfileInputChange}
+                          className="w-full p-1 border-b border-gray-300 focus:outline-none focus:border-emerald-500 bg-transparent text-gray-800 font-medium"
+                      />
+                  ) : (
+                      <p className="text-sm font-bold text-gray-800 font-mono">{user.accountNumber || 'Not Provided'}</p>
+                  )}
+            </div>
+            <div className="p-3 bg-gray-50 rounded-lg border border-gray-100">
+                  <p className="text-xs text-gray-500 mb-1">IFSC Code</p>
+                  {isEditingProfile ? (
+                      <input 
+                          type="text" 
+                          name="ifsc"
+                          value={profileFormData.ifsc || ''} 
+                          onChange={handleProfileInputChange}
+                          className="w-full p-1 border-b border-gray-300 focus:outline-none focus:border-emerald-500 bg-transparent text-gray-800 font-medium"
+                      />
+                  ) : (
+                      <p className="text-sm font-bold text-gray-800 font-mono">{user.ifsc || 'Not Provided'}</p>
+                  )}
+            </div>
+
+            <div className="pt-4 border-t border-gray-100 space-y-4">
+                <h4 className="text-xs font-bold text-gray-500 uppercase flex items-center gap-2">
+                    <FileText className="w-4 h-4" /> ID Proof Documents
+                </h4>
+                {/* ID Proof 1 */}
+                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-100">
+                    <input 
+                        type="file" 
+                        accept="image/*,.pdf" 
+                        className="hidden" 
+                        ref={aadharInputRef} 
+                        onChange={(e) => handleIdProofUpload(e.target.files?.[0] || null, 'idProof1Url')} 
+                        disabled={!isEditingProfile || uploadingAadhar}
+                    />
+                    <button 
+                        type="button"
+                        onClick={() => aadharInputRef.current?.click()}
+                        disabled={!isEditingProfile || uploadingAadhar}
+                        className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-colors ${
+                            profileFormData.idProof1Url ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                        }`}
+                    >
+                        {uploadingAadhar ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                        {profileFormData.idProof1Url ? 'Change Aadhar/ID 1' : 'Upload Aadhar/ID 1'}
+                    </button>
+                    {profileFormData.idProof1Url && (
+                        <div className="flex gap-1">
+                            <button 
+                                type="button"
+                                onClick={() => openFileViewer(profileFormData.idProof1Url!, 'Aadhar')}
+                                className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg"
+                                title="View Document"
+                            >
+                                <Eye className="w-4 h-4" />
+                            </button>
+                            {isEditingProfile && (
+                                <button 
+                                    type="button"
+                                    onClick={() => handleRemoveIdProof('idProof1Url')}
+                                    className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
+                                    title="Remove Document"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            )}
+                        </div>
+                    )}
+                </div>
+                {/* ID Proof 2 */}
+                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-100">
+                    <input 
+                        type="file" 
+                        accept="image/*,.pdf" 
+                        className="hidden" 
+                        ref={panInputRef} 
+                        onChange={(e) => handleIdProofUpload(e.target.files?.[0] || null, 'idProof2Url')} 
+                        disabled={!isEditingProfile || uploadingPan}
+                    />
+                    <button 
+                        type="button"
+                        onClick={() => panInputRef.current?.click()}
+                        disabled={!isEditingProfile || uploadingPan}
+                        className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-colors ${
+                            profileFormData.idProof2Url ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                        }`}
+                    >
+                        {uploadingPan ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                        {profileFormData.idProof2Url ? 'Change PAN/ID 2' : 'Upload PAN/ID 2'}
+                    </button>
+                    {profileFormData.idProof2Url && (
+                        <div className="flex gap-1">
+                            <button 
+                                type="button"
+                                onClick={() => openFileViewer(profileFormData.idProof2Url!, 'PAN')}
+                                className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg"
+                                title="View Document"
+                            >
+                                <Eye className="w-4 h-4" />
+                            </button>
+                            {isEditingProfile && (
+                                <button 
+                                    type="button"
+                                    onClick={() => handleRemoveIdProof('idProof2Url')}
+                                    className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
+                                    title="Remove Document"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            )}
+                        </div>
+                    )}
+                </div>
+            </div>
+
             <div className="mt-4 flex items-start gap-2 text-xs text-gray-500 bg-blue-50 p-3 rounded-lg border border-blue-100">
                <AlertCircle className="w-4 h-4 text-blue-500 shrink-0" />
-               <p>To update sensitive banking or tax information, please contact the HR department directly.</p>
+               <p>To update sensitive banking or tax information (or if documents are incorrect), please contact the HR department directly.</p>
             </div>
          </div>
       </div>

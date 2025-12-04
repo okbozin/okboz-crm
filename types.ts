@@ -1,4 +1,5 @@
 
+
 export enum UserRole {
   ADMIN = 'ADMIN',
   EMPLOYEE = 'EMPLOYEE',
@@ -60,6 +61,8 @@ export interface Employee {
   children?: number;
   idProof1Url?: string; // For Aadhar/PAN scans etc
   idProof2Url?: string; // For Aadhar/PAN scans etc
+  // Simulated online/offline events for monitoring
+  onlineHistory?: { timestamp: string; status: 'online' | 'offline'; }[];
 }
 
 export interface DailyAttendance {
@@ -241,6 +244,58 @@ export interface Task {
   priority: 'Low' | 'Medium' | 'High';
   dueDate: string;
   createdAt: string;
+}
+
+// NEW: Interface for Landing Page Content Management
+export interface LandingPageContent {
+  hero: {
+    headline: string;
+    subheadline: string;
+    ctaButtonText: string;
+    ctaButtonLink: string;
+    demoButtonText: string;
+    demoButtonLink: string;
+    promoBadge: string;
+    promoIcon: string;
+    image: string;
+  };
+  features: {
+    title: string;
+    description: string;
+    items: Array<{ icon: string; bg: string; title: string; desc: string; }>;
+  };
+  testimonials: {
+    title: string;
+    description: string;
+    items: Array<{ name: string; role: string; image: string; quote: string; }>;
+  };
+  pricing: {
+    title: string;
+    description: string;
+    billingToggleMonthly: string;
+    billingToggleYearly: string;
+    plans: Array<{ name: string; priceMonthly: string; priceYearly: string; description: string; features: string[]; buttonText: string; highlight: boolean; }>;
+  };
+  faq: {
+    title: string;
+    description: string;
+    items: Array<{ q: string; a: string; }>;
+  };
+  cta: {
+    headline: string;
+    subheadline: string;
+    buttonText: string;
+    buttonLink: string;
+  };
+  footer: {
+    companyName: string;
+    description: string;
+    productLinks: Array<{ label: string; link: string; }>;
+    companyLinks: Array<{ label: string; link: string; }>;
+    legalLinks: Array<{ label: string; link: string; }>;
+    socialLinks: Array<{ label: string; link: string; }>;
+    copyright: string;
+  };
 }
 
 

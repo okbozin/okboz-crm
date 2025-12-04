@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
@@ -36,7 +37,7 @@ import { Loader2, Cloud } from 'lucide-react';
 import { autoLoadFromCloud, syncToCloud, HARDCODED_FIREBASE_CONFIG } from './services/cloudService'; // Import Sync
 import { sendSystemNotification } from './services/cloudService'; // NEW: Import sendSystemNotification
 import Reports from './pages/admin/Reports';
-
+import CMS from './pages/admin/CMS'; // NEW: Import CMS
 
 const App: React.FC = () => {
   // Initialize state from localStorage
@@ -173,6 +174,10 @@ const App: React.FC = () => {
                             <Route path="/admin/corporate" element={<Corporate />} />
                             <Route path="/admin/settings" element={<Settings />} />
                             <Route path="/admin/admin-finance" element={<Expenses />} /> {/* Existing Admin Finance tab */}
+                            {/* NEW: Driver Monitoring */}
+                            
+                            {/* NEW: CMS */}
+                            <Route path="/admin/cms" element={<CMS />} />
                           </>
                         )}
                         

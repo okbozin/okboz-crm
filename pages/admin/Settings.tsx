@@ -1,10 +1,12 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Settings as SettingsIcon, Lock as LockIcon, 
   LogOut, Cloud, Database, Globe, Palette, Save,
   UploadCloud, DownloadCloud, Loader2, Map as MapIcon, Check,
   Users, Target, Building2, Car, Wallet, MapPin, Truck, Layers, RefreshCw, Eye,
-  Phone, DollarSign, Plane, Briefcase as BriefcaseIcon, Clock, Calendar, X
+  Phone, DollarSign, Plane, Briefcase as BriefcaseIcon, Clock, Calendar, X,
+  EyeOff, AlertCircle
 } from 'lucide-react';
 import { 
   HARDCODED_FIREBASE_CONFIG, getCloudDatabaseStats,
@@ -18,6 +20,7 @@ const Settings: React.FC = () => {
   const [dbStatus, setDbStatus] = useState<'Connected' | 'Disconnected' | 'Error'>('Disconnected');
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
+  // Fix: Corrected corrupted useState initialization
   const [collectionStats, setCollectionStats] = useState<any[]>([]);
 
   // Local state for branding form
@@ -27,6 +30,13 @@ const Settings: React.FC = () => {
   // Maps API Key State
   const [mapsKey, setMapsKey] = useState(localStorage.getItem('maps_api_key') || '');
   const [showMapsInput, setShowMapsInput] = useState(false);
+
+  // Password Change State (NEW)
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [showPasswords, setShowPasswords] = useState({ current: false, new: false, confirm: false });
+  const [passwordMessage, setPasswordMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   // Collection Viewer Modal State
   const [showCollectionViewer, setShowCollectionViewer] = useState(false);
@@ -192,6 +202,39 @@ const Settings: React.FC = () => {
     setCollectionError(null);
   };
 
+  // NEW: Handle Admin Password Change
+  const handleChangeAdminPassword = (e: React.FormEvent) => {
+      e.preventDefault();
+      setPasswordMessage(null); // Clear previous messages
+
+      const storedAdminPass = localStorage.getItem('admin_password') || '123456';
+
+      if (currentPassword !== storedAdminPass) {
+          setPasswordMessage({ type: 'error', text: 'Current password is incorrect.' });
+          return;
+      }
+      if (newPassword.length < 6) {
+          setPasswordMessage({ type: 'error', text: 'New password must be at least 6 characters.' });
+          return;
+      }
+      if (newPassword !== confirmNewPassword) {
+          setPasswordMessage({ type: 'error', text: 'New passwords do not match.' });
+          return;
+      }
+
+      localStorage.setItem('admin_password', newPassword);
+      setPasswordMessage({ type: 'success', text: 'Admin password updated successfully!' });
+      
+      // Clear form
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmNewPassword('');
+      setShowPasswords({ current: false, new: false, confirm: false });
+
+      setTimeout(() => setPasswordMessage(null), 3000); // Clear message after 3 seconds
+  };
+
+
   return (
     <div className="max-w-6xl mx-auto space-y-8">
       <div>
@@ -247,10 +290,13 @@ const Settings: React.FC = () => {
             <Cloud className="w-5 h-5 text-blue-500" /> Cloud Database
           </h3>
           <div className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 ${
+            // Fix: Using correct types for dbStatus comparison
             dbStatus === 'Connected' ? 'bg-green-100 text-green-700' : 
             dbStatus === 'Error' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'
           }`}>
-            <div className={`w-2 h-2 rounded-full ${dbStatus === 'Connected' ? 'bg-green-500' : dbStatus === 'Error' ? 'bg-red-500' : 'bg-gray-500'}`}></div>
+            <div className={`w-2 h-2 rounded-full ${
+              // Fix: Using correct types for dbStatus comparison
+              dbStatus === 'Connected' ? 'bg-green-500' : dbStatus === 'Error' ? 'bg-red-500' : 'bg-gray-500'}`}></div>
             {dbStatus}
           </div>
         </div>
@@ -279,7 +325,8 @@ const Settings: React.FC = () => {
                    <div className="space-y-2 text-sm">
                       <div className="flex justify-between text-gray-600">
                          <span>Collections:</span>
-                         <span className="font-bold text-gray-900">{Object.keys(stats).length}</span>
+                         {/* Fix: Directly accessing stats.length is incorrect, should check if stats is an object before Object.keys */}
+                         <span className="font-bold text-gray-900">{stats ? Object.keys(stats).length : 0}</span>
                       </div>
                       <div className="flex justify-between text-gray-600">
                          <span>Staff Records:</span>
@@ -437,6 +484,97 @@ const Settings: React.FC = () => {
                )}
             </div>
          </div>
+      </div>
+
+      {/* NEW: Security & Account Section */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+          <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+              <LockIcon className="w-5 h-5 text-red-500" /> Security & Account
+          </h3>
+          <div className="space-y-4">
+              {/* Change Admin Password Card */}
+              <div className="p-4 border border-gray-200 rounded-lg">
+                  <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                      <LockIcon className="w-4 h-4 text-gray-500" /> Change Admin Password
+                  </h4>
+                  <form onSubmit={handleChangeAdminPassword} className="space-y-3">
+                      <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
+                          <div className="relative">
+                              <input
+                                  type={showPasswords.current ? "text" : "password"}
+                                  value={currentPassword}
+                                  onChange={(e) => setCurrentPassword(e.target.value)}
+                                  className="w-full p-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none"
+                                  placeholder="••••••••"
+                                  required
+                              />
+                              <button
+                                  type="button"
+                                  onClick={() => setShowPasswords(prev => ({ ...prev, current: !prev.current }))}
+                                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                              >
+                                  {showPasswords.current ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                              </button>
+                          </div>
+                      </div>
+                      <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
+                          <div className="relative">
+                              <input
+                                  type={showPasswords.new ? "text" : "password"}
+                                  value={newPassword}
+                                  onChange={(e) => setNewPassword(e.target.value)}
+                                  className="w-full p-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                                  placeholder="••••••••"
+                                  required
+                              />
+                              <button
+                                  type="button"
+                                  onClick={() => setShowPasswords(prev => ({ ...prev, new: !prev.new }))}
+                                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                              >
+                                  {showPasswords.new ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                              </button>
+                          </div>
+                      </div>
+                      <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
+                          <div className="relative">
+                              <input
+                                  type={showPasswords.confirm ? "text" : "password"}
+                                  value={confirmNewPassword}
+                                  onChange={(e) => setConfirmNewPassword(e.target.value)}
+                                  className="w-full p-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                                  placeholder="••••••••"
+                                  required
+                              />
+                              <button
+                                  type="button"
+                                  onClick={() => setShowPasswords(prev => ({ ...prev, confirm: !prev.confirm }))}
+                                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                              >
+                                  {showPasswords.confirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                              </button>
+                          </div>
+                      </div>
+                      {passwordMessage && (
+                          <div className={`text-sm p-3 rounded-lg flex items-center gap-2 ${passwordMessage.type === 'error' ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-green-100 text-green-700 border border-green-200'}`}>
+                              {passwordMessage.type === 'error' ? <AlertCircle className="w-4 h-4 shrink-0" /> : <Check className="w-4 h-4 shrink-0" />}
+                              <span>{passwordMessage.text}</span>
+                          </div>
+                      )}
+                      <div className="pt-2 flex justify-end">
+                          <button
+                              type="submit"
+                              className="bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-lg font-bold text-sm shadow-sm transition-colors flex items-center gap-2"
+                          >
+                              <Save className="w-4 h-4" /> Update Password
+                          </button>
+                      </div>
+                  </form>
+              </div>
+          </div>
       </div>
 
       {/* Collection Viewer Modal */}

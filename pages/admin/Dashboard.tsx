@@ -1,3 +1,5 @@
+
+
 import React, { useMemo, useState, useEffect } from 'react';
 // @google/genai: Add missing import for Headset
 import { Users, UserCheck, UserX, MapPin, ArrowRight, Building2, Car, TrendingUp, DollarSign, Clock, BarChart3, Calendar, Truck, CheckCircle, Headset } from 'lucide-react';
@@ -225,7 +227,7 @@ const Dashboard = () => {
   const attendanceStats = useMemo(() => {
       if (filteredEmployees.length === 0) return { present: 0, absent: 0, late: 0, onField: 0 };
 
-      let present = 0, absent = 0, late = 0, onField = 0;
+      let present = 0, absent = 0, late = 0;
       
       const targetDate = new Date(selectedDate);
       const targetYear = targetDate.getFullYear();
@@ -241,7 +243,6 @@ const Dashboard = () => {
                   if (record.status === AttendanceStatus.PRESENT || record.status === AttendanceStatus.HALF_DAY) {
                       present++;
                       if (record.isLate) late++;
-                      if (emp.department === 'Sales' || emp.role.includes('Driver')) onField++;
                   } else if (record.status === AttendanceStatus.ABSENT) {
                       absent++;
                   }
@@ -257,7 +258,7 @@ const Dashboard = () => {
           });
       }
 
-      return { present, absent, late, onField };
+      return { present, absent, late, onField: 0 }; // onField is removed
   }, [filteredEmployees, filterType, selectedDate, selectedMonth]);
 
   // Trip Stats
