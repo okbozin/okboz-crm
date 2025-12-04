@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
@@ -9,7 +10,7 @@ import {
   Briefcase, ArrowUpRight, Car, MapPin, Activity, CheckSquare, Users
 } from 'lucide-react';
 import { MOCK_EMPLOYEES, getEmployeeAttendance } from '../../constants';
-import { AttendanceStatus } from '../../types';
+import { AttendanceStatus, PayrollHistoryRecord } from '../../types';
 
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#6366f1'];
 
@@ -22,45 +23,92 @@ const Reports: React.FC = () => {
   const [staff, setStaff] = useState<any[]>([]);
   const [trips, setTrips] = useState<any[]>([]);
 
-  const isSuperAdmin = (localStorage.getItem('app_session_id') || 'admin') === 'admin';
+  const sessionId = localStorage.getItem('app_session_id') || 'admin';
+  const isSuperAdmin = sessionId === 'admin';
 
   useEffect(() => {
     try {
       const corporates = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
 
-      const expenseData = JSON.parse(localStorage.getItem('office_expenses') || '[]');
-      const corpExpenses = corporates.flatMap((c: any) => {
-         const d = localStorage.getItem(`office_expenses_${c.email}`);
-         return d ? JSON.parse(d) : [];
-      });
-      setExpenses([...expenseData, ...corpExpenses]);
+      // Load Expenses
+      let allExpenses: any[] = [];
+      if (isSuperAdmin) {
+          const adminExpenses = JSON.parse(localStorage.getItem('office_expenses') || '[]');
+          allExpenses = [...adminExpenses];
+          corporates.forEach((c: any) => {
+             const d = localStorage.getItem(`office_expenses_${c.email}`);
+             if (d) allExpenses = [...allExpenses, ...JSON.parse(d)];
+          });
+      } else {
+          const key = `office_expenses_${sessionId}`;
+          const currentCorpExpenses = JSON.parse(localStorage.getItem(key) || '[]');
+          allExpenses = [...currentCorpExpenses];
+      }
+      setExpenses(allExpenses);
 
-      const payrollData = JSON.parse(localStorage.getItem('payroll_history') || '[]');
-      setPayroll(payrollData);
+      // Load Payroll History
+      let allPayrollHistory: PayrollHistoryRecord[] = [];
+      const globalPayrollHistory = JSON.parse(localStorage.getItem('payroll_history') || '[]');
+      if (isSuperAdmin) {
+          allPayrollHistory = [...globalPayrollHistory];
+      } else {
+          allPayrollHistory = globalPayrollHistory.filter((p: PayrollHistoryRecord) => p.ownerId === sessionId);
+      }
+      setPayroll(allPayrollHistory);
 
-      const leadsData = JSON.parse(localStorage.getItem('leads_data') || '[]');
-      setLeads(leadsData);
+      // Load Leads
+      let allLeads: any[] = [];
+      if (isSuperAdmin) {
+          const adminLeads = JSON.parse(localStorage.getItem('leads_data') || '[]');
+          allLeads = [...adminLeads];
+          corporates.forEach((c: any) => {
+             const d = localStorage.getItem(`leads_data_${c.email}`);
+             if (d) allLeads = [...allLeads, ...JSON.parse(d)];
+          });
+      } else {
+          const key = `leads_data_${sessionId}`;
+          const currentCorpLeads = JSON.parse(localStorage.getItem(key) || '[]');
+          allLeads = [...currentCorpLeads];
+      }
+      setLeads(allLeads);
 
-      const staffData = JSON.parse(localStorage.getItem('staff_data') || '[]');
-      const corpStaff = corporates.flatMap((c: any) => {
-         const d = localStorage.getItem(`staff_data_${c.email}`);
-         return d ? JSON.parse(d) : [];
-      });
-      setStaff(staffData.length + corpStaff.length > 0 ? [...staffData, ...corpStaff] : MOCK_EMPLOYEES);
+      // Load Staff
+      let allStaff: any[] = [];
+      if (isSuperAdmin) {
+          const adminStaff = JSON.parse(localStorage.getItem('staff_data') || '[]');
+          allStaff = [...adminStaff];
+          corporates.forEach((c: any) => {
+             const d = localStorage.getItem(`staff_data_${c.email}`);
+             if (d) allStaff = [...allStaff, ...JSON.parse(d)];
+          });
+      } else {
+          const key = `staff_data_${sessionId}`;
+          const currentCorpStaff = JSON.parse(localStorage.getItem(key) || '[]');
+          allStaff = [...currentCorpStaff];
+      }
+      setStaff(allStaff.length > 0 ? allStaff : MOCK_EMPLOYEES);
 
+
+      // Load Trips
       let allTrips: any[] = [];
-      const adminTrips = JSON.parse(localStorage.getItem('trips_data') || '[]');
-      allTrips = [...adminTrips];
-      corporates.forEach((c: any) => {
-          const cData = localStorage.getItem(`trips_data_${c.email}`);
-          if (cData) allTrips = [...allTrips, ...JSON.parse(cData)];
-      });
+      if (isSuperAdmin) {
+          const adminTrips = JSON.parse(localStorage.getItem('trips_data') || '[]');
+          allTrips = [...adminTrips];
+          corporates.forEach((c: any) => {
+              const cData = localStorage.getItem(`trips_data_${c.email}`);
+              if (cData) allTrips = [...allTrips, ...JSON.parse(cData)];
+          });
+      } else {
+          const key = `trips_data_${sessionId}`;
+          const currentCorpTrips = JSON.parse(localStorage.getItem(key) || '[]');
+          allTrips = [...currentCorpTrips];
+      }
       setTrips(allTrips);
 
     } catch (e) {
       console.error("Error loading report data", e);
     }
-  }, []);
+  }, [isSuperAdmin, sessionId]);
 
   const financialStats = useMemo(() => {
     const stats = [];

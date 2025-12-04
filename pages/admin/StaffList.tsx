@@ -18,12 +18,13 @@ interface DisplayEmployee extends Employee {
 
 const StaffList: React.FC = () => {
   // Determine Session Context
-  const getSessionKey = (key: string) => {
+  const getSessionKey = (baseKey: string) => {
      const sessionId = localStorage.getItem('app_session_id') || 'admin';
-     return sessionId === 'admin' ? key : `${key}_${sessionId}`;
+     return sessionId === 'admin' ? baseKey : `${baseKey}_${sessionId}`;
   };
 
-  const isSuperAdmin = (localStorage.getItem('app_session_id') || 'admin') === 'admin';
+  const sessionId = localStorage.getItem('app_session_id') || 'admin';
+  const isSuperAdmin = sessionId === 'admin';
 
   // Initialize state
   const [employees, setEmployees] = useState<DisplayEmployee[]>(() => {
@@ -37,7 +38,7 @@ const StaffList: React.FC = () => {
             try { 
                 const parsed = JSON.parse(adminData);
                 // Explicitly set franchiseId to 'admin' for proper filtering
-                allData = [...allData, ...parsed.map((e: any) => ({...e, franchiseName: 'Head Office', franchiseId: 'admin'}))];
+                allData = [...allData, ...parsed.map((e: any) => ({...e, corporateId: 'admin', franchiseName: 'Head Office', franchiseId: 'admin'}))];
             } catch (e) {}
         } else {
             // No data found in storage, initialize empty
@@ -51,7 +52,7 @@ const StaffList: React.FC = () => {
             if (cData) {
                 try {
                     const parsed = JSON.parse(cData);
-                    const tagged = parsed.map((e: any) => ({...e, franchiseName: corp.companyName, franchiseId: corp.email }));
+                    const tagged = parsed.map((e: any) => ({...e, corporateId: corp.email, franchiseName: corp.companyName, franchiseId: corp.email }));
                     allData = [...allData, ...tagged];
                 } catch (e) {}
             }
@@ -63,7 +64,7 @@ const StaffList: React.FC = () => {
         const saved = localStorage.getItem(key);
         if (saved) {
             try {
-                return JSON.parse(saved);
+                return JSON.parse(saved).map((e: any) => ({...e, corporateId: sessionId, franchiseName: 'My Branch', franchiseId: sessionId}));
             } catch (e) { console.error(e); }
         }
         return [];
@@ -174,15 +175,23 @@ const StaffList: React.FC = () => {
   useEffect(() => {
     if (!isSuperAdmin) {
         const key = getSessionKey('staff_data');
-        localStorage.setItem(key, JSON.stringify(employees));
+        localStorage.setItem(key, JSON.stringify(employees.map(({franchiseName, franchiseId, ...rest}) => rest)));
     } else {
         // For Super Admin, we only save 'Head Office' staff back to 'staff_data' to avoid overwriting franchise data with the whole list
-        const headOfficeStaff = employees.filter(e => e.franchiseName === 'Head Office');
-        // Strip metadata before saving to keep data clean
-        const cleanStaff = headOfficeStaff.map(({franchiseName, franchiseId, ...rest}) => rest);
-        localStorage.setItem('staff_data', JSON.stringify(cleanStaff));
+        const headOfficeStaff = employees.filter(e => e.franchiseId === 'admin');
+        // Strip metadata before saving
+        const cleanAdmin = headOfficeStaff.map(({franchiseName, franchiseId, ...rest}) => rest);
+        localStorage.setItem('staff_data', JSON.stringify(cleanAdmin));
+
+        // For Super Admin, also update individual corporate staff lists
+        const corps = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
+        corps.forEach((c: any) => {
+            const corpStaff = employees.filter(e => e.franchiseId === c.email);
+            const cleanCorpStaff = corpStaff.map(({franchiseName, franchiseId, ...rest}) => rest);
+            localStorage.setItem(`staff_data_${c.email}`, JSON.stringify(cleanCorpStaff));
+        });
     }
-  }, [employees, isSuperAdmin]);
+  }, [employees, isSuperAdmin, sessionId]);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -216,7 +225,10 @@ const StaffList: React.FC = () => {
     // Attendance Config
     gpsGeofencing: true,
     qrScan: false,
-    manualPunch: true // Default Manual Punch (Web) to true
+    manualPunch: true, // Default Manual Punch (Web) to true
+    currentLocation: undefined, // NEW: Initialize
+    attendanceLocationStatus: 'idle', // NEW: Initialize
+    cameraPermissionStatus: 'idle', // NEW: Initialize
   };
 
   const [formData, setFormData] = useState(initialFormState);
@@ -275,14 +287,18 @@ const StaffList: React.FC = () => {
                   status: 'Active',
                   password: 'user123', // Default password for bulk import
                   weekOff: 'Sunday',
-                  franchiseName: isSuperAdmin ? 'Head Office' : undefined,
-                  franchiseId: isSuperAdmin ? 'admin' : undefined,
+                  corporateId: isSuperAdmin ? 'admin' : sessionId, // NEW: corporateId for imported staff
+                  franchiseName: isSuperAdmin ? 'Head Office' : 'My Branch',
+                  franchiseId: isSuperAdmin ? 'admin' : sessionId,
                   liveTracking: false,
                   attendanceConfig: {
                       gpsGeofencing: true,
                       qrScan: false,
                       manualPunch: true // Default for imported staff
-                  }
+                  },
+                  currentLocation: undefined, // NEW: Initialize
+                  attendanceLocationStatus: 'idle', // NEW: Initialize
+                  cameraPermissionStatus: 'idle', // NEW: Initialize
               });
           }
       }
@@ -342,6 +358,9 @@ const StaffList: React.FC = () => {
       gpsGeofencing: employee.attendanceConfig?.gpsGeofencing ?? !employee.allowRemotePunch ?? true,
       qrScan: employee.attendanceConfig?.qrScan ?? false,
       manualPunch: employee.attendanceConfig?.manualPunch ?? true, // Keep it true when editing
+      currentLocation: employee.currentLocation, // NEW: Preserve
+      attendanceLocationStatus: employee.attendanceLocationStatus || 'idle', // NEW: Preserve
+      cameraPermissionStatus: employee.cameraPermissionStatus || 'idle', // NEW: Preserve
     });
     setEditingId(employee.id);
     setShowPassword(false);
@@ -351,7 +370,19 @@ const StaffList: React.FC = () => {
 
   const handleDelete = (id: string) => {
     if (window.confirm('Are you sure you want to remove this staff member?')) {
-      setEmployees(prev => prev.filter(emp => emp.id !== id));
+      // For Super Admin, handle deletion from appropriate corporate list
+      if (isSuperAdmin) {
+        const employeeToDelete = employees.find(emp => emp.id === id);
+        if (employeeToDelete) {
+          const targetKey = employeeToDelete.franchiseId === 'admin' ? 'staff_data' : `staff_data_${employeeToDelete.franchiseId}`;
+          const currentStaff = JSON.parse(localStorage.getItem(targetKey) || '[]');
+          const updatedStaff = currentStaff.filter((emp: Employee) => emp.id !== id);
+          localStorage.setItem(targetKey, JSON.stringify(updatedStaff));
+          setEmployees(prev => prev.filter(emp => emp.id !== id));
+        }
+      } else {
+        setEmployees(prev => prev.filter(emp => emp.id !== id));
+      }
     }
   };
 
@@ -390,7 +421,11 @@ const StaffList: React.FC = () => {
             ifsc: formData.ifsc,
             liveTracking: formData.liveTracking,
             allowRemotePunch: !formData.gpsGeofencing, // Backward compat
-            attendanceConfig: attendanceConfig
+            attendanceConfig: attendanceConfig,
+            currentLocation: formData.currentLocation, // NEW: Preserve
+            attendanceLocationStatus: formData.attendanceLocationStatus, // NEW: Preserve
+            cameraPermissionStatus: formData.cameraPermissionStatus, // NEW: Preserve
+            // corporateId and franchiseId/Name should remain unchanged during edit
           };
         }
         return emp;
@@ -417,11 +452,15 @@ const StaffList: React.FC = () => {
         pan: formData.pan,
         accountNumber: formData.accountNumber,
         ifsc: formData.ifsc,
-        franchiseName: isSuperAdmin ? 'Head Office' : undefined, // Tag new creations
-        franchiseId: isSuperAdmin ? 'admin' : undefined,
+        corporateId: isSuperAdmin ? 'admin' : sessionId, // NEW: corporateId for new employees
+        franchiseName: isSuperAdmin ? 'Head Office' : 'My Branch', // Tag new creations
+        franchiseId: isSuperAdmin ? 'admin' : sessionId,
         liveTracking: formData.liveTracking,
         allowRemotePunch: !formData.gpsGeofencing, // Backward compat
-        attendanceConfig: attendanceConfig
+        attendanceConfig: attendanceConfig,
+        currentLocation: undefined, // NEW: Initialize
+        attendanceLocationStatus: 'idle', // NEW: Initialize
+        cameraPermissionStatus: 'idle', // NEW: Initialize
       };
       setEmployees(prev => [...prev, newEmployee]);
     }
@@ -439,8 +478,11 @@ const StaffList: React.FC = () => {
     let matchesCorporate = true;
     if (isSuperAdmin && filterCorporate !== 'All') {
         // Ensure a safe fallback for head office matching
-        const empCorpId = emp.franchiseId || 'admin';
+        const empCorpId = emp.corporateId || 'admin';
         matchesCorporate = empCorpId === filterCorporate;
+    } else if (!isSuperAdmin) {
+        // For corporate user, only show their own employees
+        matchesCorporate = (emp.corporateId || 'admin') === sessionId;
     }
 
     const matchesBranch = filterBranch === 'All' || emp.branch === filterBranch;
@@ -874,6 +916,7 @@ const StaffList: React.FC = () => {
                             className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
                           >
                             <option value="">Select Branch</option>
+                            {/* Corrected: Use 'formAvailableBranches' which is the Memoized branch list */}
                             {availableBranches.length > 0 ? (
                                 availableBranches.map((b: any) => (
                                     <option key={b.id} value={b.name}>{b.name}</option>
@@ -1106,7 +1149,7 @@ const StaffList: React.FC = () => {
                 </button>
                 <button 
                   type="submit"
-                  className="flex-1 px-4 py-3 bg-emerald-500 text-white font-medium rounded-lg hover:bg-emerald-600 shadow-md hover:shadow-lg transition-all"
+                  className="flex-1 px-4 py-3 bg-emerald-500 text-white font-medium rounded-lg hover:bg-emerald-600 shadow-md hover:shadow-lg transition-all flex items-center gap-2"
                 >
                   {editingId ? 'Update Staff Details' : 'Complete Onboarding'}
                 </button>

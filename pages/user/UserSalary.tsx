@@ -1,9 +1,10 @@
 
+
 import React, { useMemo, useState, useEffect } from 'react';
 import { Download, TrendingUp, DollarSign, FileText, CheckCircle, Clock, Plus, AlertCircle, X, Send } from 'lucide-react';
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { MOCK_EMPLOYEES, getEmployeeAttendance } from '../../constants';
-import { AttendanceStatus, Employee, SalaryAdvanceRequest } from '../../types';
+import { AttendanceStatus, Employee, SalaryAdvanceRequest, LeaveRequest } from '../../types';
 
 const UserSalary: React.FC = () => {
   const [user, setUser] = useState<Employee | null>(null);
@@ -96,6 +97,9 @@ const UserSalary: React.FC = () => {
           return;
       }
 
+      const sessionId = localStorage.getItem('app_session_id') || 'admin';
+      const isSuperAdmin = sessionId === 'admin';
+
       const newRequest: SalaryAdvanceRequest = {
           id: `ADV-${Date.now()}`,
           employeeId: user.id,
@@ -105,7 +109,7 @@ const UserSalary: React.FC = () => {
           reason: advanceForm.reason,
           status: 'Pending',
           requestDate: new Date().toISOString(),
-          corporateId: '' 
+          corporateId: user.corporateId || (isSuperAdmin ? 'admin' : undefined), // NEW: Add corporateId from user
       };
 
       const existing = JSON.parse(localStorage.getItem('salary_advances') || '[]');

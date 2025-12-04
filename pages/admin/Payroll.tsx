@@ -1,29 +1,10 @@
 
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { DollarSign, Save, Download, Filter, Search, Calculator, RefreshCw, CheckCircle, Clock, X, Eye, CreditCard, Banknote, History, Trash2, Printer, User, ArrowLeft, Calendar, Building2, MapPin } from 'lucide-react';
 import { MOCK_EMPLOYEES, getEmployeeAttendance } from '../../constants';
-import { AttendanceStatus, Employee, SalaryAdvanceRequest } from '../../types';
+import { AttendanceStatus, Employee, SalaryAdvanceRequest, PayrollEntry, PayrollHistoryRecord } from '../../types';
 
-interface PayrollEntry {
-  employeeId: string;
-  basicSalary: number;
-  allowances: number;
-  bonus: number;
-  deductions: number;
-  advanceDeduction: number; // New field
-  payableDays: number;
-  totalDays: number;
-  status: 'Paid' | 'Pending';
-}
-
-interface PayrollHistoryRecord {
-  id: string;
-  name: string;
-  date: string;
-  totalAmount: number;
-  employeeCount: number;
-  data: Record<string, PayrollEntry>;
-}
 
 // Extended Employee type for internal use
 interface ExtendedEmployee extends Employee {
@@ -64,7 +45,8 @@ const Payroll: React.FC = () => {
     return sessionId === 'admin' ? 'staff_data' : `staff_data_${sessionId}`;
   };
 
-  const isSuperAdmin = (localStorage.getItem('app_session_id') || 'admin') === 'admin';
+  const sessionId = localStorage.getItem('app_session_id') || 'admin';
+  const isSuperAdmin = sessionId === 'admin';
 
   // Load employees with Metadata
   const [employees, setEmployees] = useState<ExtendedEmployee[]>(() => {
@@ -75,8 +57,7 @@ const Payroll: React.FC = () => {
         const adminData = localStorage.getItem('staff_data');
         if (adminData) {
             try { 
-                const parsed = JSON.parse(adminData);
-                allEmployees = [...allEmployees, ...parsed.map((e: any) => ({...e, corporateId: 'admin', corporateName: 'Head Office'}))]; 
+                allEmployees = [...allEmployees, ...JSON.parse(adminData).map((e: any) => ({...e, corporateId: 'admin', corporateName: 'Head Office'}))]; 
             } catch (e) {}
         } else {
             allEmployees = [...allEmployees, ...MOCK_EMPLOYEES.map(e => ({...e, corporateId: 'admin', corporateName: 'Head Office'}))];
@@ -89,8 +70,7 @@ const Payroll: React.FC = () => {
                 const cData = localStorage.getItem(`staff_data_${corp.email}`);
                 if (cData) {
                     try { 
-                        const parsed = JSON.parse(cData);
-                        allEmployees = [...allEmployees, ...parsed.map((e:any) => ({...e, corporateId: corp.email, corporateName: corp.companyName}))]; 
+                        allEmployees = [...allEmployees, ...JSON.parse(cData).map((e:any) => ({...e, corporateId: corp.email, corporateName: corp.companyName}))]; 
                     } catch (e) {}
                 }
             });
@@ -101,7 +81,7 @@ const Payroll: React.FC = () => {
         const key = getSessionKey();
         const saved = localStorage.getItem(key);
         if (saved) {
-            try { return JSON.parse(saved); } catch (e) { console.error(e); }
+            try { return JSON.parse(saved).map((e: any) => ({...e, corporateId: sessionId, corporateName: 'My Branch'})); } catch (e) { console.error(e); }
         }
         return [];
     }
@@ -111,11 +91,24 @@ const Payroll: React.FC = () => {
   useEffect(() => {
       const loadData = () => {
           const allAdvances = JSON.parse(localStorage.getItem('salary_advances') || '[]');
-          setAdvances(allAdvances.sort((a: any, b: any) => new Date(b.requestDate).getTime() - new Date(a.requestDate).getTime()));
+          
+          // Filter advances by current corporate for non-super admin
+          const filteredAdvances = isSuperAdmin 
+            ? allAdvances 
+            : allAdvances.filter((a: SalaryAdvanceRequest) => a.corporateId === sessionId);
+
+          setAdvances(filteredAdvances.sort((a: any, b: any) => new Date(b.requestDate).getTime() - new Date(a.requestDate).getTime()));
 
           const savedHistory = localStorage.getItem('payroll_history');
           if (savedHistory) {
-              try { setHistory(JSON.parse(savedHistory)); } catch (e) {}
+              try { 
+                const parsedHistory = JSON.parse(savedHistory);
+                // Filter history by current corporate for non-super admin
+                const filteredHistory = isSuperAdmin 
+                    ? parsedHistory 
+                    : parsedHistory.filter((h: PayrollHistoryRecord) => h.ownerId === sessionId);
+                setHistory(filteredHistory); 
+              } catch (e) {}
           }
 
           if (isSuperAdmin) {
@@ -128,7 +121,7 @@ const Payroll: React.FC = () => {
       const handleStorage = () => loadData();
       window.addEventListener('storage', handleStorage);
       return () => window.removeEventListener('storage', handleStorage);
-  }, [isSuperAdmin]);
+  }, [isSuperAdmin, sessionId]);
 
   // Derived Lists for Filters
   const departments = useMemo(() => {
@@ -140,15 +133,26 @@ const Payroll: React.FC = () => {
       let relevantEmployees = employees;
       if (isSuperAdmin && filterCorporate !== 'All') {
           relevantEmployees = employees.filter(e => e.corporateId === filterCorporate);
+      } else if (!isSuperAdmin) {
+          relevantEmployees = employees.filter(e => e.corporateId === sessionId);
       }
       const branches = new Set(relevantEmployees.map(e => e.branch).filter(Boolean));
       return ['All', ...Array.from(branches)];
-  }, [employees, filterCorporate, isSuperAdmin]);
+  }, [employees, filterCorporate, isSuperAdmin, sessionId]);
 
-  // Persist History
+  // Persist History (This will save global history, filtering is done on load)
   useEffect(() => {
-      localStorage.setItem('payroll_history', JSON.stringify(history));
-  }, [history]);
+      // For Super Admin, we load all history and then filter the view.
+      // For Corporate, we've already filtered history on load.
+      // So, here we ensure all history is present in storage.
+      const existingGlobalHistory = JSON.parse(localStorage.getItem('payroll_history') || '[]');
+      const currentCorporateHistory = history.filter(h => h.ownerId === sessionId);
+      const otherCorpsHistory = existingGlobalHistory.filter((h: PayrollHistoryRecord) => h.ownerId !== sessionId);
+      
+      const combinedHistory = [...otherCorpsHistory, ...currentCorporateHistory];
+
+      localStorage.setItem('payroll_history', JSON.stringify(combinedHistory));
+  }, [history, sessionId]);
 
   // Auto-calculate on mount or when month/filters changes
   useEffect(() => {
@@ -209,7 +213,8 @@ const Payroll: React.FC = () => {
             advanceDeduction: advanceDeduction,
             payableDays,
             totalDays: daysInMonth,
-            status: existingEntry ? existingEntry.status : 'Pending'
+            status: existingEntry ? existingEntry.status : 'Pending',
+            ownerId: emp.corporateId || 'admin', // NEW: Tag with employee's corporateId
         };
     });
 
@@ -267,8 +272,16 @@ const Payroll: React.FC = () => {
           return a;
       });
       
-      setAdvances(updatedAdvances);
-      localStorage.setItem('salary_advances', JSON.stringify(updatedAdvances));
+      // Update global advances storage, then re-filter for current view
+      const allGlobalAdvances = JSON.parse(localStorage.getItem('salary_advances') || '[]');
+      const otherAdvances = allGlobalAdvances.filter((a: SalaryAdvanceRequest) => 
+        a.id !== selectedAdvance.id && (!isSuperAdmin ? a.corporateId !== sessionId : true)
+      );
+      const combinedAdvances = [...otherAdvances, updatedAdvances.find(a => a.id === selectedAdvance.id)!];
+      localStorage.setItem('salary_advances', JSON.stringify(combinedAdvances));
+
+      // Update local state with filtered advances
+      setAdvances(isSuperAdmin ? combinedAdvances : combinedAdvances.filter(a => a.corporateId === sessionId));
       setSelectedAdvance(null);
       handleAutoCalculate(); 
   };
@@ -278,8 +291,17 @@ const Payroll: React.FC = () => {
       const updatedAdvances = advances.map(a => 
           a.id === selectedAdvance.id ? { ...a, status: 'Rejected' as const } : a
       );
-      setAdvances(updatedAdvances);
-      localStorage.setItem('salary_advances', JSON.stringify(updatedAdvances));
+      
+      // Update global advances storage, then re-filter for current view
+      const allGlobalAdvances = JSON.parse(localStorage.getItem('salary_advances') || '[]');
+      const otherAdvances = allGlobalAdvances.filter((a: SalaryAdvanceRequest) => 
+        a.id !== selectedAdvance.id && (!isSuperAdmin ? a.corporateId !== sessionId : true)
+      );
+      const combinedAdvances = [...otherAdvances, updatedAdvances.find(a => a.id === selectedAdvance.id)!];
+      localStorage.setItem('salary_advances', JSON.stringify(combinedAdvances));
+
+      // Update local state with filtered advances
+      setAdvances(isSuperAdmin ? combinedAdvances : combinedAdvances.filter(a => a.corporateId === sessionId));
       setSelectedAdvance(null);
   };
 
@@ -296,11 +318,20 @@ const Payroll: React.FC = () => {
           name: `Payroll - ${batchDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`,
           date: new Date().toISOString(),
           totalAmount,
-          employeeCount: employees.length,
-          data: payrollData
+          employeeCount: filteredEmployees.length, // Only count filtered employees
+          data: payrollData,
+          ownerId: isSuperAdmin ? (filterCorporate === 'admin' ? 'admin' : filterCorporate) : sessionId, // NEW: Tag with filterCorporate or current sessionId
       };
       
-      setHistory([newRecord, ...history]);
+      // Update global history storage, then re-filter for current view
+      const allGlobalHistory = JSON.parse(localStorage.getItem('payroll_history') || '[]');
+      const otherCorpsHistory = allGlobalHistory.filter((h: PayrollHistoryRecord) => h.ownerId !== newRecord.ownerId);
+      const combinedHistory = [...otherCorpsHistory, newRecord];
+      localStorage.setItem('payroll_history', JSON.stringify(combinedHistory));
+
+      // Update local state with filtered history
+      setHistory(isSuperAdmin ? combinedHistory : combinedHistory.filter(h => h.ownerId === sessionId));
+
       alert("Payroll record saved to History successfully!");
       setActiveTab('History');
   };
@@ -308,7 +339,13 @@ const Payroll: React.FC = () => {
   const handleDeleteHistory = (id: string, e: React.MouseEvent) => {
       e.stopPropagation();
       if(window.confirm("Are you sure you want to delete this payroll record?")) {
-          setHistory(prev => prev.filter(h => h.id !== id));
+          // Remove from global storage
+          const allGlobalHistory = JSON.parse(localStorage.getItem('payroll_history') || '[]');
+          const updatedGlobalHistory = allGlobalHistory.filter((h: PayrollHistoryRecord) => h.id !== id);
+          localStorage.setItem('payroll_history', JSON.stringify(updatedGlobalHistory));
+          
+          // Update local state with filtered history
+          setHistory(isSuperAdmin ? updatedGlobalHistory : updatedGlobalHistory.filter(h => h.ownerId === sessionId));
       }
   };
 
@@ -326,7 +363,7 @@ const Payroll: React.FC = () => {
     const matchesSearch = emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           emp.role.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesDept = filterDepartment === 'All' || emp.department === filterDepartment;
-    const matchesCorporate = isSuperAdmin ? (filterCorporate === 'All' || emp.corporateId === filterCorporate) : true;
+    const matchesCorporate = isSuperAdmin ? (filterCorporate === 'All' || emp.corporateId === filterCorporate) : (emp.corporateId === sessionId); // Filter by current corporate if not SuperAdmin
     const matchesBranch = filterBranch === 'All' || emp.branch === filterBranch;
     
     const entry = payrollData[emp.id];
@@ -517,7 +554,7 @@ const Payroll: React.FC = () => {
                         const data = payrollData[emp.id] || { 
                           employeeId: emp.id,
                           basicSalary: 0, allowances: 0, bonus: 0, deductions: 0, advanceDeduction: 0,
-                          payableDays: 0, totalDays: 30, status: 'Pending'
+                          payableDays: 0, totalDays: 30, status: 'Pending', ownerId: emp.corporateId || 'admin'
                         };
                         const netPay = calculateNetPay(data);
 

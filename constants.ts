@@ -1,7 +1,22 @@
 
+
 import { AttendanceStatus, DailyAttendance, Employee } from './types';
 
 export const MOCK_EMPLOYEES: Employee[] = [];
+
+// Define a common COLORS array for consistent chart/status colors
+export const COLORS = [
+  '#10b981', // Emerald
+  '#3b82f6', // Blue
+  '#f59e0b', // Amber
+  '#ef4444', // Red
+  '#8b5cf6', // Violet
+  '#ec4899', // Pink
+  '#6366f1', // Indigo
+  '#14b8a6', // Teal
+  '#64748b', // Slate
+  '#e879f9', // Fuchsia
+];
 
 // Generate attendance helper (Kept for functional logic if needed for real employees)
 export const generateMockAttendance = (employee: Employee, year: number, month: number): DailyAttendance[] => {

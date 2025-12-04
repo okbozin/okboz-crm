@@ -44,6 +44,10 @@ export interface Employee {
     qrScan: boolean;
     manualPunch: boolean;
   };
+  corporateId?: string; // NEW: To link employee to a specific corporate account
+  currentLocation?: { lat: number; lng: number; accuracy: number; }; // NEW: Last known accurate location
+  attendanceLocationStatus?: 'idle' | 'fetching' | 'granted' | 'denied' | 'outside_geofence' | 'within_geofence'; // NEW: Status of location access for attendance
+  cameraPermissionStatus?: 'idle' | 'granted' | 'denied'; // NEW: Status of camera access
 }
 
 export interface DailyAttendance {
@@ -133,6 +137,7 @@ export interface Enquiry {
   estimatedPrice?: number;
   // Added priority field to Enquiry interface
   priority?: 'Hot' | 'Warm' | 'Cold';
+  corporateId?: string; // NEW: To link enquiry to a specific corporate
 }
 
 export interface DocumentFile {
@@ -176,6 +181,41 @@ export interface Notification {
   link?: string;        // Optional: path to navigate to
 }
 
+export interface PayrollHistoryRecord {
+  id: string;
+  name: string;
+  date: string;
+  totalAmount: number;
+  employeeCount: number;
+  data: Record<string, PayrollEntry>;
+  ownerId?: string; // NEW: To link payroll history to a specific corporate
+}
+
+export interface PayrollEntry { // Moved this from Payroll.tsx to types.ts for consistent usage
+  employeeId: string;
+  basicSalary: number;
+  allowances: number;
+  bonus: number;
+  deductions: number;
+  advanceDeduction: number;
+  payableDays: number;
+  totalDays: number;
+  status: 'Paid' | 'Pending';
+  ownerId?: string; // NEW: To link payroll entry to a corporate for filtering
+}
+
+export interface LeaveRequest { // Moved this from ApplyLeave.tsx to types.ts for consistent usage
+  id: number;
+  type: string;
+  from: string;
+  to: string;
+  days: number;
+  status: string;
+  reason: string;
+  appliedOn: string;
+  corporateId?: string; // NEW: To link leave request to a specific corporate
+}
+
 
 declare global {
   namespace google {
@@ -191,6 +231,11 @@ declare global {
       enum Animation {}
       class InfoWindow {}
       class LatLng {} // For e.latLng methods
+      namespace geometry {
+        namespace spherical {
+          function computeDistanceBetween(latLng1: LatLng, latLng2: LatLng): number;
+        }
+      }
     }
   }
   interface Window {

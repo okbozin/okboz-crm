@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Settings, Loader2, ArrowRight, ArrowRightLeft, 
@@ -62,9 +63,16 @@ const DEFAULT_PRICING_SUV: PricingRules = {
   outstationDriverAllowance: 500, outstationNightAllowance: 400 
 };
 
-const getInitialEnquiries = (): Enquiry[] => {
+const getInitialEnquiries = (role: UserRole, sessionId: string): Enquiry[] => {
   const saved = localStorage.getItem('global_enquiries_data');
-  return saved ? JSON.parse(saved) : [];
+  const allEnquiries: Enquiry[] = saved ? JSON.parse(saved) : [];
+
+  if (role === UserRole.CORPORATE) {
+    // Filter enquiries by the current corporate's ID (email)
+    return allEnquiries.filter(e => e.corporateId === sessionId);
+  }
+  // Super Admin sees all enquiries
+  return allEnquiries;
 };
 
 interface CustomerCareProps {
@@ -138,7 +146,7 @@ export const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
   const sessionId = localStorage.getItem('app_session_id') || 'admin';
   const isSuperAdmin = sessionId === 'admin';
 
-  const [enquiries, setEnquiries] = useState<Enquiry[]>(getInitialEnquiries);
+  const [enquiries, setEnquiries] = useState<Enquiry[]>(() => getInitialEnquiries(role, sessionId));
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
 
   const [isPhoneChecked, setIsPhoneChecked] = useState(false);
@@ -525,6 +533,7 @@ Book now with OK BOZ Transport!`;
           outstationSubType: tripType === 'Outstation' ? outstationSubType : undefined,
           transportData: enquiryCategory === 'Transport' ? transportDetails : undefined,
           estimatedPrice: enquiryCategory === 'Transport' ? estimatedCost : undefined,
+          corporateId: assignment.corporateId === 'admin' ? undefined : assignment.corporateId, // NEW: corporateId for enquiries
         };
         newEnquiriesList = newEnquiriesList.map(e => e.id === editingOrderId ? updatedEnquiry : e);
         setEditingOrderId(null);
@@ -551,6 +560,7 @@ Book now with OK BOZ Transport!`;
           outstationSubType: tripType === 'Outstation' ? outstationSubType : undefined,
           transportData: enquiryCategory === 'Transport' ? transportDetails : undefined,
           estimatedPrice: enquiryCategory === 'Transport' ? estimatedCost : undefined,
+          corporateId: assignment.corporateId === 'admin' ? undefined : assignment.corporateId, // NEW: corporateId for enquiries
         };
         newEnquiriesList = [updatedEnquiry, ...newEnquiriesList];
 
@@ -559,7 +569,7 @@ Book now with OK BOZ Transport!`;
             title: `New Customer Enquiry: ${updatedEnquiry.name}`,
             message: `A new enquiry (ID: ${updatedEnquiry.id}) has been created with status: ${updatedEnquiry.status}.`,
             targetRoles: [UserRole.ADMIN, UserRole.CORPORATE],
-            corporateId: assignment.corporateId === 'admin' ? undefined : assignment.corporateId,
+            corporateId: assignment.corporateId === 'admin' ? undefined : assignment.corporateId, // Pass corporateId
             link: `/admin/customer-care`
         });
 
@@ -578,13 +588,21 @@ Book now with OK BOZ Transport!`;
         }
       }
 
-      setEnquiries(newEnquiriesList);
+      // Update global enquiries storage, then update local state with filtered enquiries
+      const allGlobalEnquiries = JSON.parse(localStorage.getItem('global_enquiries_data') || '[]');
+      let updatedGlobalEnquiries = [...allGlobalEnquiries.filter((e: Enquiry) => 
+        e.id !== updatedEnquiry.id && (!isSuperAdmin && e.corporateId !== sessionId ? true : false) // Keep other corp's enquiries
+      )];
+      updatedGlobalEnquiries = [...updatedGlobalEnquiries, updatedEnquiry];
+      
       try {
-        localStorage.setItem('global_enquiries_data', JSON.stringify(newEnquiriesList));
+        localStorage.setItem('global_enquiries_data', JSON.stringify(updatedGlobalEnquiries));
       } catch (error) {
         console.error("Error saving enquiries to local storage:", error);
         setTimeout(() => alert("Error saving data. Local storage might be full or corrupted."), 0);
       }
+
+      setEnquiries(getInitialEnquiries(role, sessionId)); // Re-fetch/filter after global update
 
       setTimeout(() => {
           alert(`${enquiryCategory === 'Transport' ? 'Order' : 'Enquiry'} ${status} Successfully!`);
@@ -674,13 +692,17 @@ Book now with OK BOZ Transport!`;
           return e;
       });
       
-      setEnquiries(updatedList);
-      try {
-        localStorage.setItem('global_enquiries_data', JSON.stringify(updatedList));
-      } catch (error) {
-        console.error("Error saving enquiries to local storage on status update:", error);
-        setTimeout(() => alert("Error saving data. Local storage might be full or corrupted."), 0);
+      // Update global enquiries storage, then re-filter for current view
+      const allGlobalEnquiries = JSON.parse(localStorage.getItem('global_enquiries_data') || '[]');
+      let updatedGlobalEnquiries = [...allGlobalEnquiries.filter((e: Enquiry) => 
+        e.id !== id && (!isSuperAdmin && e.corporateId !== sessionId ? true : false) // Keep other corp's enquiries
+      )];
+      if (updatedEnquiryItem) {
+          updatedGlobalEnquiries = [...updatedGlobalEnquiries, updatedEnquiryItem];
       }
+      localStorage.setItem('global_enquiries_data', JSON.stringify(updatedGlobalEnquiries));
+
+      setEnquiries(getInitialEnquiries(role, sessionId)); // Re-fetch/filter after global update
 
       if (updatedEnquiryItem) {
           sendSystemNotification({
@@ -688,7 +710,7 @@ Book now with OK BOZ Transport!`;
               title: `Order Status Update: ${updatedEnquiryItem.id}`,
               message: `The status of order ${updatedEnquiryItem.id} for ${updatedEnquiryItem.name} has been updated to ${newStatus}.`,
               targetRoles: [UserRole.ADMIN, UserRole.CORPORATE],
-              corporateId: updatedEnquiryItem.assignedTo ? (allStaff.find(s => s.id === updatedEnquiryItem.assignedTo)?.owner || undefined) : undefined,
+              corporateId: updatedEnquiryItem.corporateId, // Use the enquiry's corporateId
               link: `/admin/customer-care`
           });
       }
@@ -738,7 +760,8 @@ Book now with OK BOZ Transport!`;
 
       setAssignment(prev => ({
           ...prev,
-          staffId: order.assignedTo || ''
+          staffId: order.assignedTo || '',
+          corporateId: order.corporateId || (isSuperAdmin ? 'admin' : sessionId), // NEW: set corporateId correctly on edit
       }));
 
       if (order.enquiryCategory === 'General' && order.nextFollowUp) {
@@ -1120,421 +1143,4 @@ Book now with OK BOZ Transport!`;
                       </div>
                   )}
 
-                  <div className="space-y-1 max-h-40 overflow-y-auto custom-scrollbar">
-                      {rentalPackages.map(pkg => (
-                          <div key={pkg.id} className="flex justify-between items-center p-2 hover:bg-gray-50 rounded border border-transparent hover:border-gray-200 group transition-colors">
-                              <div>
-                                  <div className="text-xs font-bold text-gray-800">{pkg.name}</div>
-                                  <div className="text-[10px] text-gray-500">{pkg.hours}hr / {pkg.km}km</div>
-                              </div>
-                              <div className="text-right flex items-center gap-2">
-                                  <div className="text-[10px] text-gray-600 font-mono text-right">
-                                      <div key={`${pkg.id}-sedan-price`}>S: {pkg.priceSedan}</div>
-                                      <div key={`${pkg.id}-suv-price`}>X: {pkg.priceSuv}</div>
-                                  </div>
-                                  <button onClick={(e) => handleEditPackage(pkg)} className="text-gray-300 hover:text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity p-1">
-                                      <Edit2 className="w-3 h-3" />
-                                  </button>
-                                  <button onClick={(e) => removePackage(pkg.id, e)} className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-1">
-                                      <Trash2 className="w-3 h-3" />
-                                  </button>
-                              </div>
-                          </div>
-                      ))}
-                  </div>
-              </div>
-
-              <div className="pt-4 mt-auto">
-                 <button onClick={() => setShowSettings(false)} className="w-full bg-slate-800 text-white py-2 rounded text-sm font-medium hover:bg-slate-900">Close</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="space-y-6">
-              <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-                  <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-                      <User className="w-4 h-4" /> Customer Info
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                      <input 
-                          placeholder="Name" 
-                          className="p-2 border rounded-lg w-full outline-none focus:ring-2 focus:ring-emerald-500"
-                          value={customerDetails.name}
-                          onChange={e => setCustomerDetails({...customerDetails, name: e.target.value})}
-                      />
-                      <div className="relative">
-                          <input 
-                              placeholder="Phone" 
-                              className="p-2 border rounded-lg w-full outline-none focus:ring-2 focus:ring-emerald-500 pr-10"
-                              value={customerDetails.phone}
-                              onChange={e => {
-                                  setCustomerDetails({...customerDetails, phone: e.target.value});
-                                  setIsPhoneChecked(false);
-                                  setPhoneLookupResult(null);
-                                  setExistingEnquiriesForPhone([]);
-                              }}
-                          />
-                          <button
-                            type="button"
-                            onClick={handlePhoneInputCheck}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-emerald-600"
-                            title="Check Phone Number"
-                          >
-                            <UserCheck className="w-4 h-4" />
-                          </button>
-                      </div>
-                  </div>
-                  {isPhoneChecked && (
-                      <div className={`text-xs px-2 py-1 rounded-md mb-4 flex items-center gap-1 ${phoneLookupResult === 'Existing' ? 'bg-blue-50 text-blue-700' : 'bg-emerald-50 text-emerald-700'}`}>
-                          {phoneLookupResult === 'Existing' ? <CheckCircle className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
-                          {phoneLookupResult === 'Existing' ? 'Existing Customer/Vendor' : 'New Customer'}
-                      </div>
-                  )}
-                  
-                  {enquiryCategory === 'General' ? (
-                      <div className="space-y-4 mt-6 pt-6 border-t border-gray-100">
-                          <div className="p-4 bg-gray-50 rounded-lg text-sm text-gray-500 italic text-center">
-                              Use this for general inquiries. <br/> Switch to Transport for fare calculation.
-                          </div>
-                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Requirement Details</label>
-                          <textarea 
-                              rows={5}
-                              className="w-full p-3 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 resize-y text-sm"
-                              placeholder={phoneLookupResult === 'New' ? "New User Requirement Details" : "Enter new general requirements here..."}
-                              value={customerDetails.requirements}
-                              onChange={e => setCustomerDetails({...customerDetails, requirements: e.target.value})}
-                          />
-                          {isPhoneChecked && phoneLookupResult === 'Existing' && existingEnquiriesForPhone.length > 0 && (
-                              <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 text-blue-800 text-sm space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
-                                  <h4 className="font-bold flex items-center gap-2"><History className="w-4 h-4"/> Past Enquiries for {customerDetails.name}</h4>
-                                  {existingEnquiriesForPhone.map((enq, idx) => (
-                                      <div key={enq.id} className="p-2 border-t border-blue-100 first:border-t-0">
-                                          <p className="font-medium text-xs flex items-center gap-2">
-                                            <Calendar className="w-3 h-3"/> {enq.date || enq.createdAt.split('T')[0]} 
-                                            <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${enq.status === 'Completed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                                                {enq.status}
-                                            </span>
-                                            {enq.enquiryCategory === 'Transport' && <Car className="w-3 h-3 text-gray-500"/>}
-                                          </p>
-                                          <p className="text-xs text-blue-700 italic mt-1 line-clamp-2">"{enq.details}"</p>
-                                      </div>
-                                  ))}
-                              </div>
-                          )}
-                          <div className="space-y-3 pt-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                            <h4 className="text-xs font-bold text-gray-500 uppercase flex items-center gap-2 mb-2">
-                                <Clock className="w-3 h-3" /> Set Follow-up
-                            </h4>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Date</label>
-                                    <input 
-                                        type="date" 
-                                        value={generalFollowUpDate}
-                                        onChange={e => setGeneralFollowUpDate(e.target.value)}
-                                        className="w-full p-2 border rounded-lg outline-none"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Time</label>
-                                    <input 
-                                        type="time" 
-                                        value={generalFollowUpTime}
-                                        onChange={e => setGeneralFollowUpTime(e.target.value)}
-                                        className="w-full p-2 border rounded-lg outline-none"
-                                    />
-                                </div>
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Priority</label>
-                                <div className="flex gap-2">
-                                    {['Hot', 'Warm', 'Cold'].map(p => (
-                                        <button 
-                                            key={p}
-                                            type="button"
-                                            onClick={() => setGeneralFollowUpPriority(p as any)}
-                                            className={`flex-1 py-2 text-xs font-bold rounded-lg border transition-colors ${generalFollowUpPriority === p ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
-                                        >
-                                            {p}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-3">
-                                <button
-                                    onClick={handleCancelForm}
-                                    className="py-3 border border-gray-200 text-gray-700 rounded-lg font-bold text-sm hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
-                                >
-                                    <X className="w-4 h-4"/> Clear
-                                </button>
-                                <button 
-                                    onClick={handleSaveGeneralFollowUp}
-                                    className="py-3 bg-emerald-600 text-white rounded-lg font-bold text-sm hover:bg-emerald-700 transition-colors shadow-md flex items-center justify-center gap-2"
-                                >
-                                    <Save className="w-4 h-4" /> {editingOrderId ? 'Update Follow-up' : 'Save Follow-up'}
-                                </button>
-                            </div>
-                          </div>
-                      </div>
-                  ) : (
-                      <div className="space-y-4 mt-6 pt-6 border-t border-gray-100">
-                          <div className="flex justify-between items-center border-b border-gray-100 pb-2">
-                              <h4 className="text-sm font-bold text-gray-700">Trip Details</h4>
-                              <div className="flex gap-2">
-                                  {['Sedan', 'SUV'].map(v => (
-                                      <button
-                                          key={v}
-                                          onClick={() => setVehicleType(v as any)}
-                                          className={`px-3 py-1 text-xs rounded border transition-colors ${vehicleType === v ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-gray-600 border-gray-200'}`}
-                                      >
-                                          {v}
-                                      </button>
-                                  ))}
-                              </div>
-                          </div>
-
-                          <div className="flex border-b border-gray-200">
-                              {['Local', 'Rental', 'Outstation'].map(t => (
-                                  <button
-                                      key={t}
-                                      onClick={() => setTripType(t as any)}
-                                      className={`flex-1 py-2 text-sm font-medium border-b-2 transition-colors ${tripType === t ? 'border-emerald-500 text-emerald-700' : 'border-transparent text-gray-500'}`}
-                                  >
-                                      {t}
-                                  </button>
-                              ))}
-                              </div>
-
-                              <div className="mb-4">
-                                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Pickup Location</label>
-                                  {!isMapReady ? (
-                                      <div className="p-2 bg-gray-100 text-gray-500 text-sm rounded flex items-center gap-2">
-                                          <Loader2 className="w-4 h-4 animate-spin" /> Loading Google Maps...
-                                      </div>
-                                  ) : (
-                                      <Autocomplete 
-                                          placeholder="Search Pickup Location"
-                                          onAddressSelect={(addr) => setCustomerDetails(prev => ({ ...prev, pickup: addr }))}
-                                          setNewPlace={(place) => setPickupCoords(place)}
-                                          defaultValue={customerDetails.pickup}
-                                      />
-                                  )}
-                              </div>
-
-                              {tripType === 'Local' && (
-                                  <div className="space-y-3">
-                                      <div>
-                                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Drop Location</label>
-                                          {!isMapReady ? <div className="p-2 bg-gray-100 text-xs rounded">Loading...</div> : (
-                                              <Autocomplete 
-                                                  placeholder="Search Drop Location"
-                                                  onAddressSelect={(addr) => setTransportDetails(prev => ({ ...prev, drop: addr }))}
-                                                  setNewPlace={(place) => setDropCoords(place)}
-                                                  defaultValue={transportDetails.drop}
-                                              />
-                                          )}
-                                      </div>
-                                      <div className="grid grid-cols-2 gap-3">
-                                          <input type="number" placeholder="Est Km" className="p-2 border rounded-lg w-full" value={transportDetails.estKm} onChange={e => setTransportDetails({...transportDetails, estKm: e.target.value})} />
-                                          <input type="number" placeholder="Wait Mins" className="p-2 border rounded-lg w-full" value={transportDetails.waitingMins} onChange={e => setTransportDetails({...transportDetails, waitingMins: e.target.value})} />
-                                      </div>
-                                  </div>
-                              )}
-                              
-                              {tripType === 'Rental' && (
-                                  <div className="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto pr-1 custom-scrollbar">
-                                      {rentalPackages.map(pkg => (
-                                          <button 
-                                              key={pkg.id}
-                                              onClick={() => setTransportDetails(prev => ({...prev, packageId: pkg.id}))}
-                                              className={`p-2 border rounded-lg text-left text-sm transition-colors ${transportDetails.packageId === pkg.id ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 hover:bg-gray-50'}`}
-                                          >
-                                              <div className="font-bold">{pkg.name}</div>
-                                              <div className="text-gray-500 text-xs">₹{vehicleType === 'Sedan' ? pkg.priceSedan : pkg.priceSuv}</div>
-                                          </button>
-                                      ))}
-                                  </div>
-                              )}
-
-                              {tripType === 'Outstation' && (
-                                  <div className="space-y-3">
-                                      <div className="flex bg-gray-100 p-1 rounded-lg">
-                                          <button onClick={() => setOutstationSubType('RoundTrip')} className={`flex-1 py-1 text-xs rounded ${outstationSubType === 'RoundTrip' ? 'bg-white shadow text-emerald-600' : 'text-gray-500'}`}>Round Trip</button>
-                                          <button onClick={() => setOutstationSubType('OneWay')} className={`flex-1 py-1 text-xs rounded ${outstationSubType === 'OneWay' ? 'bg-white shadow text-emerald-600' : 'text-gray-500'}`}>One Way</button>
-                                      </div>
-                                      <div>
-                                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Destination</label>
-                                          {!isMapReady ? <div className="p-2 bg-gray-100 text-xs rounded">Loading...</div> : (
-                                              <Autocomplete 
-                                                  placeholder="Search Destination"
-                                                  onAddressSelect={(addr) => setTransportDetails(prev => ({ ...prev, destination: addr }))}
-                                                  setNewPlace={(place) => setDestCoords(place)}
-                                                  defaultValue={transportDetails.destination}
-                                              />
-                                          )}
-                                      </div>
-                                      <div className="grid grid-cols-3 gap-3">
-                                          <input type="number" placeholder="Days" className="p-2 border rounded-lg w-full" value={transportDetails.days} onChange={e => setTransportDetails({...transportDetails, days: e.target.value})} />
-                                          <input type="number" placeholder="Km" className="p-2 border rounded-lg w-full" value={transportDetails.estTotalKm} onChange={e => setTransportDetails({...transportDetails, estTotalKm: e.target.value})} />
-                                          {outstationSubType === 'RoundTrip' && (
-                                              <input type="number" placeholder="Nights" className="p-2 border rounded-lg w-full" value={transportDetails.nights} onChange={e => setTransportDetails({...transportDetails, nights: e.target.value})} />
-                                          )}
-                                      </div>
-                                  </div>
-                              )}
-                              
-                                  <div className="mt-6 pt-6 border-t border-gray-100 space-y-5">
-                                      <div>
-                                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Requirement Details</label>
-                                          <textarea 
-                                              rows={2}
-                                              className="w-full p-3 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 resize-none text-sm"
-                                              placeholder="Special requests, extra luggage, etc..."
-                                              value={customerDetails.requirements}
-                                              onChange={e => setCustomerDetails({...customerDetails, requirements: e.target.value})}
-                                          />
-                                      </div>
-
-                                      <div>
-                                          <label className="block text-xs font-bold text-gray-500 uppercase mb-2 flex items-center gap-1">
-                                              <Building2 className="w-3 h-3" /> Assign To
-                                          </label>
-                                          <div className="flex gap-2">
-                                              {isSuperAdmin && (
-                                                  <select className="flex-1 p-2 border border-gray-300 rounded-lg text-sm bg-white" value={assignment.corporateId} onChange={(e) => setAssignment({...assignment, corporateId: e.target.value, branchName: '', staffId: ''})}>
-                                                      <option value="admin">Head Office</option>
-                                                      {corporates.map((c: any) => (<option key={c.email} value={c.email}>{c.companyName}</option>))}
-                                                  </select>
-                                              )}
-                                              <select className="flex-1 p-2 border border-gray-300 rounded-lg text-sm bg-white" value={assignment.branchName} onChange={(e) => setAssignment({...assignment, branchName: e.target.value, staffId: ''})}>
-                                                      <option value="">All Branches</option>
-                                                      {filteredBranches.map((b: any) => (<option key={b.id} value={b.name}>{b.name}</option>))}
-                                                  </select>
-                                                  <select className="flex-1 p-2 border border-gray-300 rounded-lg text-sm bg-white" value={assignment.staffId} onChange={(e) => setAssignment({...assignment, staffId: e.target.value})}>
-                                                      <option value="">Select Staff</option>
-                                                      {filteredStaff.map((s: any) => (<option key={s.id} value={s.id}>{s.name}</option>))}
-                                                  </select>
-                                          </div>
-                                      </div>
-
-                                      <div className="space-y-3 pt-2">
-                                          <div className="grid grid-cols-2 gap-3">
-                                              <button 
-                                                  onClick={handleOpenSchedule}
-                                                  className="py-3 border border-blue-200 text-blue-600 rounded-lg font-bold text-sm hover:bg-blue-50 transition-colors flex items-center justify-center gap-2"
-                                              >
-                                                  <Calendar className="w-4 h-4" /> {editingOrderId ? 'Update Schedule' : 'Schedule'}
-                                              </button>
-                                              <button 
-                                                  onClick={handleBookNow}
-                                                  className="py-3 bg-emerald-600 text-white rounded-lg font-bold text-sm hover:bg-emerald-700 transition-colors shadow-md flex items-center justify-center gap-2"
-                                              >
-                                                  <ArrowRight className="w-4 h-4" /> {editingOrderId ? 'Update Now' : 'Book Now'}
-                                              </button>
-                                          </div>
-                                          <div>
-                                              <button 
-                                                  onClick={handleCancelForm}
-                                                  className="w-full py-2 text-gray-400 hover:text-red-500 rounded-lg font-medium text-sm hover:bg-gray-50 transition-colors flex items-center justify-center gap-1 rounded-lg border border-transparent hover:border-gray-200"
-                                              >
-                                                  <X className="w-3 h-3" /> Clear Form
-                                              </button>
-                                          </div>
-                                      </div>
-                                  </div>
-                              </div>
-                  )}
-              </div>
-          </div>
-
-          <div className="space-y-6">
-              <div className="bg-slate-900 text-white p-6 rounded-xl shadow-lg relative overflow-hidden">
-                  <div className="relative z-10">
-                      <p className="text-slate-400 text-xs uppercase font-bold mb-1">Estimated Cost</p>
-                      <h3 className="text-4xl font-bold mb-4">₹{estimatedCost.toLocaleString()}</h3>
-                      <div className="text-sm text-slate-300 border-t border-slate-700 pt-3">
-                          <p>Base calculation only. Tolls & Parking extra.</p>
-                      </div>
-                  </div>
-                  <div className="absolute right-0 bottom-0 opacity-10">
-                      <DollarSign className="w-32 h-32 text-white" />
-                  </div>
-              </div>
-
-              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                  <div className="flex justify-between items-center mb-2">
-                      <h4 className="font-bold text-gray-800 flex items-center gap-2">
-                          <MessageCircle className="w-4 h-4 text-emerald-500" /> Generated Message
-                      </h4>
-                      <button 
-                          onClick={() => {navigator.clipboard.writeText(generatedMessage); setTimeout(() => alert("Copied!"), 0);}}
-                          className="text-xs text-blue-600 hover:underline flex items-center gap-1"
-                      >
-                          <Copy className="w-3 h-3" /> Copy
-                      </button>
-                  </div>
-                  <textarea 
-                      ref={messageTextareaRef}
-                      className="w-full min-h-[200px] p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none overflow-y-hidden resize-none mb-3"
-                      value={generatedMessage}
-                      readOnly
-                  />
-                  <div className="grid grid-cols-2 gap-3">
-                      <button 
-                          onClick={() => window.open(`https://wa.me/${customerDetails.phone.replace(/\D/g, '')}?text=${encodeURIComponent(generatedMessage)}`, '_blank')}
-                          className="bg-green-500 hover:bg-green-600 text-white py-2 rounded-lg font-medium flex items-center justify-center gap-2"
-                      >
-                          <MessageCircle className="w-4 h-4" /> WhatsApp
-                      </button>
-                      <button 
-                          className="bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-lg font-medium flex items-center justify-center gap-2"
-                      >
-                          <Mail className="w-4 h-4" /> Email
-                      </button>
-                  </div>
-              </div>
-          </div>
-      </div>
-
-      {isScheduleModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-              <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm animate-in fade-in zoom-in duration-200">
-                  <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-2xl">
-                      <h3 className="font-bold text-gray-800">Schedule Order</h3>
-                      <button onClick={() => setIsScheduleModalOpen(false)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5"/></button>
-                  </div>
-                  <div className="p-6 space-y-4">
-                      <div>
-                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Date</label>
-                          <input 
-                              type="date" 
-                              className="w-full p-2 border border-gray-300 rounded-lg outline-none"
-                              value={scheduleData.date}
-                              onChange={(e) => setScheduleData({...scheduleData, date: e.target.value})}
-                          />
-                      </div>
-                      <div>
-                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Time</label>
-                          <input 
-                              type="time" 
-                              className="w-full p-2 border border-gray-300 rounded-lg outline-none"
-                              value={scheduleData.time}
-                              onChange={(e) => setScheduleData({...scheduleData, time: e.target.value})}
-                          />
-                      </div>
-                      <button 
-                          onClick={confirmSchedule}
-                          className="w-full bg-emerald-600 text-white py-2.5 rounded-lg font-bold shadow-sm hover:bg-emerald-700 transition-colors"
-                      >
-                          Confirm Schedule
-                      </button>
-                  </div>
-              </div>
-          </div>
-      )}
-    </div>
-  );
-};
+                  <div className="space-y-1 max-h-40 overflow

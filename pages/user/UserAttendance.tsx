@@ -1,14 +1,14 @@
 
-
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import AttendanceCalendar from '../../components/AttendanceCalendar';
-import { MOCK_EMPLOYEES, getEmployeeAttendance } from '../../constants';
-import { AttendanceStatus, DailyAttendance, Employee } from '../../types';
+// Added COLORS import from constants.ts
+import { MOCK_EMPLOYEES, getEmployeeAttendance, COLORS } from '../../constants';
+import { AttendanceStatus, DailyAttendance, Employee, Branch } from '../../types';
 import { 
   ChevronLeft, ChevronRight, Calendar, List, CheckCircle, XCircle, 
   User, MapPin, Clock, Fingerprint, Download, X, 
   PieChart as PieChartIcon, Activity, ScanLine, Loader2, Navigation,
-  Phone, DollarSign, Plane, Briefcase
+  Phone, DollarSign, Plane, Briefcase, Camera, AlertCircle
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useBranding } from '../../context/BrandingContext';
@@ -18,7 +18,25 @@ interface UserAttendanceProps {
   isAdmin?: boolean;
 }
 
-const COLORS = ['#10b981', '#ef4444', '#f59e0b', '#64748b']; // Green, Red, Amber, Slate
+// Haversine formula to calculate distance between two lat/lng points in meters
+function haversineDistance(coords1: { lat: number; lng: number; }, coords2: { lat: number; lng: number; }): number {
+    const toRad = (x: number) => x * Math.PI / 180;
+    const R = 6371e3; // metres
+
+    const dLat = toRad(coords2.lat - coords1.lat);
+    const dLon = toRad(coords2.lng - coords1.lng); // Fixed: should be coords1.lng for dLon
+
+    const lat1 = toRad(coords1.lat);
+    const lat2 = toRad(coords2.lat);
+
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(lat1) * Math.cos(lat2) *
+              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c; // Distance in meters
+}
+
 
 const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
   const navigate = useNavigate();
@@ -119,6 +137,7 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
   }, [isAdmin]);
 
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null); 
+  const [employeeBranch, setEmployeeBranch] = useState<Branch | null>(null); // NEW: Store employee's branch details
   
   // Sync selectedEmployee
   useEffect(() => {
@@ -134,6 +153,26 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
     }
   }, [isAdmin, employees, loggedInUser]);
 
+  // NEW: Load employee's assigned branch details
+  useEffect(() => {
+    if (selectedEmployee?.branch) {
+      const allBranches: Branch[] = [];
+      const adminBranches = JSON.parse(localStorage.getItem('branches_data') || '[]');
+      allBranches.push(...adminBranches);
+
+      const corporates = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
+      corporates.forEach((corp: any) => {
+        const cBranches = JSON.parse(localStorage.getItem(`branches_data_${corp.email}`) || '[]');
+        allBranches.push(...cBranches);
+      });
+
+      const foundBranch = allBranches.find(b => b.name === selectedEmployee.branch);
+      setEmployeeBranch(foundBranch || null);
+    } else {
+      setEmployeeBranch(null);
+    }
+  }, [selectedEmployee]);
+
 
   const [attendanceData, setAttendanceData] = useState<DailyAttendance[]>([]);
   const [editingDay, setEditingDay] = useState<DailyAttendance | null>(null);
@@ -144,10 +183,15 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
   const [checkInTime, setCheckInTime] = useState<string>('--:--');
   const [checkOutTime, setCheckOutTime] = useState<string>('--:--');
   const [duration, setDuration] = useState<{ hours: number, minutes: number, seconds: number }>({ hours: 0, minutes: 0, seconds: 0 });
-  const [location, setLocation] = useState<string>('Fetching location...');
   
+  // NEW: Location & Camera Permission States
+  const [locationStatus, setLocationStatus] = useState<Employee['attendanceLocationStatus']>('idle');
+  const [currentLocation, setCurrentLocation] = useState<Employee['currentLocation']>(null);
+  const [cameraStatus, setCameraStatus] = useState<Employee['cameraPermissionStatus']>('idle');
+
   // QR Scan State
   const [isScanningQr, setIsScanningQr] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   // Clock for current time
   useEffect(() => {
@@ -155,26 +199,84 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
     return () => clearInterval(timer);
   }, []);
 
-  // Geolocation Logic
+  // NEW: Request Permissions & Watch Geolocation
   useEffect(() => {
     if (!isAdmin && selectedEmployee) {
-        // If GPS is required or just generally available
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                (pos) => {
-                    // In a real app, reverse geocode here.
-                    // For mock, we'll just say "Near Office"
-                    setLocation("Location Detected: Within Geofence");
-                },
-                (err) => {
-                    setLocation("Location Access Denied");
+      const requestPermissions = async () => {
+        // Geolocation Permission
+        if (selectedEmployee.attendanceConfig?.gpsGeofencing || selectedEmployee.liveTracking) {
+          setLocationStatus('fetching');
+          if (navigator.geolocation) {
+            const watchId = navigator.geolocation.watchPosition(
+              (pos) => {
+                const newLocation = {
+                  lat: pos.coords.latitude,
+                  lng: pos.coords.longitude,
+                  accuracy: pos.coords.accuracy,
+                };
+                setCurrentLocation(newLocation);
+
+                if (employeeBranch && selectedEmployee.attendanceConfig?.gpsGeofencing) {
+                  const distance = haversineDistance(
+                    { lat: newLocation.lat, lng: newLocation.lng },
+                    { lat: employeeBranch.lat, lng: employeeBranch.lng }
+                  );
+                  if (distance <= employeeBranch.radius) {
+                    setLocationStatus('within_geofence');
+                  } else {
+                    setLocationStatus('outside_geofence');
+                  }
+                } else {
+                  // If no specific geofence, but permission is granted
+                  setLocationStatus('granted'); 
                 }
+
+                // Update employee object in local storage
+                const updatedEmployee = { ...selectedEmployee, currentLocation: newLocation, attendanceLocationStatus: locationStatus };
+                const key = `staff_data_${currentSessionId}`;
+                const allStaff = JSON.parse(localStorage.getItem(key) || '[]');
+                const updatedStaff = allStaff.map((emp: Employee) => emp.id === updatedEmployee.id ? updatedEmployee : emp);
+                localStorage.setItem(key, JSON.stringify(updatedStaff));
+
+              },
+              (err) => {
+                console.error("Geolocation Error:", err);
+                if (err.code === err.PERMISSION_DENIED) {
+                  setLocationStatus('denied');
+                  alert("Location access denied. Please enable it in your browser settings to use GPS attendance.");
+                } else {
+                  setLocationStatus('idle'); // Other errors
+                }
+              },
+              { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
             );
+            return () => navigator.geolocation.clearWatch(watchId);
+          } else {
+            setLocationStatus('denied'); // Browser doesn't support
+            alert("Geolocation not supported by your browser.");
+          }
         } else {
-            setLocation("GPS not supported");
+          setLocationStatus('idle'); // No GPS needed
         }
+
+        // Camera Permission (only if QR scan is enabled)
+        if (selectedEmployee.attendanceConfig?.qrScan) {
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            setCameraStatus('granted');
+            stream.getTracks().forEach(track => track.stop()); // Stop immediately after check
+          } catch (e) {
+            console.error("Camera access denied:", e);
+            setCameraStatus('denied');
+          }
+        } else {
+          setCameraStatus('idle'); // No camera needed
+        }
+      };
+
+      requestPermissions();
     }
-  }, [isAdmin, selectedEmployee]);
+  }, [isAdmin, selectedEmployee, employeeBranch]); // Rerun if employee or their branch changes
 
   // Restore active punch session on mount (for employee view)
   useEffect(() => {
@@ -301,17 +403,54 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
   };
 
   const handleManualPunch = () => {
-      // Check GPS restriction
-      if (selectedEmployee?.attendanceConfig?.gpsGeofencing) {
-          if (location.includes("Denied") || location.includes("Fetching")) {
-              alert("GPS Location is required for attendance. Please enable location access.");
+      if (!selectedEmployee) return;
+      const config = selectedEmployee.attendanceConfig;
+
+      if (config?.gpsGeofencing) {
+          if (locationStatus === 'denied') {
+              alert("Location access is denied. Please enable it in your browser settings to punch in.");
+              return;
+          }
+          if (locationStatus === 'fetching') {
+              alert("Fetching your location. Please wait a moment.");
+              return;
+          }
+          if (locationStatus === 'outside_geofence') {
+              alert("You are outside the designated geofence for your branch. Cannot punch in.");
               return;
           }
       }
       performPunch();
   };
 
-  const handleQrScan = () => {
+  const handleQrScan = async () => {
+      if (!selectedEmployee) return;
+      const config = selectedEmployee.attendanceConfig;
+
+      if (config?.gpsGeofencing) {
+          if (locationStatus === 'denied' || locationStatus === 'fetching' || locationStatus === 'outside_geofence') {
+              handleManualPunch(); // Reuse logic for location check
+              return;
+          }
+      }
+
+      if (cameraStatus === 'denied') {
+          alert("Camera access is denied. Please enable it in your browser settings to use QR scan.");
+          return;
+      }
+      if (cameraStatus === 'idle') {
+          // Request camera permission again if it wasn't granted or checked yet
+          try {
+              const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+              setCameraStatus('granted');
+              stream.getTracks().forEach(track => track.stop()); // Stop immediately
+          } catch (e) {
+              setCameraStatus('denied');
+              alert("Camera access denied. Please enable it in your browser settings.");
+              return;
+          }
+      }
+
       setIsScanningQr(true);
       // Simulate scanning process
       setTimeout(() => {
@@ -557,7 +696,41 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
     // Determine which punch methods are allowed
     const config = selectedEmployee.attendanceConfig || { gpsGeofencing: false, qrScan: false, manualPunch: true };
     const noMethodsEnabled = !config.manualPunch && !config.qrScan;
-    const isGpsRequiredAndDenied = config.gpsGeofencing && (location.includes("Denied") || location.includes("Fetching"));
+
+    // Determine current location display status
+    let locationDisplay = "Location Unavailable";
+    let locationColor = "text-gray-500";
+    let locationIcon = <MapPin className="w-3 h-3" />;
+
+    if (locationStatus === 'fetching') {
+      locationDisplay = "Fetching location...";
+      locationColor = "text-blue-500";
+      locationIcon = <Loader2 className="w-3 h-3 animate-spin" />;
+    } else if (locationStatus === 'denied') {
+      locationDisplay = "Location Access Denied";
+      locationColor = "text-red-500";
+      locationIcon = <MapPin className="w-3 h-3" />;
+    } else if (config.gpsGeofencing) {
+        if (locationStatus === 'within_geofence') {
+            locationDisplay = "Within Geofence";
+            locationColor = "text-emerald-600";
+        } else if (locationStatus === 'outside_geofence') {
+            locationDisplay = "Outside Geofence";
+            locationColor = "text-red-500";
+        } else if (locationStatus === 'granted') {
+            locationDisplay = "Location Detected"; // For cases where geofence rules might not apply or be configured
+            locationColor = "text-emerald-600";
+        }
+        locationIcon = <MapPin className="w-3 h-3" />;
+    } else {
+      locationDisplay = "Remote Punch Enabled";
+      locationColor = "text-gray-500";
+      locationIcon = <Navigation className="w-3 h-3" />;
+    }
+
+    const isPunchDisabled = 
+        (config.gpsGeofencing && (locationStatus === 'denied' || locationStatus === 'fetching' || locationStatus === 'outside_geofence')) ||
+        (config.qrScan && cameraStatus === 'denied'); // If QR is the *only* method and camera is denied
 
     return (
       <div className="space-y-6 max-w-7xl mx-auto">
@@ -567,13 +740,16 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
                 <div className="bg-black border border-white/20 rounded-2xl w-full max-w-sm aspect-[3/4] relative overflow-hidden flex flex-col items-center justify-center text-white">
                     <div className="absolute inset-0 border-[40px] border-black/50 pointer-events-none z-10"></div>
                     <div className="w-64 h-64 border-2 border-emerald-500 rounded-xl relative z-20 flex items-center justify-center">
+                        <Camera className="w-16 h-16 text-emerald-400 animate-pulse" />
+                        {/* Real video feed could go here */}
+                        <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover" autoPlay playsInline muted></video>
                         <div className="w-full h-0.5 bg-red-500 absolute top-0 animate-[scan_2s_ease-in-out_infinite]"></div>
                     </div>
                     <p className="mt-8 z-20 font-bold tracking-wider animate-pulse flex items-center gap-2">
                         <Loader2 className="w-4 h-4 animate-spin" /> SCANNING QR CODE...
                     </p>
                     <button 
-                        onClick={() => setIsScanningQr(false)}
+                        onClick={() => { setIsScanningQr(false); videoRef.current?.srcObject && (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop()); }}
                         className="absolute bottom-8 z-20 text-sm text-gray-400 hover:text-white underline"
                     >
                         Cancel Scan
@@ -605,14 +781,11 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
                     {currentTime.toLocaleTimeString('en-US', { hour12: false })}
                   </div>
                   
-                  {config.gpsGeofencing ? (
-                      <p className={`text-xs uppercase tracking-widest flex items-center justify-center gap-1 ${location.includes('Denied') || location.includes('Fetching') ? 'text-red-500' : 'text-emerald-600'}`}>
-                        <MapPin className="w-3 h-3" /> {location}
-                      </p>
-                  ) : (
-                      <p className="text-xs text-gray-400 uppercase tracking-widest flex items-center justify-center gap-1">
-                        <Navigation className="w-3 h-3" /> Remote Punch Enabled
-                      </p>
+                  <p className={`text-xs uppercase tracking-widest flex items-center justify-center gap-1 ${locationColor}`}>
+                    {locationIcon} {locationDisplay}
+                  </p>
+                  {config.gpsGeofencing && employeeBranch && (
+                    <p className="text-[10px] text-gray-400 mt-1">Branch: {employeeBranch.name} ({employeeBranch.radius}m radius)</p>
                   )}
                </div>
 
@@ -629,46 +802,30 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
                    ) : (
                        // Check In Options
                        <>
-                           {config.manualPunch && !config.qrScan && ( // Only Manual Punch allowed
+                           {config.manualPunch && (
                                <button
                                   onClick={handleManualPunch}
-                                  disabled={isGpsRequiredAndDenied}
-                                  className={`relative w-40 h-40 rounded-full flex flex-col items-center justify-center transition-all duration-300 shadow-xl border-4 bg-emerald-50 border-emerald-100 text-emerald-600 hover:bg-emerald-100 ${isGpsRequiredAndDenied ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                  disabled={isPunchDisabled}
+                                  className={`relative w-40 h-40 rounded-full flex flex-col items-center justify-center transition-all duration-300 shadow-xl border-4 bg-emerald-50 border-emerald-100 text-emerald-600 hover:bg-emerald-100 ${isPunchDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 >
                                   <Fingerprint className="w-12 h-12 mb-2 text-emerald-500" />
                                   <span className="font-bold text-lg">Check In</span>
-                                  {isGpsRequiredAndDenied && <span className="absolute bottom-1 text-[7px] font-bold uppercase tracking-wider text-red-600 bg-red-50 px-1 rounded">GPS Required</span>}
+                                  {isPunchDisabled && config.gpsGeofencing && (
+                                      <span className="absolute bottom-1 text-[7px] font-bold uppercase tracking-wider text-red-600 bg-red-50 px-1 rounded">
+                                        {locationStatus === 'outside_geofence' ? 'Outside Geofence' : 'Location Required'}
+                                      </span>
+                                  )}
                                 </button>
                            )}
 
-                           {config.qrScan && !config.manualPunch && ( // Only QR Scan allowed
+                           {config.qrScan && (
                                 <button
                                   onClick={handleQrScan}
-                                  className="w-40 h-40 rounded-full flex flex-col items-center justify-center transition-all duration-300 shadow-xl border-4 bg-blue-50 border-blue-100 text-blue-600 hover:bg-blue-100"
+                                  disabled={isPunchDisabled}
+                                  className={`w-full py-3 border-2 border-dashed border-blue-200 rounded-xl text-blue-600 font-medium hover:bg-blue-50 transition-colors flex items-center justify-center gap-2 ${isPunchDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 >
-                                  <ScanLine className="w-12 h-12 mb-2 text-blue-500" />
-                                  <span className="font-bold text-lg">Scan QR</span>
+                                  <ScanLine className="w-5 h-5" /> Scan QR Code
                                 </button>
-                           )}
-
-                           {config.manualPunch && config.qrScan && ( // Both Manual Punch and QR Scan allowed
-                               <>
-                                   <button
-                                      onClick={handleManualPunch}
-                                      disabled={isGpsRequiredAndDenied}
-                                      className={`relative w-40 h-40 rounded-full flex flex-col items-center justify-center transition-all duration-300 shadow-xl border-4 bg-emerald-50 border-emerald-100 text-emerald-600 hover:bg-emerald-100 ${isGpsRequiredAndDenied ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                    >
-                                      <Fingerprint className="w-12 h-12 mb-2 text-emerald-500" />
-                                      <span className="font-bold text-lg">Check In</span>
-                                      {isGpsRequiredAndDenied && <span className="absolute bottom-1 text-[7px] font-bold uppercase tracking-wider text-red-600 bg-red-50 px-1 rounded">GPS Required</span>}
-                                    </button>
-                                   <button
-                                      onClick={handleQrScan}
-                                      className="w-full py-3 border-2 border-dashed border-blue-200 rounded-xl text-blue-600 font-medium hover:bg-blue-50 transition-colors flex items-center justify-center gap-2"
-                                    >
-                                      <ScanLine className="w-5 h-5" /> Use QR Code
-                                    </button>
-                               </>
                            )}
 
                            {noMethodsEnabled && (
@@ -676,6 +833,18 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
                                    Punch-in is disabled. Please contact your administrator.
                                </div>
                            )}
+
+                            {/* Permission Status Feedback for Employee */}
+                            {config.gpsGeofencing && locationStatus === 'denied' && (
+                                <div className="text-red-500 text-xs flex items-center gap-1">
+                                    <AlertCircle className="w-3 h-3" /> Location access denied.
+                                </div>
+                            )}
+                            {config.qrScan && cameraStatus === 'denied' && (
+                                <div className="text-red-500 text-xs flex items-center gap-1">
+                                    <AlertCircle className="w-3 h-3" /> Camera access denied.
+                                </div>
+                            )}
                        </>
                    )}
                </div>
@@ -751,6 +920,7 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
                               paddingAngle={5}
                               dataKey="value"
                            >
+                              {/* Used COLORS from constants.ts */}
                               {pieData.map((entry, index) => (
                                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                               ))}
@@ -799,7 +969,11 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
            <div className="p-6">
               {viewMode === 'calendar' ? (
                  <div className="max-w-2xl mx-auto">
-                    <AttendanceCalendar data={attendanceData} stats={stats} />
+                    <AttendanceCalendar 
+                                data={attendanceData} 
+                                stats={stats} 
+                                onDateClick={handleDateClick} 
+                            />
                  </div>
               ) : (
                  renderListView()
@@ -927,6 +1101,7 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
                                         paddingAngle={5}
                                         dataKey="value"
                                     >
+                                        {/* Used COLORS from constants.ts */}
                                         {pieData.map((entry, index) => (
                                             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                         ))}

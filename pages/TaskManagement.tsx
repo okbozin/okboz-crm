@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Plus, Calendar, User, Clock, CheckCircle, AlertCircle, 
@@ -37,8 +36,9 @@ const TaskManagement: React.FC<TaskManagementProps> = ({ role }) => {
   // Determine Session Context
   const currentSessionId = localStorage.getItem('app_session_id') || 'admin';
   
-  const getSessionKey = () => {
-    return currentSessionId === 'admin' ? 'tasks_data' : `tasks_data_${currentSessionId}`;
+  // Use a namespaced key for tasks to ensure they belong to the branch
+  const getStorageKey = (baseKey: string) => {
+    return isSuperAdmin ? baseKey : `${baseKey}_${currentSessionId}`;
   };
 
   const isSuperAdmin = currentSessionId === 'admin';
@@ -80,14 +80,8 @@ const TaskManagement: React.FC<TaskManagementProps> = ({ role }) => {
 
   // --- Task State ---
   const [tasks, setTasks] = useState<Task[]>(() => {
-    // For simplicity in this demo, we use a global key if Super Admin to show aggregation capabilities,
-    // or specific keys if strict separation is needed. Here we load from current session context.
-    
-    // If Employee, we need to find which "bucket" of tasks to load. 
-    // Ideally tasks are stored centrally or namespaced by Corporate. 
-    // For this demo, we'll load from a global pool for employees to simplify "My Tasks" view across the mock backend.
-    
-    const key = isSuperAdmin ? 'tasks_data' : `tasks_data`; // Using a shared key for demo simplicity, in prod use strict namespaces
+    // Load tasks from the appropriate storage key
+    const key = getStorageKey('tasks_data');
     const saved = localStorage.getItem(key);
     if (saved) {
       try { return JSON.parse(saved); } catch (e) { console.error(e); }
@@ -97,7 +91,7 @@ const TaskManagement: React.FC<TaskManagementProps> = ({ role }) => {
 
   // Save tasks
   useEffect(() => {
-    const key = isSuperAdmin ? 'tasks_data' : `tasks_data`;
+    const key = getStorageKey('tasks_data');
     localStorage.setItem(key, JSON.stringify(tasks));
   }, [tasks, isSuperAdmin]);
 
@@ -202,7 +196,7 @@ const TaskManagement: React.FC<TaskManagementProps> = ({ role }) => {
         title: formData.title,
         description: formData.description,
         assignedTo: formData.assignedTo,
-        corporateId: formData.corporateId,
+        corporateId: formData.corporateId, // Ensure corporateId is updated
         corporateName: corpName,
         priority: formData.priority as any,
         dueDate: formData.dueDate,
@@ -217,7 +211,7 @@ const TaskManagement: React.FC<TaskManagementProps> = ({ role }) => {
         description: formData.description,
         assignedTo: formData.assignedTo,
         assignedByName: assignedByName,
-        corporateId: formData.corporateId,
+        corporateId: formData.corporateId, // NEW: Assign corporateId on creation
         corporateName: corpName,
         status: 'Todo',
         priority: formData.priority as any,
@@ -260,6 +254,7 @@ const TaskManagement: React.FC<TaskManagementProps> = ({ role }) => {
          return false;
      }
      // If Corporate, only show tasks for their franchise
+     // Use t.corporateId (which is the actual email/id of the corporate)
      if (role === UserRole.CORPORATE && t.corporateId !== currentSessionId) {
          return false;
      }
@@ -385,7 +380,7 @@ const TaskManagement: React.FC<TaskManagementProps> = ({ role }) => {
                                     <button
                                        key={c.id}
                                        onClick={() => handleStatusChange(task.id, c.id)}
-                                       className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-50 flex items-center gap-2 ${task.status === c.id ? 'text-emerald-600 font-bold bg-emerald-50' : 'text-gray-600'}`}
+                                       className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-50 flex items-center gap-2 ${task.status === c.id && 'text-emerald-600 font-bold bg-emerald-50'}`}
                                     >
                                        {task.status === c.id && <CheckCircle className="w-3 h-3" />} {c.label}
                                     </button>
@@ -417,14 +412,15 @@ const TaskManagement: React.FC<TaskManagementProps> = ({ role }) => {
                     <input required type="text" value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Task title" />
                  </div>
                  
-                 {/* Corporate Selection (Only for Super Admin) */}
-                 {isSuperAdmin && (
+                 {/* Corporate Selection (Only for Super Admin and Corporate Admins) */}
+                 {(isSuperAdmin || role === UserRole.CORPORATE) && (
                     <div>
                        <label className="block text-sm font-medium text-gray-700 mb-1">Corporate / Branch</label>
                        <select 
                           value={formData.corporateId}
                           onChange={(e) => setFormData({...formData, corporateId: e.target.value, assignedTo: ''})}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+                          disabled={role === UserRole.CORPORATE} // Corporate can only select their own
+                          className={`w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 bg-white ${role === UserRole.CORPORATE ? 'bg-gray-50 text-gray-500' : ''}`}
                        >
                           <option value="admin">Head Office</option>
                           {corporates.map(c => (
