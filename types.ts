@@ -131,6 +131,8 @@ export interface Enquiry {
     nights?: string;
   };
   estimatedPrice?: number;
+  // Added priority field to Enquiry interface
+  priority?: 'Hot' | 'Warm' | 'Cold';
 }
 
 export interface DocumentFile {

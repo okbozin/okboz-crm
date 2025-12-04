@@ -18,16 +18,18 @@ import Documents from './pages/Documents';
 import Leads from './pages/admin/Leads';
 import Reception from './pages/admin/Reception';
 import Reports from './pages/admin/Reports'; 
-import { TripBooking } from './pages/admin/TripBooking'; 
-import { VehicleEnquiries } from './pages/admin/VehicleEnquiries'; 
+// @ts-ignore - EmailMarketing component
+import EmailMarketing from './pages/admin/EmailMarketing'; // Added missing import
+// @ts-ignore - TripBooking component
+import { TripBooking } from './pages/admin/TripBooking'; // Changed to named import
+// import { VehicleEnquiries } from './pages/admin/VehicleEnquiries'; // Removed
 import { CustomerCare } from './pages/admin/CustomerCare';
 import UserAttendance from './pages/user/UserAttendance';
 import UserSalary from './pages/user/UserSalary';
 import ApplyLeave from './pages/user/ApplyLeave';
 import UserProfile from './pages/user/UserProfile'; 
 import TaskManagement from './pages/TaskManagement';
-import AiAssistant from './components/AiAssistant';
-import EmailMarketing from './pages/admin/EmailMarketing'; 
+// import AiAssistant from './components/AiAssistant'; // Removed: Ask HR AI button
 import { UserRole } from './types';
 import { BrandingProvider } from './context/BrandingContext';
 import { ThemeProvider } from './context/ThemeContext';
@@ -111,11 +113,11 @@ const App: React.FC = () => {
   // Determine home path based on role
   const homePath = userRole === UserRole.EMPLOYEE ? '/user' : '/admin';
 
-  // AI Assistant Config
-  const hrAssistantSystemInstruction = `You are an expert HR assistant for a small business staff management platform called OK BOZ. 
-  Your goal is to help the admin or employee with questions about labor laws in India, leave policies, or drafting announcements.
-  Keep answers concise, professional, and helpful.`;
-  const hrAssistantInitialMessage = 'Hi! I am your OK BOZ HR Assistant. Ask me about leave policies, labor laws, or how to manage your staff.';
+  // AI Assistant Config (Commented out as per request)
+  // const hrAssistantSystemInstruction = `You are an expert HR assistant for a small business staff management platform called OK BOZ. 
+  // Your goal is to help the admin or employee with questions about labor laws in India, leave policies, or drafting announcements.
+  // Keep answers concise, professional, and helpful.`;
+  // const hrAssistantInitialMessage = 'Hi! I am your OK BOZ HR Assistant. Ask me about leave policies, labor laws, or how to manage your staff.';
 
   return (
     <ThemeProvider>
@@ -159,13 +161,15 @@ const App: React.FC = () => {
                       <Route path="/admin/vendors" element={<VendorAttachment />} />
                       <Route path="/admin/payroll" element={<Payroll />} />
                       <Route path="/admin/expenses" element={<Expenses />} />
+                      {/* NEW ROUTE: Finance & Expenses */}
+                      <Route path="/admin/finance-and-expenses" element={<Expenses />} />
                       
                       {/* Corporate Management & Settings - Only Super Admin */}
                       {userRole === UserRole.ADMIN && (
                         <>
                           <Route path="/admin/corporate" element={<Corporate />} />
                           <Route path="/admin/settings" element={<Settings />} />
-                          <Route path="/admin/admin-finance" element={<Expenses />} /> {/* NEW: Admin Finance tab */}
+                          <Route path="/admin/admin-finance" element={<Expenses />} /> {/* Existing Admin Finance tab */}
                         </>
                       )}
                       
@@ -196,14 +200,14 @@ const App: React.FC = () => {
               </Layout>
           )}
           
-          {/* AI Assistant is available for both roles when authenticated */}
-          {isAuthenticated && 
+          {/* AI Assistant is available for both roles when authenticated (Commented out as per request) */}
+          {/* {isAuthenticated && 
             <AiAssistant 
               systemInstruction={hrAssistantSystemInstruction} 
               initialMessage={hrAssistantInitialMessage} 
               triggerButtonLabel="Ask HR AI" 
             />
-          }
+          } */}
         </HashRouter>
       </BrandingProvider>
     </ThemeProvider>

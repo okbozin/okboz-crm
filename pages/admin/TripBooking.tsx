@@ -85,6 +85,9 @@ export const TripBooking: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('All');
   const [branchFilter, setBranchFilter] = useState('All');
   const [corporateFilter, setCorporateFilter] = useState('All'); // New Filter
+  const [bookingTypeFilter, setBookingTypeFilter] = useState('All'); // NEW FILTER
+  const [transportTypeFilter, setTransportTypeFilter] = useState('All'); // NEW FILTER
+  const [tripCategoryFilter, setTripCategoryFilter] = useState('All'); // NEW FILTER
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
 
@@ -169,6 +172,11 @@ export const TripBooking: React.FC = () => {
       // Corporate Filter (Super Admin Only)
       const matchesCorporate = corporateFilter === 'All' || (t.ownerId === corporateFilter);
 
+      // NEW FILTERS
+      const matchesBookingType = bookingTypeFilter === 'All' || t.bookingType === bookingTypeFilter;
+      const matchesTransportType = transportTypeFilter === 'All' || t.transportType === transportTypeFilter;
+      const matchesTripCategory = tripCategoryFilter === 'All' || t.tripCategory === tripCategoryFilter;
+
       const tripDate = t.date;
       let matchesDate = true;
       if (fromDate && toDate) {
@@ -179,10 +187,11 @@ export const TripBooking: React.FC = () => {
         matchesDate = tripDate <= toDate;
       }
 
-      return matchesSearch && matchesStatus && matchesBranch && matchesCorporate && matchesDate;
+      return matchesSearch && matchesStatus && matchesBranch && matchesCorporate && matchesBookingType && matchesTransportType && matchesTripCategory && matchesDate;
     });
-  }, [trips, searchTerm, statusFilter, branchFilter, corporateFilter, fromDate, toDate]);
+  }, [trips, searchTerm, statusFilter, branchFilter, corporateFilter, bookingTypeFilter, transportTypeFilter, tripCategoryFilter, fromDate, toDate]);
 
+  // Chart Data for existing Booking Status and Revenue Trend
   const chartData = useMemo(() => {
     const statusCounts: Record<string, number> = {};
     const revenueMap: Record<string, number> = {};
@@ -205,6 +214,46 @@ export const TripBooking: React.FC = () => {
 
     return { pieData, barData };
   }, [filteredTrips]);
+
+  // NEW CHART DATA: Booking Type Distribution
+  const bookingTypeDistribution = useMemo(() => {
+      const counts: Record<string, number> = {};
+      filteredTrips.forEach(t => {
+          counts[t.bookingType] = (counts[t.bookingType] || 0) + 1;
+      });
+      return Object.keys(counts).map((key, idx) => ({ 
+          name: key, 
+          value: counts[key],
+          color: COLORS[idx % COLORS.length]
+      }));
+  }, [filteredTrips]);
+
+  // NEW CHART DATA: Transport Type Distribution
+  const transportTypeDistribution = useMemo(() => {
+      const counts: Record<string, number> = {};
+      filteredTrips.forEach(t => {
+          counts[t.transportType] = (counts[t.transportType] || 0) + 1;
+      });
+      return Object.keys(counts).map((key, idx) => ({ 
+          name: key, 
+          value: counts[key],
+          color: COLORS[idx % COLORS.length]
+      }));
+  }, [filteredTrips]);
+
+  // NEW CHART DATA: Trip Category Distribution
+  const tripCategoryDistribution = useMemo(() => {
+      const counts: Record<string, number> = {};
+      filteredTrips.forEach(t => {
+          counts[t.tripCategory] = (counts[t.tripCategory] || 0) + 1;
+      });
+      return Object.keys(counts).map((key, idx) => ({ 
+          name: key, 
+          value: counts[key],
+          color: COLORS[idx % COLORS.length]
+      }));
+  }, [filteredTrips]);
+
 
   const totalPrice = useMemo(() => {
     const price = Number(formData.tripPrice) || 0;
@@ -310,6 +359,9 @@ export const TripBooking: React.FC = () => {
       setStatusFilter('All');
       setBranchFilter('All');
       setCorporateFilter('All');
+      setBookingTypeFilter('All'); // RESET NEW FILTERS
+      setTransportTypeFilter('All'); // RESET NEW FILTERS
+      setTripCategoryFilter('All'); // RESET NEW FILTERS
       setFromDate('');
       setToDate('');
   };
@@ -360,28 +412,175 @@ export const TripBooking: React.FC = () => {
         </button>
       </div>
 
+      {/* NEWLY MOVED: Search and Filter Toolbar */}
+      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col gap-4">
+          <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+              {/* Search */}
+              <div className="relative flex-1 w-full">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <input 
+                      type="text" 
+                      placeholder="Search Trip ID, Name or Mobile..." 
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+                  />
+              </div>
+              
+              {/* Action Buttons */}
+              <div className="flex gap-2 w-full md:w-auto">
+                  <button 
+                      onClick={() => setShowFilters(!showFilters)}
+                      className={`px-4 py-2 border rounded-lg text-sm font-medium flex items-center gap-2 transition-colors ${showFilters ? 'bg-indigo-50 text-indigo-600 border-indigo-200' : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'}`}
+                  >
+                      <Filter className="w-4 h-4" /> Filters
+                  </button>
+                  <button 
+                      onClick={handleExport}
+                      className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 text-sm font-medium flex items-center gap-2"
+                  >
+                      <Download className="w-4 h-4" /> Export
+                  </button>
+              </div>
+          </div>
+          
+          {/* Collapsible Filters */}
+          {showFilters && (
+             <div className="flex flex-wrap gap-3 pt-4 border-t border-gray-200 animate-in fade-in slide-in-from-top-2">
+                 
+                 {/* Corporate Filter (Super Admin Only) */}
+                 {isSuperAdmin && (
+                     <select 
+                        value={corporateFilter}
+                        onChange={(e) => setCorporateFilter(e.target.value)}
+                        className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 min-w-[160px]"
+                     >
+                        <option value="All">All Corporates</option>
+                        <option value="admin">Head Office</option>
+                        {corporates.map((c: any) => (
+                           <option key={c.email} value={c.email}>{c.companyName}</option>
+                        ))}
+                     </select>
+                 )}
+
+                 <select 
+                    value={branchFilter}
+                    onChange={(e) => setBranchFilter(e.target.value)}
+                    className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 min-w-[140px]"
+                 >
+                    <option value="All">All Branches</option>
+                    {/* Show unique branches available in the current context */}
+                    {Array.from(new Set(allBranches.map((b: any) => b.name))).map((name: string) => (
+                      <option key={name} value={name}>
+                          {name}
+                      </option>
+                    ))}
+                 </select>
+
+                 <select 
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 min-w-[120px]"
+                 >
+                    <option value="All">All Status</option>
+                    <option value="Confirmed">Confirmed</option>
+                    <option value="Completed">Completed</option>
+                    <option value="Cancelled">Cancelled</option>
+                    <option value="Pending">Pending</option>
+                 </select>
+
+                 {/* NEW FILTER: Booking Type */}
+                 <select 
+                    value={bookingTypeFilter}
+                    onChange={(e) => setBookingTypeFilter(e.target.value)}
+                    className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 min-w-[140px]"
+                 >
+                    <option value="All">All Booking Types</option>
+                    {Array.from(new Set(trips.map(t => t.bookingType))).map((type: string) => (
+                        <option key={type} value={type}>{type}</option>
+                    ))}
+                 </select>
+
+                 {/* NEW FILTER: Transport Type */}
+                 <select 
+                    value={transportTypeFilter}
+                    onChange={(e) => setTransportTypeFilter(e.target.value)}
+                    className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 min-w-[140px]"
+                 >
+                    <option value="All">All Transport Types</option>
+                    {Array.from(new Set(trips.map(t => t.transportType))).map((type: string) => (
+                        <option key={type} value={type}>{type}</option>
+                    ))}
+                 </select>
+
+                 {/* NEW FILTER: Trip Category */}
+                 <select 
+                    value={tripCategoryFilter}
+                    onChange={(e) => setTripCategoryFilter(e.target.value)}
+                    className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 min-w-[140px]"
+                 >
+                    <option value="All">All Trip Categories</option>
+                    {Array.from(new Set(trips.map(t => t.tripCategory))).map((category: string) => (
+                        <option key={category} value={category}>{category}</option>
+                    ))}
+                 </select>
+                 
+                 <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-1.5">
+                    <span className="text-xs text-gray-500 font-medium">From:</span>
+                    <input 
+                      type="date"
+                      value={fromDate}
+                      onChange={(e) => setFromDate(e.target.value)}
+                      className="text-sm outline-none bg-transparent text-gray-700"
+                    />
+                 </div>
+
+                 <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-1.5">
+                    <span className="text-xs text-gray-500 font-medium">To:</span>
+                    <input 
+                      type="date"
+                      value={toDate}
+                      onChange={(e) => setToDate(e.target.value)}
+                      className="text-sm outline-none bg-transparent text-gray-700"
+                    />
+                 </div>
+
+                 {(searchTerm || statusFilter !== 'All' || branchFilter !== 'All' || corporateFilter !== 'All' || bookingTypeFilter !== 'All' || transportTypeFilter !== 'All' || tripCategoryFilter !== 'All' || fromDate || toDate) && (
+                     <button 
+                        onClick={handleResetFilters}
+                        className="px-3 py-2 text-red-500 hover:bg-red-50 rounded-lg text-sm font-medium flex items-center gap-1 transition-colors ml-auto"
+                     >
+                        <RefreshCcw className="w-4 h-4" /> Reset
+                     </button>
+                 )}
+             </div>
+          )}
+      </div>
+
+
       {/* Stats Row */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
            <p className="text-xs font-bold text-gray-500 uppercase">Total Trips</p>
-           <h3 className="text-2xl font-bold text-gray-800">{trips.length}</h3>
+           <h3 className="text-2xl font-bold text-gray-800">{filteredTrips.length}</h3>
         </div>
         <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
            <p className="text-xs font-bold text-gray-500 uppercase">Total Revenue</p>
-           <h3 className="text-2xl font-bold text-emerald-600">₹{trips.reduce((sum, t) => sum + t.totalPrice, 0).toLocaleString()}</h3>
+           <h3 className="text-2xl font-bold text-emerald-600">₹{filteredTrips.reduce((sum, t) => sum + t.totalPrice, 0).toLocaleString()}</h3>
         </div>
         <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
            <p className="text-xs font-bold text-gray-500 uppercase">Completed</p>
-           <h3 className="text-2xl font-bold text-blue-600">{trips.filter(t => t.bookingStatus === 'Completed').length}</h3>
+           <h3 className="text-2xl font-bold text-blue-600">{filteredTrips.filter(t => t.bookingStatus === 'Completed').length}</h3>
         </div>
         <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
            <p className="text-xs font-bold text-gray-500 uppercase">Cancelled</p>
-           <h3 className="text-2xl font-bold text-red-600">{trips.filter(t => t.bookingStatus === 'Cancelled').length}</h3>
+           <h3 className="text-2xl font-bold text-red-600">{filteredTrips.filter(t => t.bookingStatus === 'Cancelled').length}</h3>
         </div>
       </div>
 
-      {/* Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Charts Section - Now with more charts! */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+        {/* Existing Booking Status Pie Chart */}
         <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
             <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
                 <PieChartIcon className="w-5 h-5 text-indigo-500" /> Booking Status
@@ -409,6 +608,7 @@ export const TripBooking: React.FC = () => {
             </div>
         </div>
 
+        {/* Existing Revenue Trend Bar Chart */}
         <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
             <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
                 <TrendingUp className="w-5 h-5 text-emerald-500" /> Revenue Trend
@@ -425,120 +625,95 @@ export const TripBooking: React.FC = () => {
                 </ResponsiveContainer>
             </div>
         </div>
+
+        {/* NEW CHART: Booking Type Distribution */}
+        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+            <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <PieChartIcon className="w-5 h-5 text-blue-500" /> Booking Type
+            </h3>
+            <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                        <Pie
+                            data={bookingTypeDistribution}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={60}
+                            outerRadius={80}
+                            paddingAngle={5}
+                            dataKey="value"
+                        >
+                            {bookingTypeDistribution.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                        </Pie>
+                        <Tooltip />
+                        <Legend />
+                    </PieChart>
+                </ResponsiveContainer>
+            </div>
+        </div>
+
+        {/* NEW CHART: Transport Type Distribution */}
+        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+            <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <Car className="w-5 h-5 text-red-500" /> Transport Type
+            </h3>
+            <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                        <Pie
+                            data={transportTypeDistribution}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={60}
+                            outerRadius={80}
+                            paddingAngle={5}
+                            dataKey="value"
+                        >
+                            {transportTypeDistribution.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                        </Pie>
+                        <Tooltip />
+                        <Legend />
+                    </PieChart>
+                </ResponsiveContainer>
+            </div>
+        </div>
+
+        {/* NEW CHART: Trip Category Distribution */}
+        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+            <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <MapPin className="w-5 h-5 text-orange-500" /> Trip Category
+            </h3>
+            <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                        <Pie
+                            data={tripCategoryDistribution}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={60}
+                            outerRadius={80}
+                            paddingAngle={5}
+                            dataKey="value"
+                        >
+                            {tripCategoryDistribution.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                        </Pie>
+                        <Tooltip />
+                        <Legend />
+                    </PieChart>
+                </ResponsiveContainer>
+            </div>
+        </div>
       </div>
 
       {/* Main Content */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         
-        {/* Advanced Filter Toolbar */}
-        <div className="p-4 border-b border-gray-200 flex flex-col bg-gray-50">
-            <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-                {/* Search */}
-                <div className="relative flex-1 w-full">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-                    <input 
-                        type="text" 
-                        placeholder="Search Trip ID, Name or Mobile..." 
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
-                    />
-                </div>
-                
-                {/* Action Buttons */}
-                <div className="flex gap-2 w-full md:w-auto">
-                    <button 
-                        onClick={() => setShowFilters(!showFilters)}
-                        className={`px-4 py-2 border rounded-lg text-sm font-medium flex items-center gap-2 transition-colors ${showFilters ? 'bg-indigo-50 text-indigo-600 border-indigo-200' : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'}`}
-                    >
-                        <Filter className="w-4 h-4" /> Filters
-                    </button>
-                    <button 
-                        onClick={handleExport}
-                        className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 text-sm font-medium flex items-center gap-2"
-                    >
-                        <Download className="w-4 h-4" /> Export
-                    </button>
-                </div>
-            </div>
-            
-            {/* Collapsible Filters */}
-            {showFilters && (
-               <div className="flex flex-wrap gap-3 mt-4 pt-4 border-t border-gray-200 animate-in fade-in slide-in-from-top-2">
-                   
-                   {/* Corporate Filter (Super Admin Only) */}
-                   {isSuperAdmin && (
-                       <select 
-                          value={corporateFilter}
-                          onChange={(e) => setCorporateFilter(e.target.value)}
-                          className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 min-w-[160px]"
-                       >
-                          <option value="All">All Corporates</option>
-                          <option value="admin">Head Office</option>
-                          {corporates.map((c: any) => (
-                             <option key={c.email} value={c.email}>{c.companyName}</option>
-                          ))}
-                       </select>
-                   )}
-
-                   <select 
-                      value={branchFilter}
-                      onChange={(e) => setBranchFilter(e.target.value)}
-                      className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 min-w-[140px]"
-                   >
-                      <option value="All">All Branches</option>
-                      {/* Show unique branches available in the current context */}
-                      {allBranches.map((b: any) => (
-                        <option key={b.id} value={b.name}>
-                            {b.name} {isSuperAdmin ? `(${b.ownerName || 'Branch'})` : ''}
-                        </option>
-                      ))}
-                   </select>
-
-                   <select 
-                      value={statusFilter}
-                      onChange={(e) => setStatusFilter(e.target.value)}
-                      className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 min-w-[120px]"
-                   >
-                      <option value="All">All Status</option>
-                      <option value="Confirmed">Confirmed</option>
-                      <option value="Completed">Completed</option>
-                      <option value="Cancelled">Cancelled</option>
-                      <option value="Pending">Pending</option>
-                   </select>
-                   
-                   <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-1.5">
-                      <span className="text-xs text-gray-500 font-medium">From:</span>
-                      <input 
-                        type="date"
-                        value={fromDate}
-                        onChange={(e) => setFromDate(e.target.value)}
-                        className="text-sm outline-none bg-transparent text-gray-700"
-                      />
-                   </div>
-
-                   <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-1.5">
-                      <span className="text-xs text-gray-500 font-medium">To:</span>
-                      <input 
-                        type="date"
-                        value={toDate}
-                        onChange={(e) => setToDate(e.target.value)}
-                        className="text-sm outline-none bg-transparent text-gray-700"
-                      />
-                   </div>
-
-                   {(searchTerm || statusFilter !== 'All' || branchFilter !== 'All' || corporateFilter !== 'All' || fromDate || toDate) && (
-                       <button 
-                          onClick={handleResetFilters}
-                          className="px-3 py-2 text-red-500 hover:bg-red-50 rounded-lg text-sm font-medium flex items-center gap-1 transition-colors ml-auto"
-                       >
-                          <RefreshCcw className="w-4 h-4" /> Reset
-                       </button>
-                   )}
-               </div>
-            )}
-        </div>
-
         {/* Table */}
         <div className="overflow-x-auto">
            <table className="w-full text-left text-sm whitespace-nowrap">

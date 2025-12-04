@@ -20,7 +20,6 @@ const MASTER_ADMIN_LINKS = [
   { id: 'reports', path: '/admin/reports', label: 'Reports', icon: BarChart3 },
   { id: 'marketing', path: '/admin/marketing', label: 'Email Marketing', icon: Mail },
   { id: 'reception', path: '/admin/reception', label: 'Reception Desk', icon: PhoneCall },
-  { id: 'vehicle-enquiries', path: '/admin/vehicle-enquiries', label: 'Vehicle Enquiries', icon: Car },
   { id: 'customer-care', path: '/admin/customer-care', label: 'Customer Care', icon: Headset },
   { id: 'trips', path: '/admin/trips', label: 'Trip Booking', icon: Map },
   { id: 'tracking', path: '/admin/tracking', label: 'Live Tracking', icon: Navigation },
@@ -33,8 +32,8 @@ const MASTER_ADMIN_LINKS = [
   { id: 'documents', path: '/admin/documents', label: 'Documents', icon: FileText },
   { id: 'vendors', path: '/admin/vendors', label: 'Vendor Attachment', icon: CarFront },
   { id: 'payroll', path: '/admin/payroll', label: 'Payroll', icon: DollarSign },
-  { id: 'expenses', path: '/admin/expenses', label: 'Office Expenses', icon: ReceiptIndianRupee },
-  { id: 'admin-finance', path: '/admin/admin-finance', label: 'Admin Finance', icon: ReceiptIndianRupee }, // New entry for Super Admin
+  { id: 'admin-finance', path: '/admin/admin-finance', label: 'Admin Finance', icon: ReceiptIndianRupee }, // Existing Admin Finance tab
+  { id: 'finance-and-expenses', path: '/admin/finance-and-expenses', label: 'Finance & Expenses', icon: CreditCard }, // NEW: Duplicate Finance Tab
   { id: 'corporate', path: '/admin/corporate', label: 'Corporate', icon: Building2 },
   { id: 'settings', path: '/admin/settings', label: 'Settings', icon: Settings },
 ];
@@ -289,10 +288,10 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
     // 6. "Settings" is hidden for Corporate users (Franchise Panel)
     if (link.id === 'settings' && role === UserRole.CORPORATE) return false;
 
-    // 7. "Admin Finance" is ONLY for Super Admin
-    if (link.id === 'admin-finance' && role !== UserRole.ADMIN) return false;
-
-    // 8. "Vehicle Enquiries" is hidden for ALL Admin roles
+    // 7. "Admin Finance" and "Finance & Expenses" are hidden for EMPLOYEES
+    if ((link.id === 'admin-finance' || link.id === 'finance-and-expenses') && role === UserRole.EMPLOYEE) return false; 
+    
+    // 8. "Vehicle Enquiries" is hidden for ALL Admin roles (previously removed)
     if (link.id === 'vehicle-enquiries') return false;
 
     return true;

@@ -1,10 +1,11 @@
 
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Plus, Search, DollarSign, 
   PieChart, FileText, 
   CheckCircle, X, Download,
-  Smartphone, Zap, Wifi, Users, ArrowUpCircle, ArrowDownCircle, Wallet, TrendingUp, TrendingDown, Building2, Upload, Loader2, Paperclip, Eye
+  Smartphone, Zap, Wifi, Users, ArrowUpCircle, ArrowDownCircle, Wallet, TrendingUp, TrendingDown, Building2, Upload, Loader2, Paperclip, Eye, Edit2, Trash2, Printer
 } from 'lucide-react';
 import { PieChart as RePieChart, Pie, Cell, ResponsiveContainer, Tooltip as ReTooltip, Legend } from 'recharts';
 import { uploadFileToCloud } from '../../services/cloudService';
@@ -101,7 +102,10 @@ const Expenses: React.FC = () => {
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [typeFilter, setTypeFilter] = useState('All'); 
   const [monthFilter, setMonthFilter] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
-  const [previewReceipt, setPreviewReceipt] = useState<string | null>(null);
+  
+  const [rawReceiptPreviewUrl, setRawReceiptPreviewUrl] = useState<string | null>(null); // Renamed for clarity
+  const [showInvoiceViewer, setShowInvoiceViewer] = useState(false); // New state for structured invoice modal
+  const [invoiceData, setInvoiceData] = useState<Expense | null>(null); // New state for structured invoice data
 
   // Upload State
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -109,7 +113,7 @@ const Expenses: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form State
-  const [formData, setFormData] = useState<Partial<Expense>>({
+  const initialFormState: Partial<Expense> = {
     type: 'Expense',
     transactionNumber: '',
     title: '',
@@ -118,8 +122,11 @@ const Expenses: React.FC = () => {
     date: new Date().toISOString().split('T')[0],
     paymentMethod: 'Bank Transfer',
     status: 'Pending',
-    description: ''
-  });
+    description: '',
+    receiptUrl: ''
+  };
+  const [formData, setFormData] = useState<Partial<Expense>>(initialFormState);
+  const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null); // New state for editing
 
   // Persistence
   useEffect(() => {
@@ -141,7 +148,63 @@ const Expenses: React.FC = () => {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       if (e.target.files && e.target.files[0]) {
           setSelectedFile(e.target.files[0]);
+      } else {
+          setSelectedFile(null);
       }
+  };
+
+  const resetForm = () => {
+    setFormData(initialFormState);
+    setSelectedFile(null);
+    setEditingExpenseId(null);
+    setIsModalOpen(false);
+    if (fileInputRef.current) fileInputRef.current.value = ''; // Clear file input
+  };
+
+  const handleOpenAddTransaction = () => {
+    resetForm();
+    setIsModalOpen(true);
+  };
+
+  const handleEdit = (expense: Expense) => {
+    setEditingExpenseId(expense.id);
+    setFormData({
+        type: expense.type,
+        transactionNumber: expense.transactionNumber,
+        title: expense.title,
+        category: expense.category,
+        amount: expense.amount,
+        date: expense.date,
+        paymentMethod: expense.paymentMethod,
+        status: expense.status,
+        description: expense.description,
+        receiptUrl: expense.receiptUrl, // Keep existing URL, but don't pre-fill file input
+    });
+    setSelectedFile(null); // Clear selected file when editing
+    setIsModalOpen(true);
+  };
+
+  const handleDelete = (id: string) => {
+    if (window.confirm("Are you sure you want to delete this transaction? This action cannot be undone.")) {
+      setExpenses(prev => prev.filter(exp => exp.id !== id));
+      if (editingExpenseId === id) {
+          resetForm();
+      }
+    }
+  };
+
+  const handleViewInvoice = (expense: Expense) => {
+    setInvoiceData(expense);
+    setShowInvoiceViewer(true);
+  };
+
+  const closeInvoiceViewer = () => {
+    setShowInvoiceViewer(false);
+    setInvoiceData(null);
+  };
+
+  const closeRawReceiptPreview = () => {
+    setRawReceiptPreviewUrl(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -152,22 +215,20 @@ const Expenses: React.FC = () => {
     }
 
     setIsUploading(true);
-    let receiptUrl = '';
+    let receiptUrl = formData.receiptUrl || ''; // Use existing URL if editing and no new file
 
-    // Handle File Upload with Local Fallback
+    // Only upload if a new file is selected or if editing and the existing receiptUrl is from an old local fallback that needs re-upload.
+    // For now, if editing and no new file, just retain receiptUrl.
     if (selectedFile) {
         const sessionId = localStorage.getItem('app_session_id') || 'admin';
-        // Sanitize filename to prevent path issues
         const safeName = selectedFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
         const path = `receipts/${sessionId}/${Date.now()}_${safeName}`;
         
-        // 1. Try Cloud Upload
         const cloudUrl = await uploadFileToCloud(selectedFile, path);
         
         if (cloudUrl) {
             receiptUrl = cloudUrl;
         } else {
-            // 2. Fallback to Local Base64 if cloud upload fails (e.g. permission error)
             try {
                 receiptUrl = await new Promise((resolve) => {
                     const reader = new FileReader();
@@ -181,8 +242,8 @@ const Expenses: React.FC = () => {
         }
     }
 
-    const newExpense: Expense = {
-      id: Date.now().toString(),
+    const transactionData: Expense = {
+      id: editingExpenseId || Date.now().toString(),
       transactionNumber: formData.transactionNumber || `TXN-${Date.now()}`,
       type: formData.type as 'Income' | 'Expense',
       title: formData.title || '',
@@ -196,22 +257,14 @@ const Expenses: React.FC = () => {
       receiptUrl: receiptUrl
     };
 
-    setExpenses([newExpense, ...expenses]);
-    setIsModalOpen(false);
+    if (editingExpenseId) {
+        setExpenses(prev => prev.map(exp => exp.id === editingExpenseId ? transactionData : exp));
+    } else {
+        setExpenses(prev => [transactionData, ...prev]);
+    }
+    
     setIsUploading(false);
-    setSelectedFile(null);
-    if (fileInputRef.current) fileInputRef.current.value = ''; // Clear input
-    setFormData({
-      type: 'Expense',
-      transactionNumber: '',
-      title: '',
-      category: 'Other Expenses',
-      amount: 0,
-      date: new Date().toISOString().split('T')[0],
-      paymentMethod: 'Bank Transfer',
-      status: 'Pending',
-      description: ''
-    });
+    resetForm(); // Resets all form fields and editingExpenseId
   };
 
   // derived state
@@ -263,7 +316,7 @@ const Expenses: React.FC = () => {
           </p>
         </div>
         <button 
-          onClick={() => setIsModalOpen(true)}
+          onClick={handleOpenAddTransaction}
           className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 shadow-sm transition-colors"
         >
           <Plus className="w-5 h-5" />
@@ -359,8 +412,8 @@ const Expenses: React.FC = () => {
                      {isSuperAdmin && <th className="px-6 py-4">Franchise</th>}
                      <th className="px-6 py-4">Date</th>
                      <th className="px-6 py-4">Amount</th>
-                     <th className="px-6 py-4">Receipt</th>
-                     <th className="px-6 py-4">Status</th>
+                     <th className="px-6 py-4 text-center">Status</th>
+                     <th className="px-6 py-4 text-right">Actions</th> {/* New Actions column */}
                    </tr>
                  </thead>
                  <tbody className="divide-y divide-gray-100">
@@ -399,35 +452,36 @@ const Expenses: React.FC = () => {
                        <td className={`px-6 py-4 font-mono font-bold ${exp.type === 'Income' ? 'text-emerald-600' : 'text-red-600'}`}>
                            {exp.type === 'Income' ? '+' : '-'}₹{exp.amount.toLocaleString()}
                        </td>
-                       <td className="px-6 py-4 text-gray-600">
-                          {exp.receiptUrl ? (
-                             <div className="flex gap-2">
-                                <button 
-                                   onClick={() => setPreviewReceipt(exp.receiptUrl || null)}
-                                   className="text-blue-600 hover:bg-blue-50 p-1.5 rounded-md transition-colors"
-                                   title="Preview"
-                                >
-                                   <Eye className="w-4 h-4" />
-                                </button>
-                                <a 
-                                   href={exp.receiptUrl} 
-                                   download={`receipt_${exp.id}`}
-                                   target="_blank"
-                                   rel="noopener noreferrer"
-                                   className="text-emerald-600 hover:bg-emerald-50 p-1.5 rounded-md transition-colors"
-                                   title="Download"
-                                >
-                                   <Download className="w-4 h-4" />
-                                </a>
-                             </div>
-                          ) : (
-                             <span className="text-gray-400 text-xs">-</span>
-                          )}
-                       </td>
-                       <td className="px-6 py-4">
+                       <td className="px-6 py-4 text-center">
                          <span className={`px-2 py-1 rounded-full text-xs font-bold border ${exp.status === 'Paid' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-yellow-50 text-yellow-700 border-yellow-200'}`}>
                            {exp.status}
                          </span>
+                       </td>
+                       {/* New Actions Column */}
+                       <td className="px-6 py-4 text-right">
+                           <div className="flex justify-end gap-2">
+                               <button 
+                                   onClick={() => handleViewInvoice(exp)}
+                                   className="text-gray-400 hover:text-blue-500 p-1.5 rounded-full hover:bg-blue-50 transition-colors"
+                                   title="View Details"
+                               >
+                                   <Eye className="w-4 h-4" />
+                               </button>
+                               <button 
+                                   onClick={() => handleEdit(exp)}
+                                   className="text-gray-400 hover:text-emerald-600 p-1.5 rounded-full hover:bg-emerald-50 transition-colors"
+                                   title="Edit Transaction"
+                               >
+                                   <Edit2 className="w-4 h-4" />
+                               </button>
+                               <button 
+                                   onClick={() => handleDelete(exp.id)}
+                                   className="text-gray-400 hover:text-red-600 p-1.5 rounded-full hover:bg-red-50 transition-colors"
+                                   title="Delete Transaction"
+                               >
+                                   <Trash2 className="w-4 h-4" />
+                               </button>
+                           </div>
                        </td>
                      </tr>
                    ))}
@@ -492,13 +546,13 @@ const Expenses: React.FC = () => {
         </div>
       </div>
 
-      {/* Add Transaction Modal */}
+      {/* Add/Edit Transaction Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
             <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-              <h3 className="font-bold text-gray-800">Add Transaction</h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+              <h3 className="font-bold text-gray-800">{editingExpenseId ? 'Edit Transaction' : 'Add Transaction'}</h3>
+              <button onClick={resetForm} className="text-gray-400 hover:text-gray-600">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -642,6 +696,11 @@ const Expenses: React.FC = () => {
                       {selectedFile && (
                           <button onClick={() => setSelectedFile(null)} type="button" className="text-red-500 hover:bg-red-50 p-2 rounded"><X className="w-4 h-4"/></button>
                       )}
+                      {!selectedFile && formData.receiptUrl && (
+                          <a href={formData.receiptUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline text-xs flex items-center gap-1">
+                              <Paperclip className="w-3 h-3" /> View Existing
+                          </a>
+                      )}
                   </div>
               </div>
 
@@ -656,14 +715,21 @@ const Expenses: React.FC = () => {
                  />
               </div>
 
-              <div className="pt-2">
+              <div className="pt-2 flex gap-3">
+                 <button 
+                    type="button" 
+                    onClick={resetForm}
+                    className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-white transition-colors"
+                 >
+                   Cancel
+                 </button>
                  <button 
                     type="submit"
                     disabled={isUploading}
-                    className={`w-full text-white font-bold py-3 rounded-lg shadow-md transition-colors flex items-center justify-center gap-2 ${formData.type === 'Income' ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-red-500 hover:bg-red-600'}`}
+                    className={`flex-1 text-white font-bold py-3 rounded-lg shadow-md transition-colors flex items-center justify-center gap-2 ${formData.type === 'Income' ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-red-500 hover:bg-red-600'}`}
                  >
                     {isUploading && <Loader2 className="w-4 h-4 animate-spin" />}
-                    {formData.type === 'Income' ? 'Record Income' : 'Record Expense'}
+                    {editingExpenseId ? 'Update Transaction' : (formData.type === 'Income' ? 'Record Income' : 'Record Expense')}
                  </button>
               </div>
             </form>
@@ -671,13 +737,119 @@ const Expenses: React.FC = () => {
         </div>
       )}
 
-      {/* Receipt Preview Modal */}
-      {previewReceipt && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+      {/* Transaction Details (Invoice-like) Modal */}
+      {showInvoiceViewer && invoiceData && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+              <div className="printable-invoice bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200">
+                  {/* Header (Visible on screen and print) */}
+                  <div className="p-6 border-b border-gray-200 bg-gray-50">
+                      <div className="flex justify-between items-start mb-4">
+                          <div>
+                              <h2 className="text-2xl font-bold text-gray-900">Transaction Details</h2>
+                              <p className="text-sm text-gray-500">Invoice/Receipt Summary</p>
+                          </div>
+                          <div className="text-right">
+                              <p className="font-mono text-sm font-bold text-gray-800">#{invoiceData.transactionNumber}</p>
+                              <p className="text-xs text-gray-500">{invoiceData.date}</p>
+                          </div>
+                      </div>
+                      <div className="flex justify-between items-center bg-white p-3 rounded-lg border border-gray-200">
+                          <div>
+                              <p className="text-xs text-gray-400 uppercase font-bold">Transaction For</p>
+                              <p className="font-bold text-gray-800">{invoiceData.title}</p>
+                          </div>
+                          <div className="text-right">
+                              <p className="text-xs text-gray-400 uppercase font-bold">Category</p>
+                              <p className="font-medium text-gray-700">{invoiceData.category}</p>
+                          </div>
+                      </div>
+                  </div>
+
+                  {/* Body */}
+                  <div className="p-6 space-y-6">
+                      
+                      {/* Amount & Type */}
+                      <div className="flex justify-between items-center">
+                          <div>
+                              <p className="text-sm font-bold text-gray-800">Amount</p>
+                              <p className={`text-xl font-bold ${invoiceData.type === 'Income' ? 'text-emerald-600' : 'text-red-600'}`}>
+                                  {invoiceData.type === 'Income' ? '+' : '-'}₹{invoiceData.amount.toLocaleString()}
+                              </p>
+                          </div>
+                          <div className="text-right">
+                              <p className="text-sm font-bold text-gray-800">Type</p>
+                              <span className={`px-2 py-1 rounded-full text-xs font-bold ${invoiceData.type === 'Income' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                                  {invoiceData.type}
+                              </span>
+                          </div>
+                      </div>
+
+                      {/* Payment Method & Status */}
+                      <div>
+                          <h4 className="text-xs font-bold text-gray-500 uppercase mb-2 border-b border-gray-100 pb-1">Payment & Status</h4>
+                          <div className="space-y-2 text-sm">
+                              <div className="flex justify-between">
+                                  <span className="text-gray-600">Method</span>
+                                  <span className="font-medium text-gray-900">{invoiceData.paymentMethod}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                  <span className="text-gray-600">Transaction Status</span>
+                                  <span className={`font-medium ${invoiceData.status === 'Paid' ? 'text-green-600' : 'text-yellow-600'}`}>{invoiceData.status}</span>
+                              </div>
+                          </div>
+                      </div>
+
+                      {/* Description */}
+                      {invoiceData.description && (
+                          <div>
+                              <h4 className="text-xs font-bold text-gray-500 uppercase mb-2 border-b border-gray-100 pb-1">Description</h4>
+                              <p className="text-sm text-gray-600">{invoiceData.description}</p>
+                          </div>
+                      )}
+                      
+                      {/* Franchise Name for Super Admin */}
+                      {isSuperAdmin && invoiceData.franchiseName && (
+                        <div>
+                            <h4 className="text-xs font-bold text-gray-500 uppercase mb-2 border-b border-gray-100 pb-1">Franchise</h4>
+                            <p className="text-sm text-gray-600">{invoiceData.franchiseName}</p>
+                        </div>
+                      )}
+                  </div>
+
+                  {/* Footer (Actions - Hidden on Print) */}
+                  <div className="no-print p-5 bg-gray-50 border-t border-gray-200 flex justify-end gap-3">
+                      {invoiceData.receiptUrl && (
+                          <button
+                              onClick={() => setRawReceiptPreviewUrl(invoiceData.receiptUrl!)}
+                              className="px-4 py-2 border border-blue-200 text-blue-600 rounded-lg text-sm font-medium hover:bg-blue-50 transition-colors flex items-center gap-2"
+                          >
+                              <Paperclip className="w-4 h-4" /> View Original Receipt
+                          </button>
+                      )}
+                      <button 
+                          onClick={() => window.print()} 
+                          className="px-4 py-2 bg-slate-800 text-white rounded-lg text-sm font-bold hover:bg-slate-900 transition-colors flex items-center gap-2"
+                      >
+                          <Printer className="w-4 h-4" /> Print Invoice
+                      </button>
+                      <button 
+                          onClick={closeInvoiceViewer} 
+                          className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium hover:bg-white transition-colors"
+                      >
+                          Close
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* Raw Receipt Preview Modal (Existing, now controlled by rawReceiptPreviewUrl) */}
+      {rawReceiptPreviewUrl && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
            <div className="bg-white rounded-xl w-full max-w-4xl h-[85vh] flex flex-col animate-in fade-in zoom-in duration-200">
               <div className="flex justify-between items-center p-4 border-b border-gray-200">
                  <h3 className="font-bold text-gray-800">Receipt Preview</h3>
-                 <button onClick={() => setPreviewReceipt(null)} className="p-2 hover:bg-red-50 rounded-lg text-gray-500 hover:text-red-500 transition-colors">
+                 <button onClick={closeRawReceiptPreview} className="p-2 hover:bg-red-50 rounded-lg text-gray-500 hover:text-red-500 transition-colors">
                     <X className="w-5 h-5" />
                  </button>
               </div>
@@ -685,15 +857,15 @@ const Expenses: React.FC = () => {
                  {/* Basic detection for image vs other. If cloud URL, might need better detection, but often extensions or MIME are missing in simple string URLs. 
                      We'll try to show as image first if data URI or common extension, else iframe. 
                  */}
-                 {previewReceipt.startsWith('data:image') || /\.(jpg|jpeg|png|gif|webp)$/i.test(previewReceipt) ? (
-                    <img src={previewReceipt} alt="Receipt" className="max-w-full max-h-full object-contain shadow-lg rounded-lg" />
+                 {rawReceiptPreviewUrl.startsWith('data:image') || /\.(jpg|jpeg|png|gif|webp)$/i.test(rawReceiptPreviewUrl) ? (
+                    <img src={rawReceiptPreviewUrl} alt="Receipt" className="max-w-full max-h-full object-contain shadow-lg rounded-lg" />
                  ) : (
-                    <iframe src={previewReceipt} className="w-full h-full rounded-lg border border-gray-200 shadow-lg bg-white" title="Receipt Preview"></iframe>
+                    <iframe src={rawReceiptPreviewUrl} className="w-full h-full rounded-lg border border-gray-200 shadow-lg bg-white" title="Receipt Preview"></iframe>
                  )}
               </div>
               <div className="p-4 border-t border-gray-200 flex justify-end">
                  <a 
-                    href={previewReceipt}
+                    href={rawReceiptPreviewUrl}
                     download="receipt"
                     target="_blank"
                     rel="noopener noreferrer"

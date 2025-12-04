@@ -1,11 +1,10 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Settings, Loader2, ArrowRight, ArrowRightLeft, 
   MessageCircle, Copy, Mail, Car, User, Edit2,
   Building2, X, Phone, Truck, DollarSign,
   Calendar, MapPin, Plus, Trash2, Headset,
-  Clock, CheckCircle, Filter, Search, ChevronDown, UserCheck, XCircle
+  Clock, CheckCircle, Filter, Search, ChevronDown, UserCheck, XCircle, AlertCircle, Save, History
 } from 'lucide-react';
 import Autocomplete from '../../components/Autocomplete';
 import { Enquiry, HistoryLog, UserRole } from '../../types';
@@ -16,7 +15,7 @@ type OutstationSubType = 'RoundTrip' | 'OneWay';
 type VehicleType = 'Sedan' | 'SUV';
 type CallerType = 'Customer' | 'Vendor';
 type EnquiryCategory = 'Transport' | 'General';
-type OrderStatus = 'Scheduled' | 'Order Accepted' | 'Driver Assigned' | 'Completed' | 'Cancelled';
+type OrderStatus = 'Scheduled' | 'Order Accepted' | 'Driver Assigned' | 'Completed' | 'Cancelled' | 'New' | 'In Progress' | 'Converted' | 'Closed';
 
 interface RentalPackage {
   id: string;
@@ -145,6 +144,17 @@ export const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
   const [enquiries, setEnquiries] = useState<Enquiry[]>(getInitialEnquiries);
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
 
+  // --- NEW: Phone Lookup States ---
+  const [isPhoneChecked, setIsPhoneChecked] = useState(false);
+  const [phoneLookupResult, setPhoneLookupResult] = useState<'New' | 'Existing' | null>(null);
+  const [existingEnquiriesForPhone, setExistingEnquiriesForPhone] = useState<Enquiry[]>([]);
+  const [vendorsData, setVendorsData] = useState<any[]>([]); // For checking existing vendors
+
+  // --- NEW: General Enquiry Follow-up States ---
+  const [generalFollowUpDate, setGeneralFollowUpDate] = useState(new Date().toISOString().split('T')[0]);
+  const [generalFollowUpTime, setGeneralFollowUpTime] = useState('10:00');
+  const [generalFollowUpPriority, setGeneralFollowUpPriority] = useState<'Hot' | 'Warm' | 'Cold'>('Warm');
+
 
   // Persistence
   useEffect(() => {
@@ -154,6 +164,19 @@ export const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
   useEffect(() => {
     localStorage.setItem('transport_pricing_rules_v2', JSON.stringify(pricing));
   }, [pricing]);
+
+  // Load Vendors Data for Phone Check
+  useEffect(() => {
+    try {
+      const savedVendors = localStorage.getItem('vendor_data');
+      if (savedVendors) {
+        setVendorsData(JSON.parse(savedVendors));
+      }
+    } catch (e) {
+      console.error("Failed to load vendor data for phone check", e);
+    }
+  }, []);
+
 
   useEffect(() => {
       // 1. Load Data for Assignment Dropdowns
@@ -233,7 +256,7 @@ export const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
               setMapError("Google Maps 'places' library failed to load.");
             }
         };
-        script.onerror = () => setMapError("Network error: Failed to load Google Maps script.");
+        script.onerror = () => setTimeout(() => setMapError("Network error: Failed to load Google Maps script."), 0);
         document.head.appendChild(script);
     } else {
         script.addEventListener('load', () => {
@@ -301,7 +324,10 @@ export const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
 
   // Add Package handlers
   const handleAddPackage = () => {
-    if (!newPackage.name || !newPackage.priceSedan) return;
+    if (!newPackage.name || !newPackage.priceSedan) {
+        setTimeout(() => alert("Please fill in package name and Sedan price."), 0);
+        return;
+    }
     
     if (editingPackageId) {
         // Update existing package
@@ -317,6 +343,7 @@ export const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
         );
         setRentalPackages(updatedPackages);
         setEditingPackageId(null);
+        setTimeout(() => alert("Package updated successfully!"), 0);
     } else {
         // Add new package
         const pkg: RentalPackage = {
@@ -328,6 +355,7 @@ export const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
             priceSuv: parseFloat(newPackage.priceSuv) || 0,
         };
         setRentalPackages([...rentalPackages, pkg]);
+        setTimeout(() => alert("Package added successfully!"), 0);
     }
     setShowAddPackage(false);
     setNewPackage({ name: '', hours: '', km: '', priceSedan: '', priceSuv: '' });
@@ -362,6 +390,7 @@ export const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
         setEditingPackageId(null);
         setNewPackage({ name: '', hours: '', km: '', priceSedan: '', priceSuv: '' });
       }
+      setTimeout(() => alert("Package removed."), 0);
     }
   };
 
@@ -372,7 +401,10 @@ export const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
       const rules = pricing[vehicleType];
       let details = '';
 
-      if (tripType === 'Local') {
+      if (enquiryCategory === 'General') {
+          total = 0; // No cost for general enquiries
+          details = customerDetails.requirements || "General Enquiry.";
+      } else if (tripType === 'Local') {
           const base = rules.localBaseFare;
           const km = parseFloat(transportDetails.estKm) || 0;
           const extraKm = Math.max(0, km - rules.localBaseKm) * rules.localPerKmRate;
@@ -406,11 +438,26 @@ export const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
 
       setEstimatedCost(total);
 
-      // Generate Message
+      // Generate Message Based on Enquiry Type
       let msg = '';
-      const pkg = rentalPackages.find(p => p.id === transportDetails.packageId);
-      
-      msg = `Hello ${customerDetails.name || 'Customer'},
+
+      if (enquiryCategory === 'General') {
+          msg = `Hello ${customerDetails.name || 'Sir/Madam'},
+Thank you for contacting OK BOZ. 
+
+Regarding your enquiry:
+"${customerDetails.requirements || 'General Requirement'}"
+
+We have received your request and our team will get back to you shortly with more details.
+
+For immediate assistance, feel free to call us.
+
+Regards,
+OK BOZ Support Team`;
+      } else {
+          // Transport Estimate Message
+          const pkg = rentalPackages.find(p => p.id === transportDetails.packageId);
+          msg = `Hello ${customerDetails.name || 'Customer'},
 Here is your ${tripType} estimate from OK BOZ! 🚕
 
 *${tripType} Trip Estimate*
@@ -428,11 +475,12 @@ ${tripType === 'Rental' ? `📦 Package: ${pkg?.name || 'Custom'}` : ''}
 *Toll and Parking Extra.*
 
 Book now with OK BOZ Transport!`;
+      }
 
       setGeneratedMessage(msg);
   }, [estimatedCost, customerDetails, transportDetails, tripType, vehicleType, pricing, rentalPackages, enquiryCategory, outstationSubType]);
 
-  const saveOrder = (status: OrderStatus, scheduleInfo?: { date: string, time: string }) => {
+  const saveOrder = (status: OrderStatus, scheduleInfo?: { date: string, time: string, priority?: 'Hot' | 'Warm' | 'Cold' }) => {
       if (!customerDetails.name || !customerDetails.phone) {
           setTimeout(() => alert("Please enter Customer Name and Phone."), 0);
           return;
@@ -450,10 +498,14 @@ Book now with OK BOZ Transport!`;
           if (tripType === 'Outstation') detailsText += `Dest: ${transportDetails.destination}. ${transportDetails.days} Days. Pickup: ${customerDetails.pickup}.`;
           detailsText += ` Estimate: ₹${estimatedCost}`;
       } else {
-          detailsText = "General Enquiry. ";
+          detailsText = customerDetails.requirements; // Use requirements directly for general
       }
       
-      if (customerDetails.requirements) detailsText += `\nReq: ${customerDetails.requirements}`;
+      if (!detailsText.trim()) {
+        setTimeout(() => alert("Please enter requirements/details for the enquiry."), 0);
+        return;
+      }
+
 
       // 2. Create History Log
       const historyLog: HistoryLog = {
@@ -466,6 +518,7 @@ Book now with OK BOZ Transport!`;
 
       // 3. Create or Update Object
       let updatedEnquiry: Enquiry;
+      let newEnquiriesList = [...enquiries]; // Start with current list
 
       if (editingOrderId) {
         // Update existing enquiry
@@ -484,6 +537,8 @@ Book now with OK BOZ Transport!`;
           history: [historyLog, ...(enquiries.find(e => e.id === editingOrderId)?.history || [])],
           date: scheduleInfo ? scheduleInfo.date : new Date().toISOString().split('T')[0],
           nextFollowUp: scheduleInfo ? `${scheduleData.date}T${scheduleData.time}` : undefined,
+          // Add `priority` field
+          priority: scheduleInfo?.priority, 
           // Store structured data
           enquiryCategory: enquiryCategory,
           tripType: tripType,
@@ -492,7 +547,7 @@ Book now with OK BOZ Transport!`;
           transportData: enquiryCategory === 'Transport' ? transportDetails : undefined,
           estimatedPrice: enquiryCategory === 'Transport' ? estimatedCost : undefined,
         };
-        setEnquiries(prev => prev.map(e => e.id === editingOrderId ? updatedEnquiry : e));
+        newEnquiriesList = newEnquiriesList.map(e => e.id === editingOrderId ? updatedEnquiry : e);
         setEditingOrderId(null); // Exit edit mode
       } else {
         // Create new enquiry
@@ -512,6 +567,8 @@ Book now with OK BOZ Transport!`;
           date: scheduleInfo ? scheduleInfo.date : new Date().toISOString().split('T')[0],
           // Store scheduled time if applicable in details or meta field
           nextFollowUp: scheduleInfo ? `${scheduleData.date}T${scheduleData.time}` : undefined,
+          // Add `priority` field
+          priority: scheduleInfo?.priority, 
           // Store structured data
           enquiryCategory: enquiryCategory,
           tripType: tripType,
@@ -520,14 +577,15 @@ Book now with OK BOZ Transport!`;
           transportData: enquiryCategory === 'Transport' ? transportDetails : undefined,
           estimatedPrice: enquiryCategory === 'Transport' ? estimatedCost : undefined,
         };
-        setEnquiries(prev => [updatedEnquiry, ...prev]);
+        newEnquiriesList = [updatedEnquiry, ...newEnquiriesList];
       }
 
-      localStorage.setItem('global_enquiries_data', JSON.stringify(enquiries));
+      setEnquiries(newEnquiriesList); // Update React state
+      localStorage.setItem('global_enquiries_data', JSON.stringify(newEnquiriesList)); // Persist to local storage
 
       // Use setTimeout for alert to prevent UI blocking issues in certain environments
       setTimeout(() => {
-          alert(`Order ${status} Successfully!`);
+          alert(`${enquiryCategory === 'Transport' ? 'Order' : 'Enquiry'} ${status} Successfully!`);
       }, 0);
       
       // 5. Reset
@@ -536,6 +594,12 @@ Book now with OK BOZ Transport!`;
       setGeneratedMessage('');
       setEstimatedCost(0);
       setIsScheduleModalOpen(false);
+      setIsPhoneChecked(false); // Reset phone check
+      setPhoneLookupResult(null);
+      setExistingEnquiriesForPhone([]);
+      setGeneralFollowUpDate(new Date().toISOString().split('T')[0]);
+      setGeneralFollowUpTime('10:00');
+      setGeneralFollowUpPriority('Warm');
   };
 
   const handleBookNow = () => {
@@ -562,12 +626,32 @@ Book now with OK BOZ Transport!`;
       saveOrder('Scheduled', scheduleData);
   };
 
+  // --- NEW: Handle General Enquiry Follow-up Save ---
+  const handleSaveGeneralFollowUp = () => {
+    if (!customerDetails.name || !customerDetails.phone) {
+        setTimeout(() => alert("Please enter Customer Name and Phone."), 0);
+        return;
+    }
+    saveOrder('Scheduled', { 
+      date: generalFollowUpDate, 
+      time: generalFollowUpTime, 
+      priority: generalFollowUpPriority 
+    });
+  };
+
   const handleCancelForm = () => {
       setCustomerDetails({ name: '', phone: '', email: '', pickup: '', requirements: '' });
       setTransportDetails({ drop: '', estKm: '', waitingMins: '', packageId: '', destination: '', days: '1', estTotalKm: '', nights: '0' });
       setGeneratedMessage('');
       setEstimatedCost(0);
       setEditingOrderId(null); // Exit edit mode
+      setIsPhoneChecked(false); // Reset phone check
+      setPhoneLookupResult(null);
+      setExistingEnquiriesForPhone([]);
+      setGeneralFollowUpDate(new Date().toISOString().split('T')[0]);
+      setGeneralFollowUpTime('10:00');
+      setGeneralFollowUpPriority('Warm');
+
       setTimeout(() => alert("Form cleared."), 0);
   };
 
@@ -598,9 +682,11 @@ Book now with OK BOZ Transport!`;
       name: order.name,
       phone: order.phone,
       email: order.email || '',
-      // Extract pickup from details string using regex
-      pickup: (order.details.match(/Pickup: (.*?)(?: ->|\.|$)/)?.[1] || '').trim(),
-      requirements: order.details.includes('\nReq: ') ? order.details.split('\nReq: ')[1] : ''
+      // Extract pickup from details string using regex if transportData is not present
+      pickup: (order.enquiryCategory === 'Transport' && order.transportData && order.tripType === 'Local') 
+      ? (order.details.match(/Pickup: (.*?)(?: ->|\.|$)/)?.[1] || '').trim() // Correctly parse pickup for local trips if transportData exists
+      : (order.details.match(/Pickup: (.*?)(?: ->|\.|$)/)?.[1] || '').trim(), // Fallback for other cases or general details
+      requirements: order.enquiryCategory === 'General' ? order.details : (order.details.includes('\nReq: ') ? order.details.split('\nReq: ')[1] : '')
     });
 
     // Populate Enquiry Category
@@ -637,6 +723,21 @@ Book now with OK BOZ Transport!`;
         staffId: order.assignedTo || ''
     }));
 
+    // Populate General Enquiry Follow-up (if applicable)
+    if (order.enquiryCategory === 'General' && order.nextFollowUp) {
+        setGeneralFollowUpDate(order.nextFollowUp.split('T')[0]);
+        setGeneralFollowUpTime(order.nextFollowUp.split('T')[1]);
+        setGeneralFollowUpPriority(order.priority || 'Warm');
+    }
+
+
+    // Perform phone check to load history
+    const cleanNumber = order.phone.replace(/\D/g, '');
+    const previousEnquiries = enquiries.filter(e => e.phone.replace(/\D/g, '') === cleanNumber && e.id !== order.id);
+    setExistingEnquiriesForPhone(previousEnquiries);
+    setPhoneLookupResult(previousEnquiries.length > 0 ? 'Existing' : 'New');
+    setIsPhoneChecked(true);
+
     // Scroll to the top of the page/form
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -658,7 +759,8 @@ Book now with OK BOZ Transport!`;
       return enquiries.filter(e => {
           const matchesSearch = e.name.toLowerCase().includes(filterSearch.toLowerCase()) || 
                                 e.phone.includes(filterSearch) || 
-                                e.id.toLowerCase().includes(filterSearch.toLowerCase());
+                                e.id.toLowerCase().includes(filterSearch.toLowerCase()) ||
+                                e.details.toLowerCase().includes(filterSearch.toLowerCase()); // Search in details too
           
           const matchesStatus = filterStatus === 'All' || e.status === filterStatus;
           
@@ -670,6 +772,51 @@ Book now with OK BOZ Transport!`;
 
   // Determine if the user is an employee
   const isEmployee = role === UserRole.EMPLOYEE;
+
+  // --- NEW: Handle Phone Lookup in Input Form ---
+  const handlePhoneInputCheck = () => {
+    const cleanNumber = customerDetails.phone.replace(/\D/g, '');
+    if (cleanNumber.length < 5) {
+        setIsPhoneChecked(false);
+        setPhoneLookupResult(null);
+        setExistingEnquiriesForPhone([]);
+        return;
+    }
+
+    let foundEnquiry: Enquiry | undefined;
+    let foundVendor: any;
+
+    // 1. Check existing enquiries
+    const previousEnquiries = enquiries.filter(e => e.phone.replace(/\D/g, '') === cleanNumber);
+    if (previousEnquiries.length > 0) {
+        foundEnquiry = previousEnquiries[0]; // Take the first one to pre-fill
+        setExistingEnquiriesForPhone(previousEnquiries);
+    }
+
+    // 2. Check vendors
+    foundVendor = vendorsData.find(v => v.phone && v.phone.replace(/\D/g, '') === cleanNumber);
+
+    if (foundEnquiry || foundVendor) {
+        setPhoneLookupResult('Existing');
+        // Pre-fill from enquiry if found, else from vendor
+        const source = foundEnquiry || foundVendor;
+        setCustomerDetails(prev => ({
+            ...prev,
+            name: source.name || source.ownerName || '',
+            email: source.email || '',
+            // Do not overwrite pickup here, it's specific to the current form
+        }));
+    } else {
+        setPhoneLookupResult('New');
+        setCustomerDetails(prev => ({
+            ...prev,
+            name: '', // Clear name for new customer
+            email: '', // Clear email for new customer
+        }));
+        setExistingEnquiriesForPhone([]);
+    }
+    setIsPhoneChecked(true);
+  };
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
@@ -846,13 +993,34 @@ Book now with OK BOZ Transport!`;
                           value={customerDetails.name}
                           onChange={e => setCustomerDetails({...customerDetails, name: e.target.value})}
                       />
-                      <input 
-                          placeholder="Phone" 
-                          className="p-2 border rounded-lg w-full outline-none focus:ring-2 focus:ring-emerald-500"
-                          value={customerDetails.phone}
-                          onChange={e => setCustomerDetails({...customerDetails, phone: e.target.value})}
-                      />
+                      <div className="relative">
+                          <input 
+                              placeholder="Phone" 
+                              className="p-2 border rounded-lg w-full outline-none focus:ring-2 focus:ring-emerald-500 pr-10"
+                              value={customerDetails.phone}
+                              onChange={e => {
+                                  setCustomerDetails({...customerDetails, phone: e.target.value});
+                                  setIsPhoneChecked(false); // Reset check on input change
+                                  setPhoneLookupResult(null);
+                                  setExistingEnquiriesForPhone([]);
+                              }}
+                          />
+                          <button
+                            type="button"
+                            onClick={handlePhoneInputCheck}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-emerald-600"
+                            title="Check Phone Number"
+                          >
+                            <UserCheck className="w-4 h-4" />
+                          </button>
+                      </div>
                   </div>
+                  {isPhoneChecked && (
+                      <div className={`text-xs px-2 py-1 rounded-md mb-4 flex items-center gap-1 ${phoneLookupResult === 'Existing' ? 'bg-blue-50 text-blue-700' : 'bg-emerald-50 text-emerald-700'}`}>
+                          {phoneLookupResult === 'Existing' ? <CheckCircle className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
+                          {phoneLookupResult === 'Existing' ? 'Existing Customer/Vendor' : 'New Customer'}
+                      </div>
+                  )}
                   
                   {/* --- NEW PLACEMENT: Trip Details directly below Customer Info --- */}
                   <div className="mt-6 pt-6 border-t border-gray-100">
@@ -872,8 +1040,35 @@ Book now with OK BOZ Transport!`;
                       </div>
 
                       {enquiryCategory === 'General' ? (
-                          <div className="p-4 bg-gray-50 rounded-lg text-sm text-gray-500 italic text-center">
-                              Use this for general inquiries. <br/> Switch to Transport for fare calculation.
+                          <div className="space-y-4">
+                              <div className="p-4 bg-gray-50 rounded-lg text-sm text-gray-500 italic text-center">
+                                  Use this for general inquiries. <br/> Switch to Transport for fare calculation.
+                              </div>
+                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Requirement Details</label>
+                              <textarea 
+                                  rows={5}
+                                  className="w-full p-3 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 resize-y text-sm"
+                                  placeholder={phoneLookupResult === 'New' ? "New User Requirement Details" : "Enter new general requirements here..."}
+                                  value={customerDetails.requirements}
+                                  onChange={e => setCustomerDetails({...customerDetails, requirements: e.target.value})}
+                              />
+                              {isPhoneChecked && phoneLookupResult === 'Existing' && existingEnquiriesForPhone.length > 0 && (
+                                  <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 text-blue-800 text-sm space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
+                                      <h4 className="font-bold flex items-center gap-2"><History className="w-4 h-4"/> Past Enquiries for {customerDetails.name}</h4>
+                                      {existingEnquiriesForPhone.map((enq, idx) => (
+                                          <div key={enq.id} className="p-2 border-t border-blue-100 first:border-t-0">
+                                              <p className="font-medium text-xs flex items-center gap-2">
+                                                <Calendar className="w-3 h-3"/> {enq.date || enq.createdAt.split('T')[0]} 
+                                                <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${enq.status === 'Completed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                                                    {enq.status}
+                                                </span>
+                                                {enq.enquiryCategory === 'Transport' && <Car className="w-3 h-3 text-gray-500"/>}
+                                              </p>
+                                              <p className="text-xs text-blue-700 italic mt-1 line-clamp-2">"{enq.details}"</p>
+                                          </div>
+                                      ))}
+                                  </div>
+                              )}
                           </div>
                       ) : (
                           <div className="space-y-4">
@@ -989,16 +1184,19 @@ Book now with OK BOZ Transport!`;
 
                   {/* New Sections: Requirement Details & Assignments */}
                   <div className="mt-6 pt-6 border-t border-gray-100 space-y-5">
-                      <div>
-                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Requirement Details</label>
-                          <textarea 
-                              rows={2}
-                              className="w-full p-3 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 resize-none text-sm"
-                              placeholder="Special requests, extra luggage, etc..."
-                              value={customerDetails.requirements}
-                              onChange={e => setCustomerDetails({...customerDetails, requirements: e.target.value})}
-                          />
-                      </div>
+                      {/* 1. Requirement Details - ONLY for Transport */}
+                      {enquiryCategory === 'Transport' && (
+                          <div>
+                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Requirement Details</label>
+                              <textarea 
+                                  rows={2}
+                                  className="w-full p-3 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 resize-none text-sm"
+                                  placeholder="Special requests, extra luggage, etc..."
+                                  value={customerDetails.requirements}
+                                  onChange={e => setCustomerDetails({...customerDetails, requirements: e.target.value})}
+                              />
+                          </div>
+                      )}
 
                       {/* 2. Assign Enquiry To */}
                       <div>
@@ -1023,31 +1221,89 @@ Book now with OK BOZ Transport!`;
                           </div>
                       </div>
 
-                      {/* 3. Action Buttons - Updated Layout */}
-                      <div className="space-y-3 pt-2">
-                          <div className="grid grid-cols-2 gap-3">
-                              <button 
-                                  onClick={handleOpenSchedule}
-                                  className="py-3 border border-blue-200 text-blue-600 rounded-lg font-bold text-sm hover:bg-blue-50 transition-colors flex items-center justify-center gap-2"
-                              >
-                                  <Calendar className="w-4 h-4" /> {editingOrderId ? 'Update Schedule' : 'Schedule'}
-                              </button>
-                              <button 
-                                  onClick={handleBookNow}
-                                  className="py-3 bg-emerald-600 text-white rounded-lg font-bold text-sm hover:bg-emerald-700 transition-colors shadow-md flex items-center justify-center gap-2"
-                              >
-                                  <ArrowRight className="w-4 h-4" /> {editingOrderId ? 'Update Now' : 'Book Now'}
-                              </button>
+                      {/* 3. Action Buttons - Conditional Rendering */}
+                      {enquiryCategory === 'Transport' ? (
+                          <div className="space-y-3 pt-2">
+                              <div className="grid grid-cols-2 gap-3">
+                                  <button 
+                                      onClick={handleOpenSchedule}
+                                      className="py-3 border border-blue-200 text-blue-600 rounded-lg font-bold text-sm hover:bg-blue-50 transition-colors flex items-center justify-center gap-2"
+                                  >
+                                      <Calendar className="w-4 h-4" /> {editingOrderId ? 'Update Schedule' : 'Schedule'}
+                                  </button>
+                                  <button 
+                                      onClick={handleBookNow}
+                                      className="py-3 bg-emerald-600 text-white rounded-lg font-bold text-sm hover:bg-emerald-700 transition-colors shadow-md flex items-center justify-center gap-2"
+                                  >
+                                      <ArrowRight className="w-4 h-4" /> {editingOrderId ? 'Update Now' : 'Book Now'}
+                                  </button>
+                              </div>
+                              <div>
+                                  <button 
+                                      onClick={handleCancelForm}
+                                      className="w-full py-2 text-gray-400 hover:text-red-500 text-xs font-medium hover:bg-gray-50 transition-colors flex items-center justify-center gap-1 rounded-lg border border-transparent hover:border-gray-200"
+                                  >
+                                      <X className="w-3 h-3" /> Clear Form
+                                  </button>
+                              </div>
                           </div>
-                          <div>
-                              <button 
-                                  onClick={handleCancelForm}
-                                  className="w-full py-2 text-gray-400 hover:text-red-500 text-xs font-medium hover:bg-gray-50 transition-colors flex items-center justify-center gap-1 rounded-lg border border-transparent hover:border-gray-200"
-                              >
-                                  <X className="w-3 h-3" /> Clear Form
-                              </button>
+                      ) : (
+                          // --- NEW: General Enquiry Follow-up Section ---
+                          <div className="space-y-3 pt-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                            <h4 className="text-xs font-bold text-gray-500 uppercase flex items-center gap-2 mb-2">
+                                <Clock className="w-3 h-3" /> Set Follow-up
+                            </h4>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Date</label>
+                                    <input 
+                                        type="date" 
+                                        value={generalFollowUpDate}
+                                        onChange={e => setGeneralFollowUpDate(e.target.value)}
+                                        className="w-full p-2 border rounded-lg outline-none"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Time</label>
+                                    <input 
+                                        type="time" 
+                                        value={generalFollowUpTime}
+                                        onChange={e => setGeneralFollowUpTime(e.target.value)}
+                                        className="w-full p-2 border rounded-lg outline-none"
+                                    />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Priority</label>
+                                <div className="flex gap-2">
+                                    {['Hot', 'Warm', 'Cold'].map(p => (
+                                        <button 
+                                            key={p}
+                                            type="button"
+                                            onClick={() => setGeneralFollowUpPriority(p)}
+                                            className={`flex-1 py-2 text-xs font-bold rounded-lg border transition-colors ${generalFollowUpPriority === p ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                                        >
+                                            {p}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <button
+                                    onClick={handleCancelForm}
+                                    className="py-3 border border-gray-200 text-gray-700 rounded-lg font-bold text-sm hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
+                                >
+                                    <X className="w-4 h-4"/> Clear
+                                </button>
+                                <button 
+                                    onClick={handleSaveGeneralFollowUp}
+                                    className="py-3 bg-emerald-600 text-white rounded-lg font-bold text-sm hover:bg-emerald-700 transition-colors shadow-md flex items-center justify-center gap-2"
+                                >
+                                    <Save className="w-4 h-4" /> {editingOrderId ? 'Update Follow-up' : 'Save Follow-up'}
+                                </button>
+                            </div>
                           </div>
-                      </div>
+                      )}
                   </div>
               </div>
           </div>
@@ -1070,7 +1326,7 @@ Book now with OK BOZ Transport!`;
               <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
                   <div className="flex justify-between items-center mb-2">
                       <h4 className="font-bold text-gray-800 flex items-center gap-2">
-                          <MessageCircle className="w-4 h-4 text-emerald-500" /> Generated Message
+                          <MessageCircle className="w-4 h-4" /> Generated Message
                       </h4>
                       <button 
                           onClick={() => {navigator.clipboard.writeText(generatedMessage); setTimeout(() => alert("Copied!"), 0);}}
@@ -1080,7 +1336,7 @@ Book now with OK BOZ Transport!`;
                       </button>
                   </div>
                   <textarea 
-                      className="w-full h-40 p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none resize-none mb-3"
+                      className="w-full h-64 p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none resize-y mb-3"
                       value={generatedMessage}
                       readOnly
                   />
@@ -1153,6 +1409,10 @@ Book now with OK BOZ Transport!`;
                   <option value="Driver Assigned">Driver Assigned</option>
                   <option value="Completed">Completed</option>
                   <option value="Cancelled">Cancelled</option>
+                  <option value="New">New Enquiry</option>
+                  <option value="In Progress">In Progress Enquiry</option>
+                  <option value="Converted">Converted Enquiry</option>
+                  <option value="Closed">Closed Enquiry</option>
               </select>
               <input 
                   type="date"
@@ -1170,7 +1430,7 @@ Book now with OK BOZ Transport!`;
                           <tr>
                               <th className="px-6 py-4">Order ID / Date</th>
                               <th className="px-6 py-4">Customer</th>
-                              <th className="px-6 py-4">Trip Info</th>
+                              <th className="px-6 py-4">Trip/Enquiry Info</th>
                               <th className="px-6 py-4">Assigned To</th>
                               <th className="px-6 py-4">Status</th>
                               <th className="px-6 py-4 text-right">Actions</th>
@@ -1181,14 +1441,31 @@ Book now with OK BOZ Transport!`;
                               <tr key={order.id} className="hover:bg-gray-50 transition-colors">
                                   <td className="px-6 py-4">
                                       <div className="font-bold text-gray-900">{order.id}</div>
-                                      <div className="text-xs text-gray-500">{order.date || order.createdAt.split(',')[0]} {order.nextFollowUp ? `• ${order.nextFollowUp.split('T')[1].slice(0,5)}` : ''}</div>
+                                      <div className="text-xs text-gray-500">
+                                        {order.date || order.createdAt.split(',')[0]} 
+                                        {order.nextFollowUp ? ` • ${new Date(order.nextFollowUp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
+                                      </div>
                                   </td>
                                   <td className="px-6 py-4">
                                       <div className="font-medium text-gray-900">{order.name}</div>
                                       <div className="text-xs text-gray-500">{order.phone}</div>
                                   </td>
-                                  <td className="px-6 py-4 max-w-xs truncate" title={order.details}>
-                                      {order.details}
+                                  <td className="px-6 py-4 max-w-xs " title={order.details}>
+                                      <p className="truncate">{order.details}</p>
+                                      {order.enquiryCategory === 'General' && (
+                                          <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-full mt-1 inline-block">
+                                              General Enquiry
+                                          </span>
+                                      )}
+                                      {order.priority && order.enquiryCategory === 'General' && (
+                                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full mt-1 ml-1 inline-block ${
+                                              order.priority === 'Hot' ? 'bg-red-50 text-red-700' :
+                                              order.priority === 'Warm' ? 'bg-yellow-50 text-yellow-700' :
+                                              'bg-green-50 text-green-700'
+                                          }`}>
+                                              {order.priority}
+                                          </span>
+                                      )}
                                   </td>
                                   <td className="px-6 py-4 text-gray-600">
                                       {order.assignedTo || 'Unassigned'}
@@ -1198,7 +1475,9 @@ Book now with OK BOZ Transport!`;
                                           order.status === 'Completed' ? 'bg-green-50 text-green-700 border-green-200' :
                                           order.status === 'Cancelled' ? 'bg-red-50 text-red-700 border-red-200' :
                                           order.status === 'Scheduled' ? 'bg-orange-50 text-orange-700 border-orange-200' :
-                                          'bg-blue-50 text-blue-700 border-blue-200'
+                                          order.status === 'Order Accepted' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                          order.status === 'Driver Assigned' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' :
+                                          'bg-gray-50 text-gray-700 border-gray-200' // Default for New, In Progress, Converted, Closed
                                       }`}>
                                           {order.status}
                                       </span>
@@ -1214,7 +1493,7 @@ Book now with OK BOZ Transport!`;
                                           </button>
                                           {order.status !== 'Completed' && order.status !== 'Cancelled' && (
                                               <>
-                                                  {order.status !== 'Driver Assigned' && (
+                                                  {order.status !== 'Driver Assigned' && order.enquiryCategory === 'Transport' && (
                                                       <button 
                                                           onClick={() => handleStatusUpdate(order.id, 'Driver Assigned')}
                                                           className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200"
