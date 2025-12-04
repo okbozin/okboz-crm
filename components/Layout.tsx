@@ -301,7 +301,8 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
   const userLinks = [
     { path: '/user', label: 'My Attendance', icon: Calendar },
     { path: '/user/tasks', label: 'My Tasks', icon: ClipboardList },
-    { path: '/user/vehicle-enquiries', label: 'Vehicle Enquiries', icon: CarFront }, // Added Vehicle Enquiries
+    // { path: '/user/vehicle-enquiries', label: 'Vehicle Enquiries', icon: CarFront }, // Removed: Vehicle Enquiries for Employee
+    { path: '/user/customer-care', label: 'Customer Care', icon: Headset }, // Added: Customer Care for Employee
     { path: '/user/vendors', label: 'Vendor Attachment', icon: Car },
     { path: '/user/salary', label: 'My Salary', icon: DollarSign },
     { path: '/user/documents', label: 'Documents', icon: FileText },

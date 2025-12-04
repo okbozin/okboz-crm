@@ -145,7 +145,8 @@ const App: React.FC = () => {
                       />
                       <Route path="/admin/reception" element={<Reception />} />
                       {/* Vehicle Enquiries route removed */}
-                      <Route path="/admin/customer-care" element={<CustomerCare />} />
+                      {/* <Route path="/admin/vehicle-enquiries" element={<VehicleEnquiries />} /> */}
+                      <Route path="/admin/customer-care" element={<CustomerCare role={userRole} />} />
                       <Route path="/admin/trips" element={<TripBooking />} /> 
                       <Route path="/admin/tracking" element={<LiveTracking />} />
                       <Route path="/admin/leads" element={<Leads />} />
@@ -178,6 +179,8 @@ const App: React.FC = () => {
                       <Route path="/user" element={<UserAttendance />} />
                       <Route path="/user/tasks" element={<TaskManagement role={UserRole.EMPLOYEE} />} />
                       {/* Vehicle Enquiries route removed */}
+                      {/* <Route path="/user/vehicle-enquiries" element={<VehicleEnquiries />} /> */}
+                      <Route path="/user/customer-care" element={<CustomerCare role={UserRole.EMPLOYEE} />} />
                       <Route path="/user/vendors" element={<VendorAttachment />} />
                       <Route path="/user/salary" element={<UserSalary />} />
                       <Route path="/user/documents" element={<Documents role={UserRole.EMPLOYEE} />} />

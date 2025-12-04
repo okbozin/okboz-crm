@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Settings, Loader2, ArrowRight, ArrowRightLeft, 
@@ -7,7 +8,7 @@ import {
   Clock, CheckCircle, Filter, Search, ChevronDown, UserCheck, XCircle
 } from 'lucide-react';
 import Autocomplete from '../../components/Autocomplete';
-import { Enquiry, HistoryLog } from '../../types';
+import { Enquiry, HistoryLog, UserRole } from '../../types';
 
 // Types
 type TripType = 'Local' | 'Rental' | 'Outstation';
@@ -67,7 +68,11 @@ const getInitialEnquiries = (): Enquiry[] => {
   return saved ? JSON.parse(saved) : [];
 };
 
-export const CustomerCare: React.FC = () => {
+interface CustomerCareProps {
+  role: UserRole; // Add role prop
+}
+
+export const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
   const [showSettings, setShowSettings] = useState(false);
   const [settingsVehicleType, setSettingsVehicleType] = useState<VehicleType>('Sedan');
   
@@ -663,6 +668,9 @@ Book now with OK BOZ Transport!`;
       });
   }, [enquiries, filterSearch, filterStatus, filterDate]);
 
+  // Determine if the user is an employee
+  const isEmployee = role === UserRole.EMPLOYEE;
+
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       <div className="flex justify-between items-center">
@@ -672,14 +680,17 @@ Book now with OK BOZ Transport!`;
           </h2>
           <p className="text-gray-500">Create bookings and manage order lifecycle</p>
         </div>
-        <div className="flex gap-2">
-            <button 
-                onClick={() => setShowSettings(!showSettings)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${showSettings ? 'bg-slate-800 text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}`}
-            >
-                <Settings className="w-4 h-4" /> {showSettings ? 'Hide Rates' : 'Edit Rates'}
-            </button>
-        </div>
+        {/* Conditionally render "Edit Rates" button - Hidden for employees */}
+        {!isEmployee && ( 
+          <div className="flex gap-2">
+              <button 
+                  onClick={() => setShowSettings(!showSettings)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${showSettings ? 'bg-slate-800 text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}`}
+              >
+                  <Settings className="w-4 h-4" /> {showSettings ? 'Hide Rates' : 'Edit Rates'}
+              </button>
+          </div>
+        )}
       </div>
 
       {/* SETTINGS PANEL (Hidden by default) */}
