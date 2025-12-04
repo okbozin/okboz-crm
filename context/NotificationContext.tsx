@@ -15,6 +15,8 @@ const NotificationContext = createContext<NotificationContextType | undefined>(u
 
 const NOTIFICATION_STORAGE_KEY = 'app_notifications_cache';
 const LAST_PLAYED_COUNT_KEY = 'app_last_played_notification_count';
+// Use a reliable hosted sound file for notifications
+const NOTIFICATION_SOUND_URL = 'https://assets.mixkit.co/sfx/preview/mixkit-positive-notification-951.mp3';
 
 export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [notifications, setNotifications] = useState<Notification[]>(() => {
@@ -27,38 +29,53 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     }
   });
   const unreadCount = notifications.filter(n => !n.read).length;
+  
+  // Ref for audio element (used for preloading)
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  
   const lastPlayedCountRef = useRef<number>(
     parseInt(localStorage.getItem(LAST_PLAYED_COUNT_KEY) || '0', 10)
   );
 
   // Play alarm sound if new notifications appear
   const playAlarmSound = useCallback(() => {
-    if (audioRef.current) {
+    try {
       // Create a new Audio object to ensure it plays even if one is already playing/paused
-      const audio = new Audio('/notification.mp3'); // Assuming notification.mp3 exists in public folder
-      audio.play().catch(e => console.warn("Failed to play notification sound:", e));
+      // This allows overlapping sounds if multiple notifications come in quick succession
+      const audio = new Audio(NOTIFICATION_SOUND_URL);
+      audio.volume = 0.6; // Moderate volume
+      const playPromise = audio.play();
+      
+      if (playPromise !== undefined) {
+        playPromise.catch(e => {
+            // Auto-play might be blocked if user hasn't interacted with document yet
+            console.warn("Notification sound playback failed (interaction required):", e);
+        });
+      }
+    } catch (e) {
+      console.error("Error creating/playing audio:", e);
     }
   }, []);
 
   // Effect to manage sound playing and last played count
   useEffect(() => {
+    // Only play if unread count INCREASED (new notification)
     if (unreadCount > lastPlayedCountRef.current) {
       playAlarmSound();
-      // Update ref and local storage after playing sound for new notifications
-      lastPlayedCountRef.current = unreadCount;
-      localStorage.setItem(LAST_PLAYED_COUNT_KEY, unreadCount.toString());
-    } else if (unreadCount < lastPlayedCountRef.current) {
-      // If notifications were read or cleared, reset lastPlayedCountRef
-      lastPlayedCountRef.current = unreadCount;
-      localStorage.setItem(LAST_PLAYED_COUNT_KEY, unreadCount.toString());
+    }
+    
+    // Always update ref and storage to current count
+    // If count decreased (read), we update so next increase triggers sound
+    if (unreadCount !== lastPlayedCountRef.current) {
+        lastPlayedCountRef.current = unreadCount;
+        localStorage.setItem(LAST_PLAYED_COUNT_KEY, unreadCount.toString());
     }
   }, [unreadCount, playAlarmSound]);
 
 
   // Polling mechanism to fetch notifications
   useEffect(() => {
-    let timeoutId: number; // Changed NodeJS.Timeout to number
+    let timeoutId: number;
 
     const pollNotifications = async () => {
       try {
@@ -70,16 +87,15 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
           );
           const updatedExisting = prevNotifications.map(pn => {
             const fetched = fetchedNotifications.find(fn => fn.id === pn.id);
-            return fetched ? { ...pn, read: fetched.read } : pn; // Update read status
+            return fetched ? { ...pn, read: fetched.read } : pn;
           });
 
           const mergedNotifications = [
-            ...newNotifications.map(n => ({ ...n, read: false, timestamp: n.timestamp || new Date().toISOString() })), // New notifications start unread, ensure timestamp
-            ...updatedExisting.filter(pn => fetchedNotifications.some(fn => fn.id === pn.id)), // Keep updated existing
-            ...prevNotifications.filter(pn => !fetchedNotifications.some(fn => fn.id === pn.id)) // Keep local-only if not in fetched
+            ...newNotifications.map(n => ({ ...n, read: false, timestamp: n.timestamp || new Date().toISOString() })), 
+            ...updatedExisting.filter(pn => fetchedNotifications.some(fn => fn.id === pn.id)), 
+            ...prevNotifications.filter(pn => !fetchedNotifications.some(fn => fn.id === pn.id)) 
           ];
           
-          // Filter out duplicates and sort by timestamp
           const uniqueAndSorted = Array.from(new Map(mergedNotifications.map(n => [n.id, n])).values())
             .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
@@ -97,7 +113,7 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     return () => clearTimeout(timeoutId); // Cleanup on unmount
   }, []);
 
-  // Persist notifications to local storage whenever they change
+  // Persist notifications to local storage
   useEffect(() => {
     localStorage.setItem(NOTIFICATION_STORAGE_KEY, JSON.stringify(notifications));
   }, [notifications]);
@@ -127,8 +143,8 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
       }}
     >
       {children}
-      {/* Hidden audio element for notification sound */}
-      <audio ref={audioRef} src="/notification.mp3" preload="auto" />
+      {/* Hidden audio element to help with preloading */}
+      <audio ref={audioRef} src={NOTIFICATION_SOUND_URL} preload="auto" style={{ display: 'none' }} />
     </NotificationContext.Provider>
   );
 };
