@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Settings, Loader2, ArrowRight, ArrowRightLeft, 
   MessageCircle, Copy, Mail, Car, User, Edit2,
@@ -115,6 +115,9 @@ export const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
 
   const [generatedMessage, setGeneratedMessage] = useState('');
   const [estimatedCost, setEstimatedCost] = useState(0);
+
+  // Ref for the generated message textarea for auto-resizing
+  const messageTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   // --- Assignment Data ---
   const [corporates, setCorporates] = useState<any[]>([]);
@@ -480,6 +483,15 @@ Book now with OK BOZ Transport!`;
       setGeneratedMessage(msg);
   }, [estimatedCost, customerDetails, transportDetails, tripType, vehicleType, pricing, rentalPackages, enquiryCategory, outstationSubType]);
 
+  // Effect to auto-resize the textarea
+  useEffect(() => {
+    if (messageTextareaRef.current) {
+      messageTextareaRef.current.style.height = 'auto';
+      messageTextareaRef.current.style.height = messageTextareaRef.current.scrollHeight + 'px';
+    }
+  }, [generatedMessage]);
+
+
   const saveOrder = (status: OrderStatus, scheduleInfo?: { date: string, time: string, priority?: 'Hot' | 'Warm' | 'Cold' }) => {
       if (!customerDetails.name || !customerDetails.phone) {
           setTimeout(() => alert("Please enter Customer Name and Phone."), 0);
@@ -493,6 +505,7 @@ Book now with OK BOZ Transport!`;
           if (tripType === 'Local') detailsText += `Pickup: ${customerDetails.pickup} -> Drop: ${transportDetails.drop}. Dist: ${transportDetails.estKm}km.`;
           if (tripType === 'Rental') {
               const pkg = rentalPackages.find(p => p.id === transportDetails.packageId);
+              // Fix: Changed transportDetails.pickup to customerDetails.pickup
               detailsText += `Package: ${pkg?.name}. Pickup: ${customerDetails.pickup}.`;
           }
           if (tripType === 'Outstation') detailsText += `Dest: ${transportDetails.destination}. ${transportDetails.days} Days. Pickup: ${customerDetails.pickup}.`;
@@ -683,8 +696,8 @@ Book now with OK BOZ Transport!`;
       phone: order.phone,
       email: order.email || '',
       // Extract pickup from details string using regex if transportData is not present
-      pickup: (order.enquiryCategory === 'Transport' && order.transportData && order.tripType === 'Local') 
-      ? (order.details.match(/Pickup: (.*?)(?: ->|\.|$)/)?.[1] || '').trim() // Correctly parse pickup for local trips if transportData exists
+      pickup: (order.enquiryCategory === 'Transport' && order.transportData) 
+      ? (order.transportData.pickup || (order.details.match(/Pickup: (.*?)(?: ->|\.|$)/)?.[1] || '')).trim()
       : (order.details.match(/Pickup: (.*?)(?: ->|\.|$)/)?.[1] || '').trim(), // Fallback for other cases or general details
       requirements: order.enquiryCategory === 'General' ? order.details : (order.details.includes('\nReq: ') ? order.details.split('\nReq: ')[1] : '')
     });
@@ -1336,7 +1349,8 @@ Book now with OK BOZ Transport!`;
                       </button>
                   </div>
                   <textarea 
-                      className="w-full h-64 p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none resize-y mb-3"
+                      ref={messageTextareaRef}
+                      className="w-full min-h-[200px] p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none overflow-y-hidden resize-none mb-3"
                       value={generatedMessage}
                       readOnly
                   />
@@ -1458,7 +1472,7 @@ Book now with OK BOZ Transport!`;
                                           </span>
                                       )}
                                       {order.priority && order.enquiryCategory === 'General' && (
-                                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full mt-1 ml-1 inline-block ${
+                                          <span className={`px-1.5 py-0.5 rounded-full mt-1 ml-1 inline-block text-[10px] font-bold ${
                                               order.priority === 'Hot' ? 'bg-red-50 text-red-700' :
                                               order.priority === 'Warm' ? 'bg-yellow-50 text-yellow-700' :
                                               'bg-green-50 text-green-700'
