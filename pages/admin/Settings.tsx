@@ -1,10 +1,10 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Settings as SettingsIcon, Lock as LockIcon, 
   LogOut, Cloud, Database, Globe, Palette, Save,
   UploadCloud, DownloadCloud, Loader2, Map as MapIcon, Check,
-  Users, Target, Building2, Car, Wallet, MapPin, Truck, Layers, RefreshCw
+  Users, Target, Building2, Car, Wallet, MapPin, Truck, Layers, RefreshCw, Eye,
+  Phone, DollarSign, Plane, Briefcase as BriefcaseIcon, Clock, Calendar, X
 } from 'lucide-react';
 import { 
   HARDCODED_FIREBASE_CONFIG, getCloudDatabaseStats,
@@ -28,6 +28,13 @@ const Settings: React.FC = () => {
   const [mapsKey, setMapsKey] = useState(localStorage.getItem('maps_api_key') || '');
   const [showMapsInput, setShowMapsInput] = useState(false);
 
+  // Collection Viewer Modal State
+  const [showCollectionViewer, setShowCollectionViewer] = useState(false);
+  const [currentViewingCollection, setCurrentViewingCollection] = useState<string | null>(null);
+  const [collectionContent, setCollectionContent] = useState<any[] | string | null>(null);
+  const [collectionError, setCollectionError] = useState<string | null>(null);
+
+
   const isPermanent = !!(HARDCODED_FIREBASE_CONFIG.apiKey && HARDCODED_FIREBASE_CONFIG.apiKey.length > 5);
 
   useEffect(() => {
@@ -47,28 +54,51 @@ const Settings: React.FC = () => {
         { key: 'office_expenses', label: 'Office Expenses', icon: Wallet, color: 'text-gray-600' },
         { key: 'branches_data', label: 'Branches', icon: MapPin, color: 'text-gray-600' },
         { key: 'trips_data', label: 'Trips', icon: Truck, color: 'text-gray-600' },
+        { key: 'global_enquiries_data', label: 'Customer Enquiries', icon: Globe, color: 'text-gray-600' },
+        { key: 'call_enquiries_history', label: 'Call History', icon: Phone, color: 'text-gray-600' },
+        { key: 'reception_recent_transfers', label: 'Reception Transfers', icon: Layers, color: 'text-gray-600' },
+        { key: 'payroll_history', label: 'Payroll History', icon: DollarSign, color: 'text-gray-600' },
+        { key: 'leave_history', label: 'Leave History', icon: Plane, color: 'text-gray-600' },
+        { key: 'app_settings', label: 'App Settings', icon: SettingsIcon, color: 'text-gray-600' },
+        { key: 'transport_pricing_rules_v2', label: 'Transport Prices', icon: Car, color: 'text-gray-600' },
+        { key: 'transport_rental_packages_v2', label: 'Rental Packages', icon: BriefcaseIcon, color: 'text-gray-600' },
+        { key: 'company_departments', label: 'Departments', icon: Building2, color: 'text-gray-600' },
+        { key: 'company_roles', label: 'Roles', icon: BriefcaseIcon, color: 'text-gray-600' },
+        { key: 'company_shifts', label: 'Shifts', icon: Clock, color: 'text-gray-600' },
+        { key: 'company_payout_dates', label: 'Payout Dates', icon: Calendar, color: 'text-gray-600' },
+        { key: 'company_global_payout_day', label: 'Global Payout Day', icon: Calendar, color: 'text-gray-600' },
+        { key: 'salary_advances', label: 'Salary Advances', icon: Wallet, color: 'text-gray-600' },
+        { key: 'app_branding', label: 'App Branding', icon: Palette, color: 'text-gray-600' },
+        { key: 'app_theme', label: 'App Theme', icon: Palette, color: 'text-gray-600' },
+        { key: 'maps_api_key', label: 'Maps API Key', icon: MapIcon, color: 'text-gray-600' },
     ];
 
     return collections.map(col => {
         // Get Local Count
-        let localCount = 0;
+        let localCount: string | number = 0; // Initialize with compatible type
+        let localContent: any = null;
+        let localStr: string | null = null; // Declare localStr outside try block
         try {
-            const localStr = localStorage.getItem(col.key);
+            localStr = localStorage.getItem(col.key);
             if (localStr) {
-                const parsed = JSON.parse(localStr);
-                localCount = Array.isArray(parsed) ? parsed.length : 0;
+                localContent = JSON.parse(localStr);
+                localCount = Array.isArray(localContent) ? localContent.length : 1; // Count 1 for non-array settings
             }
-        } catch(e) {}
+        } catch(e) {
+            localCount = 'Err'; // Indicate parsing error
+            localContent = localStr; // Store raw string if error
+        }
 
         // Get Cloud Count
         let cloudCount: string | number = '-';
         if (cloudData && cloudData[col.key]) {
-            cloudCount = cloudData[col.key].count;
+            cloudCount = cloudData[col.key].count as string | number; // Explicitly cast to resolve type issue if any
         }
 
         return {
             ...col,
             local: localCount,
+            localContent: localContent, // Store content for viewer
             cloud: cloudCount,
             status: 'Synced' // Assuming synced if connected for UI demo
         };
@@ -133,6 +163,33 @@ const Settings: React.FC = () => {
         }
         setIsRestoring(false);
     }
+  };
+
+  const handleViewCollection = (collectionKey: string, content: any) => {
+    setCurrentViewingCollection(collectionKey);
+    setCollectionError(null);
+
+    if (content === null || content === undefined || (typeof content === 'string' && content.trim() === '')) {
+        setCollectionContent("No data available locally.");
+    } else if (typeof content === 'string') {
+        try {
+            const parsed = JSON.parse(content);
+            setCollectionContent(parsed);
+        } catch (e) {
+            setCollectionContent(content); // Fallback to raw string if not valid JSON
+            setCollectionError("Content is not valid JSON.");
+        }
+    } else {
+        setCollectionContent(content);
+    }
+    setShowCollectionViewer(true);
+  };
+
+  const closeCollectionViewer = () => {
+    setShowCollectionViewer(false);
+    setCurrentViewingCollection(null);
+    setCollectionContent(null);
+    setCollectionError(null);
   };
 
   return (
@@ -321,6 +378,14 @@ const Settings: React.FC = () => {
                               </div>
                           </div>
                       </div>
+                      <div className="mt-4">
+                          <button 
+                              onClick={() => handleViewCollection(stat.key, stat.localContent)}
+                              className="w-full px-4 py-2 bg-blue-50 text-blue-600 text-sm font-medium rounded-lg hover:bg-blue-100 transition-colors flex items-center justify-center gap-2"
+                          >
+                              <Eye className="w-4 h-4" /> View Items
+                          </button>
+                      </div>
                   </div>
               ))}
           </div>
@@ -358,7 +423,7 @@ const Settings: React.FC = () => {
                                value={mapsKey}
                                onChange={(e) => setMapsKey(e.target.value)}
                                placeholder="Paste your AIza... API Key here"
-                               className="flex-1 p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none font-mono"
+                               className="flex-1 p-2 border border-gray-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-blue-500 outline-none"
                            />
                            <button 
                                onClick={handleSaveMapsKey}
@@ -373,6 +438,63 @@ const Settings: React.FC = () => {
             </div>
          </div>
       </div>
+
+      {/* Collection Viewer Modal */}
+      {showCollectionViewer && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl h-[85vh] flex flex-col animate-in fade-in zoom-in duration-200">
+            <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-2xl">
+              <h3 className="font-bold text-gray-800">Viewing Collection: {currentViewingCollection}</h3>
+              <button onClick={closeCollectionViewer} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-6 text-sm bg-gray-50 text-gray-800 font-mono">
+                {collectionError ? (
+                    <div className="bg-red-50 text-red-600 p-4 rounded-lg border border-red-100 text-center">
+                        {collectionError}
+                    </div>
+                ) : (
+                    <>
+                        {Array.isArray(collectionContent) ? (
+                            collectionContent.length > 0 ? (
+                                <ul className="space-y-3">
+                                    {collectionContent.map((item, index) => (
+                                        <li key={index} className="bg-white p-3 rounded-lg border border-gray-100 shadow-sm">
+                                            <pre className="whitespace-pre-wrap break-all text-xs">
+                                                {JSON.stringify(item, null, 2)}
+                                            </pre>
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : (
+                                <p className="text-center text-gray-500">This collection is empty.</p>
+                            )
+                        ) : (
+                            typeof collectionContent === 'object' && collectionContent !== null ? (
+                                <pre className="whitespace-pre-wrap break-all text-xs">
+                                    {JSON.stringify(collectionContent, null, 2)}
+                                </pre>
+                            ) : (
+                                <p className="text-center text-gray-500">{collectionContent || "No content available."}</p>
+                            )
+                        )}
+                    </>
+                )}
+            </div>
+
+            <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-end rounded-b-2xl">
+              <button 
+                onClick={closeCollectionViewer} 
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors shadow-sm"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
@@ -145,11 +144,7 @@ const App: React.FC = () => {
                         element={userRole === UserRole.ADMIN ? <EmailMarketing /> : <Navigate to="/admin" replace />} 
                       />
                       <Route path="/admin/reception" element={<Reception />} />
-                      {/* Vehicle Enquiries - Only Super Admin */}
-                      <Route 
-                        path="/admin/vehicle-enquiries" 
-                        element={userRole === UserRole.ADMIN ? <VehicleEnquiries /> : <Navigate to="/admin" replace />} 
-                      />
+                      {/* Vehicle Enquiries route removed */}
                       <Route path="/admin/customer-care" element={<CustomerCare />} />
                       <Route path="/admin/trips" element={<TripBooking />} /> 
                       <Route path="/admin/tracking" element={<LiveTracking />} />
@@ -182,7 +177,7 @@ const App: React.FC = () => {
                     <>
                       <Route path="/user" element={<UserAttendance />} />
                       <Route path="/user/tasks" element={<TaskManagement role={UserRole.EMPLOYEE} />} />
-                      <Route path="/user/vehicle-enquiries" element={<VehicleEnquiries />} /> 
+                      {/* Vehicle Enquiries route removed */}
                       <Route path="/user/vendors" element={<VendorAttachment />} />
                       <Route path="/user/salary" element={<UserSalary />} />
                       <Route path="/user/documents" element={<Documents role={UserRole.EMPLOYEE} />} />

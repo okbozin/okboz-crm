@@ -1,6 +1,7 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
-import { Users, UserCheck, UserX, MapPin, ArrowRight, Building2, Car, TrendingUp, DollarSign, Clock, BarChart3, Calendar, Truck, CheckCircle } from 'lucide-react';
+// @google/genai: Add missing import for Headset
+import { Users, UserCheck, UserX, MapPin, ArrowRight, Building2, Car, TrendingUp, DollarSign, Clock, BarChart3, Calendar, Truck, CheckCircle, Headset } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, AreaChart, Area } from 'recharts';
 import { useNavigate } from 'react-router-dom';
 import { MOCK_EMPLOYEES, getEmployeeAttendance } from '../../constants';
@@ -605,9 +606,11 @@ const Dashboard = () => {
                       <button onClick={() => navigate('/admin/trips')} className="w-full py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm font-medium transition-colors text-left px-4 flex items-center gap-2">
                           <Truck className="w-4 h-4 text-emerald-400" /> Book New Trip
                       </button>
-                      <button onClick={() => navigate('/admin/vehicle-enquiries')} className="w-full py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm font-medium transition-colors text-left px-4 flex items-center gap-2">
-                          <Car className="w-4 h-4 text-blue-400" /> Create Transport Quote
+                      
+                      <button onClick={() => navigate('/admin/customer-care')} className="w-full py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm font-medium transition-colors text-left px-4 flex items-center gap-2">
+                          <Headset className="w-4 h-4 text-blue-400" /> Create Transport Quote
                       </button>
+                      
                       <button onClick={() => navigate('/admin/attendance')} className="w-full py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm font-medium transition-colors text-left px-4 flex items-center gap-2">
                           <Calendar className="w-4 h-4 text-orange-400" /> Mark Attendance
                       </button>
