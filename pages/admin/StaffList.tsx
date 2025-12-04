@@ -16,7 +16,7 @@ interface DisplayEmployee extends Employee {
     franchiseId?: string;
 }
 
-const StaffList = () => {
+const StaffList: React.FC = () => {
   // Determine Session Context
   const getSessionKey = (key: string) => {
      const sessionId = localStorage.getItem('app_session_id') || 'admin';
@@ -178,7 +178,7 @@ const StaffList = () => {
     } else {
         // For Super Admin, we only save 'Head Office' staff back to 'staff_data' to avoid overwriting franchise data with the whole list
         const headOfficeStaff = employees.filter(e => e.franchiseName === 'Head Office');
-        // Strip the injected IDs before saving to keep data clean
+        // Strip metadata before saving to keep data clean
         const cleanStaff = headOfficeStaff.map(({franchiseName, franchiseId, ...rest}) => rest);
         localStorage.setItem('staff_data', JSON.stringify(cleanStaff));
     }
@@ -216,7 +216,7 @@ const StaffList = () => {
     // Attendance Config
     gpsGeofencing: true,
     qrScan: false,
-    manualPunch: false
+    manualPunch: true // Default Manual Punch (Web) to true
   };
 
   const [formData, setFormData] = useState(initialFormState);
@@ -281,7 +281,7 @@ const StaffList = () => {
                   attendanceConfig: {
                       gpsGeofencing: true,
                       qrScan: false,
-                      manualPunch: false
+                      manualPunch: true // Default for imported staff
                   }
               });
           }
@@ -341,7 +341,7 @@ const StaffList = () => {
       liveTracking: employee.liveTracking || false,
       gpsGeofencing: employee.attendanceConfig?.gpsGeofencing ?? !employee.allowRemotePunch ?? true,
       qrScan: employee.attendanceConfig?.qrScan ?? false,
-      manualPunch: employee.attendanceConfig?.manualPunch ?? false,
+      manualPunch: employee.attendanceConfig?.manualPunch ?? true, // Keep it true when editing
     });
     setEditingId(employee.id);
     setShowPassword(false);
