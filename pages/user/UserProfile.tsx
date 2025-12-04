@@ -2,7 +2,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   User, Mail, Phone, MapPin, Briefcase, Calendar, CreditCard, Shield, 
-  Edit2, AlertCircle, Lock, CheckCircle, Eye, EyeOff, Building, Heart, Baby, BookUser, Home
+  Edit2, AlertCircle, Lock, CheckCircle, Eye, EyeOff, Building, Heart, Baby, BookUser, Home,
+  Clock, Settings // Added Clock and Settings imports
 } from 'lucide-react';
 import { MOCK_EMPLOYEES } from '../../constants';
 import { Employee, CorporateAccount } from '../../types';
@@ -236,196 +237,257 @@ const UserProfile: React.FC = () => {
               </span>
             </div>
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 border-t border-gray-100">
-             <div className="flex flex-col gap-1">
-               <span className="text-xs text-gray-400 uppercase tracking-wider font-semibold">Employee ID</span>
-               <span className="font-mono text-gray-800 font-medium">{user.id}</span>
-             </div>
-             <div className="flex flex-col gap-1">
-               <span className="text-xs text-gray-400 uppercase tracking-wider font-semibold">Date of Joining</span>
-               <span className="text-gray-800 font-medium flex items-center gap-2">
-                 <Calendar className="w-4 h-4 text-emerald-500" />
-                 {new Date(user.joiningDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-               </span>
-             </div>
-             <div className="flex flex-col gap-1">
-               <span className="text-xs text-gray-400 uppercase tracking-wider font-semibold">Department</span>
-               <span className="text-gray-800 font-medium flex items-center gap-2">
-                 <Briefcase className="w-4 h-4 text-emerald-500" />
-                 {user.department}
-               </span>
-             </div>
-          </div>
         </div>
       </div>
+      
+      {/* My Employment Details Card - Directly below profile header */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+         <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2">
+           <Briefcase className="w-5 h-5 text-emerald-500" />
+           My Employment Details
+         </h3>
+         
+         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex items-start gap-4 p-3 bg-gray-50 rounded-lg">
+               <User className="w-5 h-5 text-gray-400 mt-0.5" />
+               <div className="flex-1">
+                  <p className="text-xs text-gray-500 mb-0.5">Employee ID</p>
+                  <p className="text-gray-800 font-medium font-mono">{user.id}</p>
+               </div>
+            </div>
+            <div className="flex items-start gap-4 p-3 bg-gray-50 rounded-lg">
+               <Calendar className="w-5 h-5 text-gray-400 mt-0.5" />
+               <div className="flex-1">
+                  <p className="text-xs text-gray-500 mb-0.5">Date of Joining</p>
+                  <p className="text-gray-800 font-medium">{new Date(user.joiningDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
+               </div>
+            </div>
+            <div className="flex items-start gap-4 p-3 bg-gray-50 rounded-lg">
+               <Briefcase className="w-5 h-5 text-gray-400 mt-0.5" />
+               <div className="flex-1">
+                  <p className="text-xs text-gray-500 mb-0.5">Department</p>
+                  <p className="text-gray-800 font-medium">{user.department || 'N/A'}</p>
+               </div>
+            </div>
+            <div className="flex items-start gap-4 p-3 bg-gray-50 rounded-lg">
+               <BookUser className="w-5 h-5 text-gray-400 mt-0.5" />
+               <div className="flex-1">
+                  <p className="text-xs text-gray-500 mb-0.5">Job Role</p>
+                  <p className="text-gray-800 font-medium">{user.role || 'N/A'}</p>
+               </div>
+            </div>
+            <div className="flex items-start gap-4 p-3 bg-gray-50 rounded-lg">
+               <Building className="w-5 h-5 text-gray-400 mt-0.5" />
+               <div className="flex-1">
+                  <p className="text-xs text-gray-500 mb-0.5">Assigned Branch</p>
+                  <p className="text-gray-800 font-medium">{user.branch || 'N/A'}</p>
+               </div>
+            </div>
+            <div className="flex items-start gap-4 p-3 bg-gray-50 rounded-lg">
+               <Clock className="w-5 h-5 text-gray-400 mt-0.5" />
+               <div className="flex-1">
+                  <p className="text-xs text-gray-500 mb-0.5">Working Hours (Shift)</p>
+                  <p className="text-gray-800 font-medium">{user.workingHours || 'N/A'}</p>
+               </div>
+            </div>
+            <div className="flex items-start gap-4 p-3 bg-gray-50 rounded-lg">
+               <Calendar className="w-5 h-5 text-gray-400 mt-0.5" />
+               <div className="flex-1">
+                  <p className="text-xs text-gray-500 mb-0.5">Weekly Off</p>
+                  <p className="text-gray-800 font-medium">{user.weekOff || 'N/A'}</p>
+               </div>
+            </div>
+            {user.corporateId && user.corporateId !== 'admin' && (
+                <div className="flex items-start gap-4 p-3 bg-gray-50 rounded-lg">
+                    <Building className="w-5 h-5 text-gray-400 mt-0.5" />
+                    <div className="flex-1">
+                        <p className="text-xs text-gray-500 mb-0.5">Corporate / Franchise</p>
+                        <p className="text-gray-800 font-medium">{user.corporateId || 'N/A'}</p>
+                    </div>
+                </div>
+            )}
+         </div>
+      </div>
 
-      <form onSubmit={handleSaveProfile}> {/* Wrap profile sections in a form */}
+      {/* My Personal Settings Form */}
+      <form onSubmit={handleSaveProfile} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2">
+          <Settings className="w-5 h-5 text-emerald-500" />
+          My Personal Settings
+        </h3>
+        
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Personal Information */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-             <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2">
-               <User className="w-5 h-5 text-emerald-500" />
-               Personal Information
-             </h3>
-             <div className="space-y-4">
+          <section className="space-y-4">
+            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2 pb-2 border-b border-gray-100">
+              <User className="w-4 h-4 text-emerald-500"/> Basic Info
+            </h4>
+            <div className="flex items-start gap-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
+               <User className="w-5 h-5 text-gray-400 mt-0.5" />
+               <div className="flex-1">
+                  <p className="text-xs text-gray-500 mb-0.5">Full Name</p>
+                  <input 
+                      type="text" 
+                      name="name"
+                      value={user.name || ''} 
+                      readOnly={true}
+                      className="w-full p-1 border-b border-gray-300 focus:outline-none focus:border-emerald-500 bg-transparent text-gray-800 font-medium"
+                  />
+               </div>
+            </div>
+            <div className="flex items-start gap-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
+               <Mail className="w-5 h-5 text-gray-400 mt-0.5" />
+               <div className="flex-1">
+                  <p className="text-xs text-gray-500 mb-0.5">Email Address</p>
+                  {isEditingProfile ? (
+                      <input 
+                          type="email" 
+                          name="email"
+                          value={profileFormData.email || ''} 
+                          onChange={handleProfileInputChange}
+                          className="w-full p-1 border-b border-gray-300 focus:outline-none focus:border-emerald-500 bg-transparent text-gray-800 font-medium"
+                      />
+                  ) : (
+                      <p className="text-gray-800 font-medium break-all">{user.email || 'Not Provided'}</p>
+                  )}
+               </div>
+            </div>
+            <div className="flex items-start gap-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
+               <Phone className="w-5 h-5 text-gray-400 mt-0.5" />
+               <div className="flex-1">
+                  <p className="text-xs text-gray-500 mb-0.5">Phone Number</p>
+                  <input 
+                      type="tel" 
+                      name="phone"
+                      value={user.phone || ''} 
+                      readOnly={true}
+                      className="w-full p-1 border-b border-gray-300 focus:outline-none focus:border-emerald-500 bg-transparent text-gray-800 font-medium"
+                  />
+               </div>
+            </div>
+            <div className="flex items-start gap-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
+               <Calendar className="w-5 h-5 text-gray-400 mt-0.5" />
+               <div className="flex-1">
+                  <p className="text-xs text-gray-500 mb-0.5">Date of Birth</p>
+                  {isEditingProfile ? (
+                      <input 
+                          type="date" 
+                          name="dob"
+                          value={profileFormData.dob || ''} 
+                          onChange={handleProfileInputChange}
+                          className="w-full p-1 border-b border-gray-300 focus:outline-none focus:border-emerald-500 bg-transparent text-gray-800 font-medium"
+                      />
+                  ) : (
+                      <p className="text-gray-800 font-medium">{user.dob || 'Not Provided'}</p>
+                  )}
+               </div>
+            </div>
+            <div className="flex items-start gap-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
+               <BookUser className="w-5 h-5 text-gray-400 mt-0.5" />
+               <div className="flex-1">
+                  <p className="text-xs text-gray-500 mb-0.5">Gender</p>
+                  {isEditingProfile ? (
+                      <select 
+                          name="gender"
+                          value={profileFormData.gender || ''} 
+                          onChange={handleProfileInputChange}
+                          className="w-full p-1 border-b border-gray-300 focus:outline-none focus:border-emerald-500 bg-transparent text-gray-800 font-medium"
+                      >
+                        <option value="">Select Gender</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other</option>
+                      </select>
+                  ) : (
+                      <p className="text-gray-800 font-medium">{user.gender || 'Not Provided'}</p>
+                  )}
+               </div>
+            </div>
+            <div className="flex items-start gap-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
+               <Heart className="w-5 h-5 text-gray-400 mt-0.5" />
+               <div className="flex-1">
+                  <p className="text-xs text-gray-500 mb-0.5">Blood Group</p>
+                  {isEditingProfile ? (
+                      <input 
+                          type="text" 
+                          name="bloodGroup"
+                          value={profileFormData.bloodGroup || ''} 
+                          onChange={handleProfileInputChange}
+                          className="w-full p-1 border-b border-gray-300 focus:outline-none focus:border-emerald-500 bg-transparent text-gray-800 font-medium"
+                          placeholder="e.g. O+"
+                      />
+                  ) : (
+                      <p className="text-gray-800 font-medium">{user.bloodGroup || 'Not Provided'}</p>
+                  )}
+               </div>
+            </div>
+            <div className="flex items-start gap-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
+               <User className="w-5 h-5 text-gray-400 mt-0.5" />
+               <div className="flex-1">
+                  <p className="text-xs text-gray-500 mb-0.5">Marital Status</p>
+                  {isEditingProfile ? (
+                      <select 
+                          name="maritalStatus"
+                          value={profileFormData.maritalStatus || ''} 
+                          onChange={handleProfileInputChange}
+                          className="w-full p-1 border-b border-gray-300 focus:outline-none focus:border-emerald-500 bg-transparent text-gray-800 font-medium"
+                      >
+                        <option value="">Select Status</option>
+                        <option value="Single">Single</option>
+                        <option value="Married">Married</option>
+                        <option value="Divorced">Divorced</option>
+                        <option value="Widowed">Widowed</option>
+                      </select>
+                  ) : (
+                      <p className="text-gray-800 font-medium">{user.maritalStatus || 'Not Provided'}</p>
+                  )}
+               </div>
+            </div>
+            {profileFormData.maritalStatus === 'Married' && (
                 <div className="flex items-start gap-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
                    <User className="w-5 h-5 text-gray-400 mt-0.5" />
                    <div className="flex-1">
-                      <p className="text-xs text-gray-500 mb-0.5">Full Name</p>
-                      {/* Name is now read-only */}
-                      <p className="text-gray-800 font-medium break-all">{user.name}</p>
-                   </div>
-                </div>
-                <div className="flex items-start gap-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
-                   <Mail className="w-5 h-5 text-gray-400 mt-0.5" />
-                   <div className="flex-1">
-                      <p className="text-xs text-gray-500 mb-0.5">Email Address</p>
-                      {isEditingProfile ? (
-                          <input 
-                              type="email" 
-                              name="email"
-                              value={profileFormData.email || ''} 
-                              onChange={handleProfileInputChange}
-                              className="w-full p-1 border-b border-gray-300 focus:outline-none focus:border-emerald-500 bg-transparent text-gray-800 font-medium"
-                          />
-                      ) : (
-                          <p className="text-gray-800 font-medium break-all">{user.email || 'Not Provided'}</p>
-                      )}
-                   </div>
-                </div>
-                <div className="flex items-start gap-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
-                   <Phone className="w-5 h-5 text-gray-400 mt-0.5" />
-                   <div className="flex-1">
-                      <p className="text-xs text-gray-500 mb-0.5">Phone Number</p>
-                      {/* Phone is now read-only */}
-                      <p className="text-gray-800 font-medium">{user.phone || 'Not Provided'}</p>
-                   </div>
-                </div>
-                <div className="flex items-start gap-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
-                   <Calendar className="w-5 h-5 text-gray-400 mt-0.5" />
-                   <div className="flex-1">
-                      <p className="text-xs text-gray-500 mb-0.5">Date of Birth</p>
-                      {isEditingProfile ? (
-                          <input 
-                              type="date" 
-                              name="dob"
-                              value={profileFormData.dob || ''} 
-                              onChange={handleProfileInputChange}
-                              className="w-full p-1 border-b border-gray-300 focus:outline-none focus:border-emerald-500 bg-transparent text-gray-800 font-medium"
-                          />
-                      ) : (
-                          <p className="text-gray-800 font-medium">{user.dob || 'Not Provided'}</p>
-                      )}
-                   </div>
-                </div>
-                <div className="flex items-start gap-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
-                   <BookUser className="w-5 h-5 text-gray-400 mt-0.5" />
-                   <div className="flex-1">
-                      <p className="text-xs text-gray-500 mb-0.5">Gender</p>
-                      {isEditingProfile ? (
-                          <select 
-                              name="gender"
-                              value={profileFormData.gender || ''} 
-                              onChange={handleProfileInputChange}
-                              className="w-full p-1 border-b border-gray-300 focus:outline-none focus:border-emerald-500 bg-transparent text-gray-800 font-medium"
-                          >
-                            <option value="">Select Gender</option>
-                            <option value="Male">Male</option>
-                            <option value="Female">Female</option>
-                            <option value="Other">Other</option>
-                          </select>
-                      ) : (
-                          <p className="text-gray-800 font-medium">{user.gender || 'Not Provided'}</p>
-                      )}
-                   </div>
-                </div>
-                <div className="flex items-start gap-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
-                   <Heart className="w-5 h-5 text-gray-400 mt-0.5" />
-                   <div className="flex-1">
-                      <p className="text-xs text-gray-500 mb-0.5">Blood Group</p>
+                      <p className="text-xs text-gray-500 mb-0.5">Spouse Name</p>
                       {isEditingProfile ? (
                           <input 
                               type="text" 
-                              name="bloodGroup"
-                              value={profileFormData.bloodGroup || ''} 
-                              onChange={handleProfileInputChange}
-                              className="w-full p-1 border-b border-gray-300 focus:outline-none focus:border-emerald-500 bg-transparent text-gray-800 font-medium"
-                              placeholder="e.g. O+"
-                          />
-                      ) : (
-                          <p className="text-gray-800 font-medium">{user.bloodGroup || 'Not Provided'}</p>
-                      )}
-                   </div>
-                </div>
-                <div className="flex items-start gap-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
-                   <User className="w-5 h-5 text-gray-400 mt-0.5" />
-                   <div className="flex-1">
-                      <p className="text-xs text-gray-500 mb-0.5">Marital Status</p>
-                      {isEditingProfile ? (
-                          <select 
-                              name="maritalStatus"
-                              value={profileFormData.maritalStatus || ''} 
-                              onChange={handleProfileInputChange}
-                              className="w-full p-1 border-b border-gray-300 focus:outline-none focus:border-emerald-500 bg-transparent text-gray-800 font-medium"
-                          >
-                            <option value="">Select Status</option>
-                            <option value="Single">Single</option>
-                            <option value="Married">Married</option>
-                            <option value="Divorced">Divorced</option>
-                            <option value="Widowed">Widowed</option>
-                          </select>
-                      ) : (
-                          <p className="text-gray-800 font-medium">{user.maritalStatus || 'Not Provided'}</p>
-                      )}
-                   </div>
-                </div>
-                {profileFormData.maritalStatus === 'Married' && (
-                    <div className="flex items-start gap-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
-                       <User className="w-5 h-5 text-gray-400 mt-0.5" />
-                       <div className="flex-1">
-                          <p className="text-xs text-gray-500 mb-0.5">Spouse Name</p>
-                          {isEditingProfile ? (
-                              <input 
-                                  type="text" 
-                                  name="spouseName"
-                                  value={profileFormData.spouseName || ''} 
-                                  onChange={handleProfileInputChange}
-                                  className="w-full p-1 border-b border-gray-300 focus:outline-none focus:border-emerald-500 bg-transparent text-gray-800 font-medium"
-                              />
-                          ) : (
-                              <p className="text-gray-800 font-medium">{user.spouseName || 'Not Provided'}</p>
-                          )}
-                       </div>
-                    </div>
-                )}
-                <div className="flex items-start gap-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
-                   <Baby className="w-5 h-5 text-gray-400 mt-0.5" />
-                   <div className="flex-1">
-                      <p className="text-xs text-gray-500 mb-0.5">Number of Children</p>
-                      {isEditingProfile ? (
-                          <input 
-                              type="number" 
-                              name="children"
-                              value={profileFormData.children?.toString() || ''} 
+                              name="spouseName"
+                              value={profileFormData.spouseName || ''} 
                               onChange={handleProfileInputChange}
                               className="w-full p-1 border-b border-gray-300 focus:outline-none focus:border-emerald-500 bg-transparent text-gray-800 font-medium"
                           />
                       ) : (
-                          <p className="text-gray-800 font-medium">{user.children ?? 'Not Provided'}</p>
+                          <p className="text-gray-800 font-medium">{user.spouseName || 'Not Provided'}</p>
                       )}
                    </div>
                 </div>
-             </div>
-          </div>
+            )}
+            <div className="flex items-start gap-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
+               <Baby className="w-5 h-5 text-gray-400 mt-0.5" />
+               <div className="flex-1">
+                  <p className="text-xs text-gray-500 mb-0.5">Number of Children</p>
+                  {isEditingProfile ? (
+                      <input 
+                          type="number" 
+                          name="children"
+                          value={profileFormData.children?.toString() || ''} 
+                          onChange={handleProfileInputChange}
+                          className="w-full p-1 border-b border-gray-300 focus:outline-none focus:border-emerald-500 bg-transparent text-gray-800 font-medium"
+                      />
+                  ) : (
+                      <p className="text-gray-800 font-medium">{user.children ?? 'Not Provided'}</p>
+                  )}
+               </div>
+            </div>
+          </section>
 
           {/* Contact and Emergency Details */}
           <div className="space-y-6">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-               <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2">
-                 <Building className="w-5 h-5 text-emerald-500" />
+            <section className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+               <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2 pb-2 border-b border-gray-100">
+                 <Building className="w-4 h-4 text-emerald-500" />
                  Work & Home Address
-               </h3>
+               </h4>
                <div className="space-y-4">
                   <div className="flex items-start gap-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
                      <MapPin className="w-5 h-5 text-gray-400 mt-0.5" />
@@ -452,13 +514,13 @@ const UserProfile: React.FC = () => {
                      </div>
                   </div>
                </div>
-            </div>
+            </section>
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-               <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2">
-                 <Phone className="w-5 h-5 text-emerald-500" />
+            <section className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+               <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2 pb-2 border-b border-gray-100">
+                 <Phone className="w-4 h-4 text-emerald-500" />
                  Emergency Contact
-               </h3>
+               </h4>
                <div className="space-y-4">
                   <div className="flex items-start gap-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
                      <User className="w-5 h-5 text-gray-400 mt-0.5" />
@@ -513,7 +575,7 @@ const UserProfile: React.FC = () => {
                      </div>
                   </div>
                </div>
-            </div>
+            </section>
           </div>
         </div>
       </form> {/* End of form wrapper */}

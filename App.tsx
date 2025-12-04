@@ -16,7 +16,6 @@ import VendorAttachment from './pages/admin/VendorAttachment';
 import Corporate from './pages/admin/Corporate';
 import Documents from './pages/Documents';
 import Leads from './pages/admin/Leads';
-// @ts-ignore - Module '"./pages/admin/Reception"' has no default export.
 import { Reception } from '@/pages/admin/Reception'; // Changed to named import and using alias
 // @ts-ignore - EmailMarketing component
 import EmailMarketing from './pages/admin/EmailMarketing'; // Added missing import
