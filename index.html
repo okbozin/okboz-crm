@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -16,7 +17,18 @@
                 850: '#1a202c',
                 950: '#0d1117',
               }
-            }
+            },
+            animation: {
+              blob: "blob 7s infinite",
+            },
+            keyframes: {
+              blob: {
+                "0%": { transform: "translate(0px, 0px) scale(1)" },
+                "33%": { transform: "translate(30px, -50px) scale(1.1)" },
+                "66%": { transform: "translate(-20px, 20px) scale(0.9)" },
+                "100%": { transform: "translate(0px, 0px) scale(1)" },
+              },
+            },
           }
         }
       }
@@ -86,6 +98,23 @@
         background-color: #374151;
         color: white;
       }
+
+      /* NEW: CSS for blinking bell notification */
+      @keyframes blink-bell {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.4; }
+      }
+      .animate-blink-bell {
+        animation: blink-bell 1.5s infinite;
+      }
+
+      /* Animation Delays for Landing Page */
+      .animation-delay-2000 {
+        animation-delay: 2s;
+      }
+      .animation-delay-4000 {
+        animation-delay: 4s;
+      }
     </style>
     <script type="importmap">
 {
@@ -111,5 +140,6 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
+    <audio id="notification-sound" src="/notification.mp3" preload="auto"></audio>
   </body>
 </html>

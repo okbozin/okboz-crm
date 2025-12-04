@@ -1,19 +1,20 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Settings, Loader2, ArrowRight, ArrowRightLeft, 
   MessageCircle, Copy, Mail, Car, User, Edit2,
   Building2, X, Phone, Truck, DollarSign,
   Calendar, MapPin, Plus, Trash2, Headset,
-  Clock, CheckCircle, Filter, Search, ChevronDown, UserCheck, XCircle, AlertCircle, Save, History
+  Clock, CheckCircle, Filter, Search, ChevronDown, UserCheck, XCircle, AlertCircle, Save, History, PhoneOutgoing, PhoneIncoming
 } from 'lucide-react';
 import Autocomplete from '../../components/Autocomplete';
 import { Enquiry, HistoryLog, UserRole } from '../../types';
+import { sendSystemNotification } from '../../services/cloudService';
 
 // Types
 type TripType = 'Local' | 'Rental' | 'Outstation';
 type OutstationSubType = 'RoundTrip' | 'OneWay';
 type VehicleType = 'Sedan' | 'SUV';
-type CallerType = 'Customer' | 'Vendor';
 type EnquiryCategory = 'Transport' | 'General';
 type OrderStatus = 'Scheduled' | 'Order Accepted' | 'Driver Assigned' | 'Completed' | 'Cancelled' | 'New' | 'In Progress' | 'Converted' | 'Closed';
 
@@ -61,14 +62,13 @@ const DEFAULT_PRICING_SUV: PricingRules = {
   outstationDriverAllowance: 500, outstationNightAllowance: 400 
 };
 
-// Helper function for initial enquiries state
 const getInitialEnquiries = (): Enquiry[] => {
   const saved = localStorage.getItem('global_enquiries_data');
   return saved ? JSON.parse(saved) : [];
 };
 
 interface CustomerCareProps {
-  role: UserRole; // Add role prop
+  role: UserRole;
 }
 
 export const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
@@ -112,14 +112,11 @@ export const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
   const [newPackage, setNewPackage] = useState({ name: '', hours: '', km: '', priceSedan: '', priceSuv: '' });
   const [editingPackageId, setEditingPackageId] = useState<string | null>(null);
 
-
   const [generatedMessage, setGeneratedMessage] = useState('');
   const [estimatedCost, setEstimatedCost] = useState(0);
 
-  // Ref for the generated message textarea for auto-resizing
   const messageTextareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // --- Assignment Data ---
   const [corporates, setCorporates] = useState<any[]>([]);
   const [allBranches, setAllBranches] = useState<any[]>([]);
   const [allStaff, setAllStaff] = useState<any[]>([]);
@@ -130,36 +127,29 @@ export const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
     staffId: ''
   });
 
-  // --- Dashboard Filter States ---
+  // Filters
   const [filterStatus, setFilterStatus] = useState<string>('All');
   const [filterSearch, setFilterSearch] = useState<string>('');
   const [filterDate, setFilterDate] = useState<string>('');
 
-  // --- Scheduling Modal State ---
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [scheduleData, setScheduleData] = useState({ date: '', time: '' });
 
   const sessionId = localStorage.getItem('app_session_id') || 'admin';
   const isSuperAdmin = sessionId === 'admin';
 
-  // --- Enquiry List Management ---
-  // Fix: Used the new getInitialEnquiries function
   const [enquiries, setEnquiries] = useState<Enquiry[]>(getInitialEnquiries);
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
 
-  // --- NEW: Phone Lookup States ---
   const [isPhoneChecked, setIsPhoneChecked] = useState(false);
   const [phoneLookupResult, setPhoneLookupResult] = useState<'New' | 'Existing' | null>(null);
   const [existingEnquiriesForPhone, setExistingEnquiriesForPhone] = useState<Enquiry[]>([]);
-  const [vendorsData, setVendorsData] = useState<any[]>([]); // For checking existing vendors
+  const [vendorsData, setVendorsData] = useState<any[]>([]);
 
-  // --- NEW: General Enquiry Follow-up States ---
   const [generalFollowUpDate, setGeneralFollowUpDate] = useState(new Date().toISOString().split('T')[0]);
   const [generalFollowUpTime, setGeneralFollowUpTime] = useState('10:00');
   const [generalFollowUpPriority, setGeneralFollowUpPriority] = useState<'Hot' | 'Warm' | 'Cold'>('Warm');
 
-
-  // Persistence
   useEffect(() => {
     localStorage.setItem('transport_rental_packages_v2', JSON.stringify(rentalPackages));
   }, [rentalPackages]);
@@ -168,7 +158,6 @@ export const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
     localStorage.setItem('transport_pricing_rules_v2', JSON.stringify(pricing));
   }, [pricing]);
 
-  // Load Vendors Data for Phone Check
   useEffect(() => {
     try {
       const savedVendors = localStorage.getItem('vendor_data');
@@ -180,9 +169,7 @@ export const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
     }
   }, []);
 
-
   useEffect(() => {
-      // 1. Load Data for Assignment Dropdowns
       const corps = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
       setCorporates(corps);
 
@@ -219,8 +206,6 @@ export const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
       );
   }, [allStaff, assignment.corporateId, assignment.branchName]);
 
-
-  // --- Google Maps Script Loader ---
   useEffect(() => {
     if (window.gm_authFailure_detected) {
       setMapError("Map API Error: Check required APIs (Maps JS, Places).");
@@ -273,7 +258,6 @@ export const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
     }
   }, []);
 
-  // --- Auto Distance Calculation Effect ---
   useEffect(() => {
     if (!isMapReady || !window.google || !window.google.maps.DistanceMatrixService || !pickupCoords) return;
 
@@ -325,7 +309,6 @@ export const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
     }));
   };
 
-  // Add Package handlers
   const handleAddPackage = () => {
     if (!newPackage.name || !newPackage.priceSedan) {
         setTimeout(() => alert("Please fill in package name and Sedan price."), 0);
@@ -333,7 +316,6 @@ export const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
     }
     
     if (editingPackageId) {
-        // Update existing package
         const updatedPackages = rentalPackages.map(pkg => 
             pkg.id === editingPackageId ? {
                 ...pkg,
@@ -348,7 +330,6 @@ export const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
         setEditingPackageId(null);
         setTimeout(() => alert("Package updated successfully!"), 0);
     } else {
-        // Add new package
         const pkg: RentalPackage = {
             id: `pkg-${Date.now()}`,
             name: newPackage.name,
@@ -397,15 +378,13 @@ export const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
     }
   };
 
-
-  // Calculation Logic
   useEffect(() => {
       let total = 0;
       const rules = pricing[vehicleType];
       let details = '';
 
       if (enquiryCategory === 'General') {
-          total = 0; // No cost for general enquiries
+          total = 0; 
           details = customerDetails.requirements || "General Enquiry.";
       } else if (tripType === 'Local') {
           const base = rules.localBaseFare;
@@ -421,7 +400,6 @@ export const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
               details = `Rental: ${pkg.name}`;
           }
       } else {
-          // Outstation
           const days = parseFloat(transportDetails.days) || 1;
           const km = parseFloat(transportDetails.estTotalKm) || 0;
           const driver = rules.outstationDriverAllowance * days;
@@ -441,7 +419,6 @@ export const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
 
       setEstimatedCost(total);
 
-      // Generate Message Based on Enquiry Type
       let msg = '';
 
       if (enquiryCategory === 'General') {
@@ -458,7 +435,6 @@ For immediate assistance, feel free to call us.
 Regards,
 OK BOZ Support Team`;
       } else {
-          // Transport Estimate Message
           const pkg = rentalPackages.find(p => p.id === transportDetails.packageId);
           msg = `Hello ${customerDetails.name || 'Customer'},
 Here is your ${tripType} estimate from OK BOZ! 🚕
@@ -483,7 +459,6 @@ Book now with OK BOZ Transport!`;
       setGeneratedMessage(msg);
   }, [estimatedCost, customerDetails, transportDetails, tripType, vehicleType, pricing, rentalPackages, enquiryCategory, outstationSubType]);
 
-  // Effect to auto-resize the textarea
   useEffect(() => {
     if (messageTextareaRef.current) {
       messageTextareaRef.current.style.height = 'auto';
@@ -492,26 +467,24 @@ Book now with OK BOZ Transport!`;
   }, [generatedMessage]);
 
 
-  const saveOrder = (status: OrderStatus, scheduleInfo?: { date: string, time: string, priority?: 'Hot' | 'Warm' | 'Cold' }) => {
+  const saveOrder = async (status: OrderStatus, scheduleInfo?: { date: string, time: string, priority?: 'Hot' | 'Warm' | 'Cold' }) => {
       if (!customerDetails.name || !customerDetails.phone) {
           setTimeout(() => alert("Please enter Customer Name and Phone."), 0);
           return;
       }
 
-      // 1. Construct Details String
       let detailsText = '';
       if (enquiryCategory === 'Transport') {
           detailsText = `[${vehicleType} - ${tripType}] `;
           if (tripType === 'Local') detailsText += `Pickup: ${customerDetails.pickup} -> Drop: ${transportDetails.drop}. Dist: ${transportDetails.estKm}km.`;
           if (tripType === 'Rental') {
               const pkg = rentalPackages.find(p => p.id === transportDetails.packageId);
-              // Fix: Changed transportDetails.pickup to customerDetails.pickup
               detailsText += `Package: ${pkg?.name}. Pickup: ${customerDetails.pickup}.`;
           }
           if (tripType === 'Outstation') detailsText += `Dest: ${transportDetails.destination}. ${transportDetails.days} Days. Pickup: ${customerDetails.pickup}.`;
           detailsText += ` Estimate: ₹${estimatedCost}`;
       } else {
-          detailsText = customerDetails.requirements; // Use requirements directly for general
+          detailsText = customerDetails.requirements;
       }
       
       if (!detailsText.trim()) {
@@ -519,8 +492,6 @@ Book now with OK BOZ Transport!`;
         return;
       }
 
-
-      // 2. Create History Log
       const historyLog: HistoryLog = {
           id: Date.now(),
           type: 'Note',
@@ -529,30 +500,25 @@ Book now with OK BOZ Transport!`;
           outcome: 'Completed'
       };
 
-      // 3. Create or Update Object
       let updatedEnquiry: Enquiry;
-      let newEnquiriesList = [...enquiries]; // Start with current list
+      let newEnquiriesList = [...enquiries];
 
       if (editingOrderId) {
-        // Update existing enquiry
         updatedEnquiry = {
-          ...enquiries.find(e => e.id === editingOrderId)!, // Find the existing one
-          type: 'Customer', // Always customer for this console
+          ...enquiries.find(e => e.id === editingOrderId)!,
+          type: 'Customer',
           initialInteraction: 'Incoming',
           name: customerDetails.name,
           phone: customerDetails.phone,
-          email: customerDetails.email,
+          email: customerDetails.email || '',
           city: 'Coimbatore', 
           details: detailsText,
           status: status,
           assignedTo: assignment.staffId,
-          // Merge new history log with existing history
           history: [historyLog, ...(enquiries.find(e => e.id === editingOrderId)?.history || [])],
           date: scheduleInfo ? scheduleInfo.date : new Date().toISOString().split('T')[0],
           nextFollowUp: scheduleInfo ? `${scheduleData.date}T${scheduleData.time}` : undefined,
-          // Add `priority` field
           priority: scheduleInfo?.priority, 
-          // Store structured data
           enquiryCategory: enquiryCategory,
           tripType: tripType,
           vehicleType: vehicleType,
@@ -561,9 +527,8 @@ Book now with OK BOZ Transport!`;
           estimatedPrice: enquiryCategory === 'Transport' ? estimatedCost : undefined,
         };
         newEnquiriesList = newEnquiriesList.map(e => e.id === editingOrderId ? updatedEnquiry : e);
-        setEditingOrderId(null); // Exit edit mode
+        setEditingOrderId(null);
       } else {
-        // Create new enquiry
         updatedEnquiry = {
           id: `ORD-${Date.now()}`,
           type: 'Customer',
@@ -571,18 +536,15 @@ Book now with OK BOZ Transport!`;
           name: customerDetails.name,
           phone: customerDetails.phone,
           email: customerDetails.email,
-          city: 'Coimbatore', // Default if not parsed
+          city: 'Coimbatore',
           details: detailsText,
-          status: status, // Uses the expanded status types
+          status: status,
           assignedTo: assignment.staffId,
           createdAt: new Date().toLocaleString(),
           history: [historyLog],
           date: scheduleInfo ? scheduleInfo.date : new Date().toISOString().split('T')[0],
-          // Store scheduled time if applicable in details or meta field
           nextFollowUp: scheduleInfo ? `${scheduleData.date}T${scheduleData.time}` : undefined,
-          // Add `priority` field
           priority: scheduleInfo?.priority, 
-          // Store structured data
           enquiryCategory: enquiryCategory,
           tripType: tripType,
           vehicleType: vehicleType,
@@ -591,28 +553,49 @@ Book now with OK BOZ Transport!`;
           estimatedPrice: enquiryCategory === 'Transport' ? estimatedCost : undefined,
         };
         newEnquiriesList = [updatedEnquiry, ...newEnquiriesList];
+
+        sendSystemNotification({
+            type: 'new_enquiry',
+            title: `New Customer Enquiry: ${updatedEnquiry.name}`,
+            message: `A new enquiry (ID: ${updatedEnquiry.id}) has been created with status: ${updatedEnquiry.status}.`,
+            targetRoles: [UserRole.ADMIN, UserRole.CORPORATE],
+            corporateId: assignment.corporateId === 'admin' ? undefined : assignment.corporateId,
+            link: `/admin/customer-care`
+        });
+
+        if (assignment.staffId) {
+            const assignedStaffMember = allStaff.find(s => s.id === assignment.staffId);
+            if (assignedStaffMember) {
+                sendSystemNotification({
+                    type: 'task_assigned',
+                    title: `New Enquiry Assigned: ${updatedEnquiry.id}`,
+                    message: `You have been assigned a new customer enquiry for ${updatedEnquiry.name}.`,
+                    targetRoles: [UserRole.EMPLOYEE],
+                    employeeId: assignedStaffMember.id,
+                    link: `/user/customer-care`
+                });
+            }
+        }
       }
 
-      setEnquiries(newEnquiriesList); // Update React state
+      setEnquiries(newEnquiriesList);
       try {
-        localStorage.setItem('global_enquiries_data', JSON.stringify(newEnquiriesList)); // Persist to local storage
+        localStorage.setItem('global_enquiries_data', JSON.stringify(newEnquiriesList));
       } catch (error) {
         console.error("Error saving enquiries to local storage:", error);
         setTimeout(() => alert("Error saving data. Local storage might be full or corrupted."), 0);
       }
 
-      // Use setTimeout for alert to prevent UI blocking issues in certain environments
       setTimeout(() => {
           alert(`${enquiryCategory === 'Transport' ? 'Order' : 'Enquiry'} ${status} Successfully!`);
       }, 0);
       
-      // 5. Reset
       setCustomerDetails({ name: '', phone: '', email: '', pickup: '', requirements: '' });
       setTransportDetails({ drop: '', estKm: '', waitingMins: '', packageId: '', destination: '', days: '1', estTotalKm: '', nights: '0' });
       setGeneratedMessage('');
       setEstimatedCost(0);
       setIsScheduleModalOpen(false);
-      setIsPhoneChecked(false); // Reset phone check
+      setIsPhoneChecked(false);
       setPhoneLookupResult(null);
       setExistingEnquiriesForPhone([]);
       setGeneralFollowUpDate(new Date().toISOString().split('T')[0]);
@@ -641,10 +624,9 @@ Book now with OK BOZ Transport!`;
           setTimeout(() => alert("Please select both Date and Time."), 0);
           return;
       }
-      saveOrder('Scheduled', scheduleData);
+      saveOrder('Scheduled', { ...scheduleData, priority: generalFollowUpPriority });
   };
 
-  // --- NEW: Handle General Enquiry Follow-up Save ---
   const handleSaveGeneralFollowUp = () => {
     if (!customerDetails.name || !customerDetails.phone) {
         setTimeout(() => alert("Please enter Customer Name and Phone."), 0);
@@ -662,8 +644,8 @@ Book now with OK BOZ Transport!`;
       setTransportDetails({ drop: '', estKm: '', waitingMins: '', packageId: '', destination: '', days: '1', estTotalKm: '', nights: '0' });
       setGeneratedMessage('');
       setEstimatedCost(0);
-      setEditingOrderId(null); // Exit edit mode
-      setIsPhoneChecked(false); // Reset phone check
+      setEditingOrderId(null);
+      setIsPhoneChecked(false);
       setPhoneLookupResult(null);
       setExistingEnquiriesForPhone([]);
       setGeneralFollowUpDate(new Date().toISOString().split('T')[0]);
@@ -673,11 +655,12 @@ Book now with OK BOZ Transport!`;
       setTimeout(() => alert("Form cleared."), 0);
   };
 
-  const handleStatusUpdate = (id: string, newStatus: OrderStatus) => {
+  const handleStatusUpdate = async (id: string, newStatus: OrderStatus) => {
     try {
+      let updatedEnquiryItem: Enquiry | undefined;
+
       const updatedList = enquiries.map(e => {
           if (e.id === id) {
-              // Add history log for status change
               const historyLog: HistoryLog = {
                   id: Date.now(),
                   type: 'Note',
@@ -685,10 +668,12 @@ Book now with OK BOZ Transport!`;
                   date: new Date().toLocaleString(),
                   outcome: 'Completed'
               };
-              return { ...e, status: newStatus, history: [historyLog, ...e.history] };
+              updatedEnquiryItem = { ...e, status: newStatus, history: [historyLog, ...e.history] };
+              return updatedEnquiryItem;
           }
           return e;
       });
+      
       setEnquiries(updatedList);
       try {
         localStorage.setItem('global_enquiries_data', JSON.stringify(updatedList));
@@ -696,6 +681,18 @@ Book now with OK BOZ Transport!`;
         console.error("Error saving enquiries to local storage on status update:", error);
         setTimeout(() => alert("Error saving data. Local storage might be full or corrupted."), 0);
       }
+
+      if (updatedEnquiryItem) {
+          sendSystemNotification({
+              type: 'system',
+              title: `Order Status Update: ${updatedEnquiryItem.id}`,
+              message: `The status of order ${updatedEnquiryItem.id} for ${updatedEnquiryItem.name} has been updated to ${newStatus}.`,
+              targetRoles: [UserRole.ADMIN, UserRole.CORPORATE],
+              corporateId: updatedEnquiryItem.assignedTo ? (allStaff.find(s => s.id === updatedEnquiryItem.assignedTo)?.owner || undefined) : undefined,
+              link: `/admin/customer-care`
+          });
+      }
+
     } catch (error) {
       console.error("Error in handleStatusUpdate:", error);
       setTimeout(() => alert("An error occurred while updating status. See console for details."), 0);
@@ -706,20 +703,16 @@ Book now with OK BOZ Transport!`;
     try {
       setEditingOrderId(order.id);
 
-      // Populate Customer Details
       setCustomerDetails({
         name: order.name,
         phone: order.phone,
         email: order.email || '',
-        // Refined extraction of pickup from details string
         pickup: (order.details.match(/Pickup:\s*(.*?)(?=(?:\s*->|\s*\.|\s*$))/i)?.[1] || '').trim(),
         requirements: order.enquiryCategory === 'General' ? order.details : (order.details.includes('\nReq: ') ? order.details.split('\nReq: ')[1] : '')
       });
 
-      // Populate Enquiry Category
       setEnquiryCategory(order.enquiryCategory || 'General');
 
-      // Populate Transport Details if it's a Transport enquiry
       if (order.enquiryCategory === 'Transport' && order.transportData) {
         setTripType(order.tripType || 'Local');
         setVehicleType(order.vehicleType || 'Sedan');
@@ -736,7 +729,6 @@ Book now with OK BOZ Transport!`;
         });
         setEstimatedCost(order.estimatedPrice || 0);
       } else {
-          // Reset transport specific states for General enquiries
           setTripType('Local');
           setVehicleType('Sedan');
           setOutstationSubType('RoundTrip');
@@ -744,28 +736,23 @@ Book now with OK BOZ Transport!`;
           setEstimatedCost(0);
       }
 
-      // Populate Assignment (simple example, can be more complex)
       setAssignment(prev => ({
           ...prev,
           staffId: order.assignedTo || ''
       }));
 
-      // Populate General Enquiry Follow-up (if applicable)
       if (order.enquiryCategory === 'General' && order.nextFollowUp) {
           setGeneralFollowUpDate(order.nextFollowUp.split('T')[0]);
           setGeneralFollowUpTime(order.nextFollowUp.split('T')[1]);
           setGeneralFollowUpPriority(order.priority || 'Warm');
       }
 
-
-      // Perform phone check to load history
       const cleanNumber = order.phone.replace(/\D/g, '');
       const previousEnquiries = enquiries.filter(e => e.phone.replace(/\D/g, '') === cleanNumber && e.id !== order.id);
       setExistingEnquiriesForPhone(previousEnquiries);
       setPhoneLookupResult(previousEnquiries.length > 0 ? 'Existing' : 'New');
       setIsPhoneChecked(true);
 
-      // Scroll to the top of the page/form
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error) {
       console.error("Error in handleEditOrder:", error);
@@ -773,8 +760,6 @@ Book now with OK BOZ Transport!`;
     }
   };
 
-
-  // --- Dashboard Logic ---
   const dashboardStats = useMemo(() => {
       const total = enquiries.length;
       const accepted = enquiries.filter(e => e.status === 'Order Accepted' || e.status === 'Booked').length;
@@ -791,20 +776,18 @@ Book now with OK BOZ Transport!`;
           const matchesSearch = e.name.toLowerCase().includes(filterSearch.toLowerCase()) || 
                                 e.phone.includes(filterSearch) || 
                                 e.id.toLowerCase().includes(filterSearch.toLowerCase()) ||
-                                e.details.toLowerCase().includes(filterSearch.toLowerCase()); // Search in details too
+                                e.details.toLowerCase().includes(filterSearch.toLowerCase());
           
           const matchesStatus = filterStatus === 'All' || e.status === filterStatus;
           
-          const matchesDate = !filterDate || (e.date === filterDate || e.createdAt.startsWith(filterDate)); // Simple date check
+          const matchesDate = !filterDate || (e.date === filterDate || e.createdAt.startsWith(filterDate));
 
           return matchesSearch && matchesStatus && matchesDate;
       });
   }, [enquiries, filterSearch, filterStatus, filterDate]);
 
-  // Determine if the user is an employee
   const isEmployee = role === UserRole.EMPLOYEE;
 
-  // --- NEW: Handle Phone Lookup in Input Form ---
   const handlePhoneInputCheck = () => {
     const cleanNumber = customerDetails.phone.replace(/\D/g, '');
     if (cleanNumber.length < 5) {
@@ -817,32 +800,28 @@ Book now with OK BOZ Transport!`;
     let foundEnquiry: Enquiry | undefined;
     let foundVendor: any;
 
-    // 1. Check existing enquiries
     const previousEnquiries = enquiries.filter(e => e.phone.replace(/\D/g, '') === cleanNumber);
     if (previousEnquiries.length > 0) {
-        foundEnquiry = previousEnquiries[0]; // Take the first one to pre-fill
+        foundEnquiry = previousEnquiries[0];
         setExistingEnquiriesForPhone(previousEnquiries);
     }
 
-    // 2. Check vendors
     foundVendor = vendorsData.find(v => v.phone && v.phone.replace(/\D/g, '') === cleanNumber);
 
     if (foundEnquiry || foundVendor) {
         setPhoneLookupResult('Existing');
-        // Pre-fill from enquiry if found, else from vendor
         const source = foundEnquiry || foundVendor;
         setCustomerDetails(prev => ({
             ...prev,
             name: source.name || source.ownerName || '',
             email: source.email || '',
-            // Do not overwrite pickup here, it's specific to the current form
         }));
     } else {
         setPhoneLookupResult('New');
         setCustomerDetails(prev => ({
             ...prev,
-            name: '', // Clear name for new customer
-            email: '', // Clear email for new customer
+            name: '',
+            email: '',
         }));
         setExistingEnquiriesForPhone([]);
     }
@@ -858,7 +837,6 @@ Book now with OK BOZ Transport!`;
           </h2>
           <p className="text-gray-500">Create bookings and manage order lifecycle</p>
         </div>
-        {/* Conditionally render "Edit Rates" button - Hidden for employees */}
         {!isEmployee && ( 
           <div className="flex gap-2">
               <button 
@@ -871,7 +849,176 @@ Book now with OK BOZ Transport!`;
         )}
       </div>
 
-      {/* SETTINGS PANEL (Hidden by default) */}
+      <div className="space-y-6">
+          <div className="flex justify-between items-center">
+              <h2 className="text-xl font-bold text-gray-800">Orders Dashboard</h2>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                  <p className="text-xs font-bold text-gray-500 uppercase">Total Orders</p>
+                  <h3 className="text-2xl font-bold text-gray-800">{dashboardStats.total}</h3>
+              </div>
+              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                  <p className="text-xs font-bold text-gray-500 uppercase">Accepted</p>
+                  <h3 className="text-2xl font-bold text-emerald-600">{dashboardStats.accepted}</h3>
+              </div>
+              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                  <p className="text-xs font-bold text-gray-500 uppercase">Driver Assigned</p>
+                  <h3 className="text-2xl font-bold text-blue-600">{dashboardStats.assigned}</h3>
+              </div>
+              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                  <p className="text-xs font-bold text-gray-500 uppercase">Completed</p>
+                  <h3 className="text-2xl font-bold text-purple-600">{dashboardStats.completed}</h3>
+              </div>
+              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                  <p className="text-xs font-bold text-gray-500 uppercase">Scheduled</p>
+                  <h3 className="text-2xl font-bold text-orange-600">{dashboardStats.scheduled}</h3>
+              </div>
+          </div>
+
+          <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex flex-col md:flex-row gap-3">
+              <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <input 
+                      placeholder="Search Orders..." 
+                      className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      value={filterSearch}
+                      onChange={(e) => setFilterSearch(e.target.value)}
+                  />
+              </div>
+              <select 
+                  className="px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none bg-white cursor-pointer"
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+              >
+                  <option value="All">All Status</option>
+                  <option value="Scheduled">Scheduled</option>
+                  <option value="Order Accepted">Order Accepted</option>
+                  <option value="Driver Assigned">Driver Assigned</option>
+                  <option value="Completed">Completed</option>
+                  <option value="Cancelled">Cancelled</option>
+                  <option value="New">New Enquiry</option>
+                  <option value="In Progress">In Progress Enquiry</option>
+                  <option value="Converted">Converted Enquiry</option>
+                  <option value="Closed">Closed Enquiry</option>
+              </select>
+              <input 
+                  type="date"
+                  className="px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none bg-white"
+                  value={filterDate}
+                  onChange={(e) => setFilterDate(e.target.value)}
+              />
+          </div>
+
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm whitespace-nowrap">
+                      <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-200">
+                          <tr>
+                              <th className="px-6 py-4">Order ID / Date</th>
+                              <th className="px-6 py-4">Customer</th>
+                              <th className="px-6 py-4">Trip/Enquiry Info</th>
+                              <th className="px-6 py-4">Assigned To</th>
+                              <th className="px-6 py-4">Status</th>
+                              <th className="px-6 py-4 text-right">Actions</th>
+                          </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                          {filteredOrders.length > 0 ? filteredOrders.map((order) => (
+                              <tr key={order.id} className="hover:bg-gray-50 transition-colors">
+                                  <td className="px-6 py-4">
+                                      <div className="font-bold text-gray-900">{order.id}</div>
+                                      <div className="text-xs text-gray-500">
+                                        {order.date || order.createdAt.split(',')[0]} 
+                                        {order.nextFollowUp ? ` • ${new Date(order.nextFollowUp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
+                                      </div>
+                                  </td>
+                                  <td className="px-6 py-4">
+                                      <div className="font-medium text-gray-900">{order.name}</div>
+                                      <div className="text-xs text-gray-500">{order.phone}</div>
+                                  </td>
+                                  <td className="px-6 py-4 max-w-xs " title={order.details}>
+                                      <p className="truncate">{order.details}</p>
+                                      {order.enquiryCategory === 'General' && (
+                                          <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-full mt-1 inline-block">
+                                              General Enquiry
+                                          </span>
+                                      )}
+                                      {order.priority && order.enquiryCategory === 'General' && (
+                                          <span className={`px-1.5 py-0.5 rounded-full mt-1 ml-1 inline-block text-[10px] font-bold ${
+                                              order.priority === 'Hot' ? 'bg-red-50 text-red-700' :
+                                              order.priority === 'Warm' ? 'bg-yellow-50 text-yellow-700' :
+                                              'bg-green-50 text-green-700'
+                                          }`}>
+                                              {order.priority}
+                                          </span>
+                                      )}
+                                  </td>
+                                  <td className="px-6 py-4 text-gray-600">
+                                      {order.assignedTo || 'Unassigned'}
+                                  </td>
+                                  <td className="px-6 py-4">
+                                      <span className={`px-2 py-1 rounded-full text-xs font-bold border ${
+                                          order.status === 'Completed' ? 'bg-green-50 text-green-700 border-green-200' :
+                                          order.status === 'Cancelled' ? 'bg-red-50 text-red-700 border-red-200' :
+                                          order.status === 'Scheduled' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                                          order.status === 'Order Accepted' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                          order.status === 'Driver Assigned' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' :
+                                          'bg-gray-50 text-gray-700 border-gray-200'
+                                      }`}>
+                                          {order.status}
+                                      </span>
+                                  </td>
+                                  <td className="px-6 py-4 text-right">
+                                      <div className="flex justify-end gap-2">
+                                          <button 
+                                              onClick={() => handleEditOrder(order)}
+                                              className="text-gray-400 hover:text-blue-500 p-1.5 rounded-full hover:bg-blue-50 transition-colors"
+                                              title="Edit Order"
+                                          >
+                                              <Edit2 className="w-4 h-4" />
+                                          </button>
+                                          {order.status !== 'Completed' && order.status !== 'Cancelled' && (
+                                              <>
+                                                  {order.status !== 'Driver Assigned' && order.enquiryCategory === 'Transport' && (
+                                                      <button 
+                                                          onClick={() => handleStatusUpdate(order.id, 'Driver Assigned')}
+                                                          className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200"
+                                                      >
+                                                          Assign Driver
+                                                      </button>
+                                                  )}
+                                                  <button 
+                                                      onClick={() => handleStatusUpdate(order.id, 'Completed')}
+                                                      className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded hover:bg-green-200"
+                                                      >
+                                                      Complete
+                                                  </button>
+                                                  <button 
+                                                      onClick={() => handleStatusUpdate(order.id, 'Cancelled')}
+                                                      className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded hover:bg-red-200"
+                                                  >
+                                                      Cancel
+                                                  </button>
+                                              </>
+                                          )}
+                                      </div>
+                                  </td>
+                              </tr>
+                          )) : (
+                              <tr>
+                                  <td colSpan={6} className="text-center py-10 text-gray-500">
+                                      No orders found.
+                                  </td>
+                              </tr>
+                          )}
+                      </tbody>
+                  </table>
+              </div>
+          </div>
+      </div>
+
       {showSettings && (
         <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 animate-in fade-in slide-in-from-top-2 mb-6">
            <div className="flex items-center justify-between mb-4">
@@ -902,7 +1049,6 @@ Book now with OK BOZ Transport!`;
                 </div>
             </div>
 
-            {/* Outstation Settings */}
             <div className="space-y-3 bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
               <h4 className="text-sm font-bold text-orange-600 uppercase tracking-wide border-b border-gray-100 pb-2 mb-2">Outstation Rules ({settingsVehicleType})</h4>
               <div>
@@ -920,18 +1066,16 @@ Book now with OK BOZ Transport!`;
               <div>
                 <label className="text-xs text-gray-500 block mb-1">Driver Allowance (₹/day)</label>
                 <input type="number" name="outstationDriverAllowance" value={pricing[settingsVehicleType].outstationDriverAllowance} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
-              </div>
+                </div>
               <div>
                 <label className="text-xs text-gray-500 block mb-1">Driver Night Allowance (₹/night)</label>
                 <input type="number" name="outstationNightAllowance" value={pricing[settingsVehicleType].outstationNightAllowance} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
               </div>
             </div>
 
-            {/* Rental Settings */}
             <div className="space-y-3 bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
               <h4 className="text-sm font-bold text-blue-600 uppercase tracking-wide border-b border-gray-100 pb-2 mb-2">Rental Rules ({settingsVehicleType})</h4>
               
-              {/* Extra Rates */}
               <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="text-xs text-gray-500 block mb-1">Extra Hr (₹)</label>
@@ -943,7 +1087,6 @@ Book now with OK BOZ Transport!`;
                   </div>
               </div>
 
-              {/* Package List Management */}
               <div className="mt-4 border-t border-gray-100 pt-2">
                   <div className="flex justify-between items-center mb-2">
                       <label className="text-xs font-bold text-gray-700">Packages</label>
@@ -986,8 +1129,8 @@ Book now with OK BOZ Transport!`;
                               </div>
                               <div className="text-right flex items-center gap-2">
                                   <div className="text-[10px] text-gray-600 font-mono text-right">
-                                      <div>S: {pkg.priceSedan}</div>
-                                      <div>X: {pkg.priceSuv}</div>
+                                      <div key={`${pkg.id}-sedan-price`}>S: {pkg.priceSedan}</div>
+                                      <div key={`${pkg.id}-suv-price`}>X: {pkg.priceSuv}</div>
                                   </div>
                                   <button onClick={(e) => handleEditPackage(pkg)} className="text-gray-300 hover:text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity p-1">
                                       <Edit2 className="w-3 h-3" />
@@ -1009,9 +1152,7 @@ Book now with OK BOZ Transport!`;
         </div>
       )}
 
-      {/* --- Main Entry Section --- */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Left Column: Input Form */}
           <div className="space-y-6">
               <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
                   <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
@@ -1031,7 +1172,7 @@ Book now with OK BOZ Transport!`;
                               value={customerDetails.phone}
                               onChange={e => {
                                   setCustomerDetails({...customerDetails, phone: e.target.value});
-                                  setIsPhoneChecked(false); // Reset check on input change
+                                  setIsPhoneChecked(false);
                                   setPhoneLookupResult(null);
                                   setExistingEnquiriesForPhone([]);
                               }}
@@ -1053,84 +1194,120 @@ Book now with OK BOZ Transport!`;
                       </div>
                   )}
                   
-                  {/* --- NEW PLACEMENT: Trip Details directly below Customer Info --- */}
-                  <div className="mt-6 pt-6 border-t border-gray-100">
-                      <div className="flex bg-gray-100 p-1 rounded-lg mb-4">
-                          <button 
-                              onClick={() => setEnquiryCategory('Transport')}
-                              className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${enquiryCategory === 'Transport' ? 'bg-white shadow text-emerald-600' : 'text-gray-500'}`}
-                          >
-                              Transport
-                          </button>
-                          <button 
-                              onClick={() => setEnquiryCategory('General')}
-                              className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${enquiryCategory === 'General' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}
-                          >
-                              General
-                          </button>
-                      </div>
-
-                      {enquiryCategory === 'General' ? (
-                          <div className="space-y-4">
-                              <div className="p-4 bg-gray-50 rounded-lg text-sm text-gray-500 italic text-center">
-                                  Use this for general inquiries. <br/> Switch to Transport for fare calculation.
-                              </div>
-                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Requirement Details</label>
-                              <textarea 
-                                  rows={5}
-                                  className="w-full p-3 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 resize-y text-sm"
-                                  placeholder={phoneLookupResult === 'New' ? "New User Requirement Details" : "Enter new general requirements here..."}
-                                  value={customerDetails.requirements}
-                                  onChange={e => setCustomerDetails({...customerDetails, requirements: e.target.value})}
-                              />
-                              {isPhoneChecked && phoneLookupResult === 'Existing' && existingEnquiriesForPhone.length > 0 && (
-                                  <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 text-blue-800 text-sm space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
-                                      <h4 className="font-bold flex items-center gap-2"><History className="w-4 h-4"/> Past Enquiries for {customerDetails.name}</h4>
-                                      {existingEnquiriesForPhone.map((enq, idx) => (
-                                          <div key={enq.id} className="p-2 border-t border-blue-100 first:border-t-0">
-                                              <p className="font-medium text-xs flex items-center gap-2">
-                                                <Calendar className="w-3 h-3"/> {enq.date || enq.createdAt.split('T')[0]} 
-                                                <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${enq.status === 'Completed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                                                    {enq.status}
-                                                </span>
-                                                {enq.enquiryCategory === 'Transport' && <Car className="w-3 h-3 text-gray-500"/>}
-                                              </p>
-                                              <p className="text-xs text-blue-700 italic mt-1 line-clamp-2">"{enq.details}"</p>
-                                          </div>
-                                      ))}
-                                  </div>
-                              )}
+                  {enquiryCategory === 'General' ? (
+                      <div className="space-y-4 mt-6 pt-6 border-t border-gray-100">
+                          <div className="p-4 bg-gray-50 rounded-lg text-sm text-gray-500 italic text-center">
+                              Use this for general inquiries. <br/> Switch to Transport for fare calculation.
                           </div>
-                      ) : (
-                          <div className="space-y-4">
-                              <div className="flex justify-between items-center border-b border-gray-100 pb-2">
-                                  <h4 className="text-sm font-bold text-gray-700">Trip Details</h4>
-                                  <div className="flex gap-2">
-                                      {['Sedan', 'SUV'].map(v => (
-                                          <button
-                                              key={v}
-                                              onClick={() => setVehicleType(v as any)}
-                                              className={`px-3 py-1 text-xs rounded border transition-colors ${vehicleType === v ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-gray-600 border-gray-200'}`}
-                                          >
-                                              {v}
-                                          </button>
-                                      ))}
-                                  </div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Requirement Details</label>
+                          <textarea 
+                              rows={5}
+                              className="w-full p-3 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 resize-y text-sm"
+                              placeholder={phoneLookupResult === 'New' ? "New User Requirement Details" : "Enter new general requirements here..."}
+                              value={customerDetails.requirements}
+                              onChange={e => setCustomerDetails({...customerDetails, requirements: e.target.value})}
+                          />
+                          {isPhoneChecked && phoneLookupResult === 'Existing' && existingEnquiriesForPhone.length > 0 && (
+                              <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 text-blue-800 text-sm space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
+                                  <h4 className="font-bold flex items-center gap-2"><History className="w-4 h-4"/> Past Enquiries for {customerDetails.name}</h4>
+                                  {existingEnquiriesForPhone.map((enq, idx) => (
+                                      <div key={enq.id} className="p-2 border-t border-blue-100 first:border-t-0">
+                                          <p className="font-medium text-xs flex items-center gap-2">
+                                            <Calendar className="w-3 h-3"/> {enq.date || enq.createdAt.split('T')[0]} 
+                                            <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${enq.status === 'Completed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                                                {enq.status}
+                                            </span>
+                                            {enq.enquiryCategory === 'Transport' && <Car className="w-3 h-3 text-gray-500"/>}
+                                          </p>
+                                          <p className="text-xs text-blue-700 italic mt-1 line-clamp-2">"{enq.details}"</p>
+                                      </div>
+                                  ))}
                               </div>
-
-                              <div className="flex border-b border-gray-200">
-                                  {['Local', 'Rental', 'Outstation'].map(t => (
+                          )}
+                          <div className="space-y-3 pt-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                            <h4 className="text-xs font-bold text-gray-500 uppercase flex items-center gap-2 mb-2">
+                                <Clock className="w-3 h-3" /> Set Follow-up
+                            </h4>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Date</label>
+                                    <input 
+                                        type="date" 
+                                        value={generalFollowUpDate}
+                                        onChange={e => setGeneralFollowUpDate(e.target.value)}
+                                        className="w-full p-2 border rounded-lg outline-none"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Time</label>
+                                    <input 
+                                        type="time" 
+                                        value={generalFollowUpTime}
+                                        onChange={e => setGeneralFollowUpTime(e.target.value)}
+                                        className="w-full p-2 border rounded-lg outline-none"
+                                    />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Priority</label>
+                                <div className="flex gap-2">
+                                    {['Hot', 'Warm', 'Cold'].map(p => (
+                                        <button 
+                                            key={p}
+                                            type="button"
+                                            onClick={() => setGeneralFollowUpPriority(p as any)}
+                                            className={`flex-1 py-2 text-xs font-bold rounded-lg border transition-colors ${generalFollowUpPriority === p ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                                        >
+                                            {p}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <button
+                                    onClick={handleCancelForm}
+                                    className="py-3 border border-gray-200 text-gray-700 rounded-lg font-bold text-sm hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
+                                >
+                                    <X className="w-4 h-4"/> Clear
+                                </button>
+                                <button 
+                                    onClick={handleSaveGeneralFollowUp}
+                                    className="py-3 bg-emerald-600 text-white rounded-lg font-bold text-sm hover:bg-emerald-700 transition-colors shadow-md flex items-center justify-center gap-2"
+                                >
+                                    <Save className="w-4 h-4" /> {editingOrderId ? 'Update Follow-up' : 'Save Follow-up'}
+                                </button>
+                            </div>
+                          </div>
+                      </div>
+                  ) : (
+                      <div className="space-y-4 mt-6 pt-6 border-t border-gray-100">
+                          <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+                              <h4 className="text-sm font-bold text-gray-700">Trip Details</h4>
+                              <div className="flex gap-2">
+                                  {['Sedan', 'SUV'].map(v => (
                                       <button
-                                          key={t}
-                                          onClick={() => setTripType(t as any)}
-                                          className={`flex-1 py-2 text-sm font-medium border-b-2 transition-colors ${tripType === t ? 'border-emerald-500 text-emerald-700' : 'border-transparent text-gray-500'}`}
+                                          key={v}
+                                          onClick={() => setVehicleType(v as any)}
+                                          className={`px-3 py-1 text-xs rounded border transition-colors ${vehicleType === v ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-gray-600 border-gray-200'}`}
+                                      >
+                                          {v}
+                                      </button>
+                                  ))}
+                              </div>
+                          </div>
+
+                          <div className="flex border-b border-gray-200">
+                              {['Local', 'Rental', 'Outstation'].map(t => (
+                                  <button
+                                      key={t}
+                                      onClick={() => setTripType(t as any)}
+                                      className={`flex-1 py-2 text-sm font-medium border-b-2 transition-colors ${tripType === t ? 'border-emerald-500 text-emerald-700' : 'border-transparent text-gray-500'}`}
                                   >
                                       {t}
                                   </button>
                               ))}
                               </div>
 
-                              {/* Common Pickup Location for Transport */}
                               <div className="mb-4">
                                   <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Pickup Location</label>
                                   {!isMapReady ? (
@@ -1149,7 +1326,6 @@ Book now with OK BOZ Transport!`;
 
                               {tripType === 'Local' && (
                                   <div className="space-y-3">
-                                      {/* Drop Location is now here, after Pickup */}
                                       <div>
                                           <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Drop Location</label>
                                           {!isMapReady ? <div className="p-2 bg-gray-100 text-xs rounded">Loading...</div> : (
@@ -1209,137 +1385,71 @@ Book now with OK BOZ Transport!`;
                                       </div>
                                   </div>
                               )}
-                          </div>
-                      )}
-                  </div>
+                              
+                                  <div className="mt-6 pt-6 border-t border-gray-100 space-y-5">
+                                      <div>
+                                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Requirement Details</label>
+                                          <textarea 
+                                              rows={2}
+                                              className="w-full p-3 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 resize-none text-sm"
+                                              placeholder="Special requests, extra luggage, etc..."
+                                              value={customerDetails.requirements}
+                                              onChange={e => setCustomerDetails({...customerDetails, requirements: e.target.value})}
+                                          />
+                                      </div>
 
-                  {/* New Sections: Requirement Details & Assignments */}
-                  <div className="mt-6 pt-6 border-t border-gray-100 space-y-5">
-                      {/* 1. Requirement Details - ONLY for Transport */}
-                      {enquiryCategory === 'Transport' && (
-                          <div>
-                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Requirement Details</label>
-                              <textarea 
-                                  rows={2}
-                                  className="w-full p-3 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 resize-none text-sm"
-                                  placeholder="Special requests, extra luggage, etc..."
-                                  value={customerDetails.requirements}
-                                  onChange={e => setCustomerDetails({...customerDetails, requirements: e.target.value})}
-                              />
-                          </div>
-                      )}
+                                      <div>
+                                          <label className="block text-xs font-bold text-gray-500 uppercase mb-2 flex items-center gap-1">
+                                              <Building2 className="w-3 h-3" /> Assign To
+                                          </label>
+                                          <div className="flex gap-2">
+                                              {isSuperAdmin && (
+                                                  <select className="flex-1 p-2 border border-gray-300 rounded-lg text-sm bg-white" value={assignment.corporateId} onChange={(e) => setAssignment({...assignment, corporateId: e.target.value, branchName: '', staffId: ''})}>
+                                                      <option value="admin">Head Office</option>
+                                                      {corporates.map((c: any) => (<option key={c.email} value={c.email}>{c.companyName}</option>))}
+                                                  </select>
+                                              )}
+                                              <select className="flex-1 p-2 border border-gray-300 rounded-lg text-sm bg-white" value={assignment.branchName} onChange={(e) => setAssignment({...assignment, branchName: e.target.value, staffId: ''})}>
+                                                      <option value="">All Branches</option>
+                                                      {filteredBranches.map((b: any) => (<option key={b.id} value={b.name}>{b.name}</option>))}
+                                                  </select>
+                                                  <select className="flex-1 p-2 border border-gray-300 rounded-lg text-sm bg-white" value={assignment.staffId} onChange={(e) => setAssignment({...assignment, staffId: e.target.value})}>
+                                                      <option value="">Select Staff</option>
+                                                      {filteredStaff.map((s: any) => (<option key={s.id} value={s.id}>{s.name}</option>))}
+                                                  </select>
+                                          </div>
+                                      </div>
 
-                      {/* 2. Assign Enquiry To */}
-                      <div>
-                          <label className="block text-xs font-bold text-gray-500 uppercase mb-2 flex items-center gap-1">
-                              <Building2 className="w-3 h-3" /> Assign To
-                          </label>
-                          <div className="flex gap-2">
-                              {isSuperAdmin && (
-                                  <select className="flex-1 p-2 border border-gray-300 rounded-lg text-sm bg-white" value={assignment.corporateId} onChange={(e) => setAssignment({...assignment, corporateId: e.target.value, branchName: '', staffId: ''})}>
-                                      <option value="admin">Head Office</option>
-                                      {corporates.map((c: any) => (<option key={c.email} value={c.email}>{c.companyName}</option>))}
-                                  </select>
-                              )}
-                              <select className="flex-1 p-2 border border-gray-300 rounded-lg text-sm bg-white" value={assignment.branchName} onChange={(e) => setAssignment({...assignment, branchName: e.target.value, staffId: ''})}>
-                                  <option value="">All Branches</option>
-                                  {filteredBranches.map((b: any) => (<option key={b.id} value={b.name}>{b.name}</option>))}
-                              </select>
-                              <select className="flex-1 p-2 border border-gray-300 rounded-lg text-sm bg-white" value={assignment.staffId} onChange={(e) => setAssignment({...assignment, staffId: e.target.value})}>
-                                  <option value="">Select Staff</option>
-                                  {filteredStaff.map((s: any) => (<option key={s.id} value={s.id}>{s.name}</option>))}
-                              </select>
-                          </div>
-                      </div>
-
-                      {/* 3. Action Buttons - Conditional Rendering */}
-                      {enquiryCategory === 'Transport' ? (
-                          <div className="space-y-3 pt-2">
-                              <div className="grid grid-cols-2 gap-3">
-                                  <button 
-                                      onClick={handleOpenSchedule}
-                                      className="py-3 border border-blue-200 text-blue-600 rounded-lg font-bold text-sm hover:bg-blue-50 transition-colors flex items-center justify-center gap-2"
-                                  >
-                                      <Calendar className="w-4 h-4" /> {editingOrderId ? 'Update Schedule' : 'Schedule'}
-                                  </button>
-                                  <button 
-                                      onClick={handleBookNow}
-                                      className="py-3 bg-emerald-600 text-white rounded-lg font-bold text-sm hover:bg-emerald-700 transition-colors shadow-md flex items-center justify-center gap-2"
-                                  >
-                                      <ArrowRight className="w-4 h-4" /> {editingOrderId ? 'Update Now' : 'Book Now'}
-                                  </button>
+                                      <div className="space-y-3 pt-2">
+                                          <div className="grid grid-cols-2 gap-3">
+                                              <button 
+                                                  onClick={handleOpenSchedule}
+                                                  className="py-3 border border-blue-200 text-blue-600 rounded-lg font-bold text-sm hover:bg-blue-50 transition-colors flex items-center justify-center gap-2"
+                                              >
+                                                  <Calendar className="w-4 h-4" /> {editingOrderId ? 'Update Schedule' : 'Schedule'}
+                                              </button>
+                                              <button 
+                                                  onClick={handleBookNow}
+                                                  className="py-3 bg-emerald-600 text-white rounded-lg font-bold text-sm hover:bg-emerald-700 transition-colors shadow-md flex items-center justify-center gap-2"
+                                              >
+                                                  <ArrowRight className="w-4 h-4" /> {editingOrderId ? 'Update Now' : 'Book Now'}
+                                              </button>
+                                          </div>
+                                          <div>
+                                              <button 
+                                                  onClick={handleCancelForm}
+                                                  className="w-full py-2 text-gray-400 hover:text-red-500 rounded-lg font-medium text-sm hover:bg-gray-50 transition-colors flex items-center justify-center gap-1 rounded-lg border border-transparent hover:border-gray-200"
+                                              >
+                                                  <X className="w-3 h-3" /> Clear Form
+                                              </button>
+                                          </div>
+                                      </div>
+                                  </div>
                               </div>
-                              <div>
-                                  <button 
-                                      onClick={handleCancelForm}
-                                      className="w-full py-2 text-gray-400 hover:text-red-500 rounded-lg font-medium text-sm hover:bg-gray-50 transition-colors flex items-center justify-center gap-1 rounded-lg border border-transparent hover:border-gray-200"
-                                  >
-                                      <X className="w-3 h-3" /> Clear Form
-                                  </button>
-                              </div>
-                          </div>
-                      ) : (
-                          // --- NEW: General Enquiry Follow-up Section ---
-                          <div className="space-y-3 pt-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                            <h4 className="text-xs font-bold text-gray-500 uppercase flex items-center gap-2 mb-2">
-                                <Clock className="w-3 h-3" /> Set Follow-up
-                            </h4>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Date</label>
-                                    <input 
-                                        type="date" 
-                                        value={generalFollowUpDate}
-                                        onChange={e => setGeneralFollowUpDate(e.target.value)}
-                                        className="w-full p-2 border rounded-lg outline-none"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Time</label>
-                                    <input 
-                                        type="time" 
-                                        value={generalFollowUpTime}
-                                        onChange={e => setGeneralFollowUpTime(e.target.value)}
-                                        className="w-full p-2 border rounded-lg outline-none"
-                                    />
-                                </div>
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Priority</label>
-                                <div className="flex gap-2">
-                                    {['Hot', 'Warm', 'Cold'].map(p => (
-                                        <button 
-                                            key={p}
-                                            type="button"
-                                            onClick={() => setGeneralFollowUpPriority(p)}
-                                            className={`flex-1 py-2 text-xs font-bold rounded-lg border transition-colors ${generalFollowUpPriority === p ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
-                                        >
-                                            {p}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-3">
-                                <button
-                                    onClick={handleCancelForm}
-                                    className="py-3 border border-gray-200 text-gray-700 rounded-lg font-bold text-sm hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
-                                >
-                                    <X className="w-4 h-4"/> Clear
-                                </button>
-                                <button 
-                                    onClick={handleSaveGeneralFollowUp}
-                                    className="py-3 bg-emerald-600 text-white rounded-lg font-bold text-sm hover:bg-emerald-700 transition-colors shadow-md flex items-center justify-center gap-2"
-                                >
-                                    <Save className="w-4 h-4" /> {editingOrderId ? 'Update Follow-up' : 'Save Follow-up'}
-                                </button>
-                            </div>
-                          </div>
-                      )}
-                  </div>
+                  )}
               </div>
           </div>
 
-          {/* Right Column: Output */}
           <div className="space-y-6">
               <div className="bg-slate-900 text-white p-6 rounded-xl shadow-lg relative overflow-hidden">
                   <div className="relative z-10">
@@ -1357,7 +1467,7 @@ Book now with OK BOZ Transport!`;
               <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
                   <div className="flex justify-between items-center mb-2">
                       <h4 className="font-bold text-gray-800 flex items-center gap-2">
-                          <MessageCircle className="w-4 h-4" /> Generated Message
+                          <MessageCircle className="w-4 h-4 text-emerald-500" /> Generated Message
                       </h4>
                       <button 
                           onClick={() => {navigator.clipboard.writeText(generatedMessage); setTimeout(() => alert("Copied!"), 0);}}
@@ -1389,181 +1499,6 @@ Book now with OK BOZ Transport!`;
           </div>
       </div>
 
-      {/* DASHBOARD SECTION */}
-      <div className="space-y-6 border-t border-gray-200 pt-8 mt-4">
-          <div className="flex justify-between items-center">
-              <h2 className="text-xl font-bold text-gray-800">Orders Dashboard</h2>
-          </div>
-
-          {/* Stats Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                  <p className="text-xs font-bold text-gray-500 uppercase">Total Orders</p>
-                  <h3 className="text-2xl font-bold text-gray-800">{dashboardStats.total}</h3>
-              </div>
-              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                  <p className="text-xs font-bold text-gray-500 uppercase">Accepted</p>
-                  <h3 className="text-2xl font-bold text-emerald-600">{dashboardStats.accepted}</h3>
-              </div>
-              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                  <p className="text-xs font-bold text-gray-500 uppercase">Driver Assigned</p>
-                  <h3 className="text-2xl font-bold text-blue-600">{dashboardStats.assigned}</h3>
-              </div>
-              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                  <p className="text-xs font-bold text-gray-500 uppercase">Completed</p>
-                  <h3 className="text-2xl font-bold text-purple-600">{dashboardStats.completed}</h3>
-              </div>
-              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                  <p className="text-xs font-bold text-gray-500 uppercase">Scheduled</p>
-                  <h3 className="text-2xl font-bold text-orange-600">{dashboardStats.scheduled}</h3>
-              </div>
-          </div>
-
-          {/* Filter Toolbar */}
-          <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex flex-col md:flex-row gap-3">
-              <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-                  <input 
-                      placeholder="Search Orders..." 
-                      className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                      value={filterSearch}
-                      onChange={(e) => setFilterSearch(e.target.value)}
-                  />
-              </div>
-              <select 
-                  className="px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none bg-white cursor-pointer"
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
-              >
-                  <option value="All">All Status</option>
-                  <option value="Scheduled">Scheduled</option>
-                  <option value="Order Accepted">Order Accepted</option>
-                  <option value="Driver Assigned">Driver Assigned</option>
-                  <option value="Completed">Completed</option>
-                  <option value="Cancelled">Cancelled</option>
-                  <option value="New">New Enquiry</option>
-                  <option value="In Progress">In Progress Enquiry</option>
-                  <option value="Converted">Converted Enquiry</option>
-                  <option value="Closed">Closed Enquiry</option>
-              </select>
-              <input 
-                  type="date"
-                  className="px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none bg-white"
-                  value={filterDate}
-                  onChange={(e) => setFilterDate(e.target.value)}
-              />
-          </div>
-
-          {/* Orders List */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-              <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm whitespace-nowrap">
-                      <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-200">
-                          <tr>
-                              <th className="px-6 py-4">Order ID / Date</th>
-                              <th className="px-6 py-4">Customer</th>
-                              <th className="px-6 py-4">Trip/Enquiry Info</th>
-                              <th className="px-6 py-4">Assigned To</th>
-                              <th className="px-6 py-4">Status</th>
-                              <th className="px-6 py-4 text-right">Actions</th>
-                          </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                          {filteredOrders.length > 0 ? filteredOrders.map((order) => (
-                              <tr key={order.id} className="hover:bg-gray-50 transition-colors">
-                                  <td className="px-6 py-4">
-                                      <div className="font-bold text-gray-900">{order.id}</div>
-                                      <div className="text-xs text-gray-500">
-                                        {order.date || order.createdAt.split(',')[0]} 
-                                        {order.nextFollowUp ? ` • ${new Date(order.nextFollowUp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
-                                      </div>
-                                  </td>
-                                  <td className="px-6 py-4">
-                                      <div className="font-medium text-gray-900">{order.name}</div>
-                                      <div className="text-xs text-gray-500">{order.phone}</div>
-                                  </td>
-                                  <td className="px-6 py-4 max-w-xs " title={order.details}>
-                                      <p className="truncate">{order.details}</p>
-                                      {order.enquiryCategory === 'General' && (
-                                          <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-full mt-1 inline-block">
-                                              General Enquiry
-                                          </span>
-                                      )}
-                                      {order.priority && order.enquiryCategory === 'General' && (
-                                          <span className={`px-1.5 py-0.5 rounded-full mt-1 ml-1 inline-block text-[10px] font-bold ${
-                                              order.priority === 'Hot' ? 'bg-red-50 text-red-700' :
-                                              order.priority === 'Warm' ? 'bg-yellow-50 text-yellow-700' :
-                                              'bg-green-50 text-green-700'
-                                          }`}>
-                                              {order.priority}
-                                          </span>
-                                      )}
-                                  </td>
-                                  <td className="px-6 py-4 text-gray-600">
-                                      {order.assignedTo || 'Unassigned'}
-                                  </td>
-                                  <td className="px-6 py-4">
-                                      <span className={`px-2 py-1 rounded-full text-xs font-bold border ${
-                                          order.status === 'Completed' ? 'bg-green-50 text-green-700 border-green-200' :
-                                          order.status === 'Cancelled' ? 'bg-red-50 text-red-700 border-red-200' :
-                                          order.status === 'Scheduled' ? 'bg-orange-50 text-orange-700 border-orange-200' :
-                                          order.status === 'Order Accepted' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                                          order.status === 'Driver Assigned' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' :
-                                          'bg-gray-50 text-gray-700 border-gray-200' // Default for New, In Progress, Converted, Closed
-                                      }`}>
-                                          {order.status}
-                                      </span>
-                                  </td>
-                                  <td className="px-6 py-4 text-right">
-                                      <div className="flex justify-end gap-2">
-                                          <button 
-                                              onClick={() => handleEditOrder(order)}
-                                              className="text-gray-400 hover:text-blue-500 p-1.5 rounded-full hover:bg-blue-50 transition-colors"
-                                              title="Edit Order"
-                                          >
-                                              <Edit2 className="w-4 h-4" />
-                                          </button>
-                                          {order.status !== 'Completed' && order.status !== 'Cancelled' && (
-                                              <>
-                                                  {order.status !== 'Driver Assigned' && order.enquiryCategory === 'Transport' && (
-                                                      <button 
-                                                          onClick={() => handleStatusUpdate(order.id, 'Driver Assigned')}
-                                                          className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200"
-                                                      >
-                                                          Assign Driver
-                                                      </button>
-                                                  )}
-                                                  <button 
-                                                      onClick={() => handleStatusUpdate(order.id, 'Completed')}
-                                                      className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded hover:bg-green-200"
-                                                      >
-                                                      Complete
-                                                  </button>
-                                                  <button 
-                                                      onClick={() => handleStatusUpdate(order.id, 'Cancelled')}
-                                                      className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded hover:bg-red-200"
-                                                  >
-                                                      Cancel
-                                                  </button>
-                                              </>
-                                          )}
-                                      </div>
-                                  </td>
-                              </tr>
-                          )) : (
-                              <tr>
-                                  <td colSpan={6} className="text-center py-10 text-gray-500">
-                                      No orders found.
-                                  </td>
-                              </tr>
-                          )}
-                      </tbody>
-                  </table>
-              </div>
-          </div>
-      </div>
-
-      {/* Scheduling Modal */}
       {isScheduleModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
               <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm animate-in fade-in zoom-in duration-200">

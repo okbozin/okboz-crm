@@ -162,6 +162,20 @@ export interface SalaryAdvanceRequest {
   corporateId?: string; // For syncing to correct dashboard
 }
 
+// NEW: Notification Interface
+export interface Notification {
+  id: string;
+  type: 'system' | 'login' | 'leave_request' | 'advance_request' | 'task_assigned' | 'custom_message' | 'new_enquiry';
+  title: string;
+  message: string;
+  timestamp: string; // ISO string
+  read: boolean;
+  targetRoles: UserRole[]; // e.g., [UserRole.ADMIN, UserRole.CORPORATE]
+  corporateId?: string; // Optional: target a specific corporate (email)
+  employeeId?: string;  // Optional: target a specific employee (id)
+  link?: string;        // Optional: path to navigate to
+}
+
 
 declare global {
   namespace google {

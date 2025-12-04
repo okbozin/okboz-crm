@@ -1,10 +1,9 @@
 
-
 import React, { useState } from 'react';
 import { UserRole } from '../types';
 import { Shield, User, Lock, Mail, ArrowRight, Building2, Eye, EyeOff, AlertTriangle, Cloud, BadgeCheck } from 'lucide-react';
 import { useBranding } from '../context/BrandingContext';
-import { sendSystemNotification } from './services/cloudService'; // Import sendSystemNotification
+import { sendSystemNotification, HARDCODED_FIREBASE_CONFIG } from '../services/cloudService'; // Import sendSystemNotification
 
 interface LoginProps {
   onLogin: (role: UserRole) => void;
@@ -20,13 +19,16 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
+  // Check connection status based on config availability
+  const isConnected = !!(HARDCODED_FIREBASE_CONFIG.apiKey && HARDCODED_FIREBASE_CONFIG.apiKey.length > 5) || !!localStorage.getItem('firebase_config');
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
 
     // Simulate network delay for better UX
-    setTimeout(async () => { // Made async to await sendSystemNotification
+    setTimeout(async () => {
         let success = false;
         let role = UserRole.ADMIN;
         let sessionId = '';
@@ -36,7 +38,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
         if (activeTab === 'admin') {
             // Check against stored admin password or default
-            const storedAdminPass = localStorage.getItem('admin_password') || '123456'; // Updated default per request
+            const storedAdminPass = localStorage.getItem('admin_password') || '123456'; 
             const adminEmail = 'okboz.com@gmail.com'; 
 
             if (email.toLowerCase() === adminEmail.toLowerCase() && password === storedAdminPass) {
@@ -100,19 +102,17 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 localStorage.setItem('logged_in_employee_corporate_id', corporateOwnerId);
 
                 // Send login notification
-                await sendSystemNotification({
-                    id: `login-${Date.now()}`,
-                    type: 'login',
+                // Fix: Explicitly cast 'type' to 'login' literal string
+                const loginNotification = {
+                    type: 'login' as 'login',
                     title: 'Employee Logged In',
                     message: `${employeeName} (${employeeId}) has logged in.`,
-                    timestamp: new Date().toISOString(),
-                    read: false,
                     targetRoles: [UserRole.ADMIN, UserRole.CORPORATE],
                     corporateId: corporateOwnerId, // Admin sees all, Corporate only sees their own staff's logins
-                    employeeName: employeeName,
                     employeeId: employeeId,
                     link: `/admin/staff` // Admin and Corporate can go to staff list
-                });
+                };
+                await sendSystemNotification(loginNotification);
             }
 
             onLogin(role);
@@ -154,8 +154,9 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               Secure login for Admin, Franchise Partners, and Staff Members.
             </p>
             
-            <div className="flex items-center gap-2 text-sm text-emerald-600 font-medium bg-emerald-50 px-3 py-1.5 rounded-lg w-fit mb-6">
-                <Cloud className="w-4 h-4" /> Cloud Database Connected
+            <div className={`flex items-center gap-2 text-sm font-medium px-3 py-1.5 rounded-lg w-fit mb-6 transition-colors ${isConnected ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-100 text-gray-500'}`}>
+                <Cloud className="w-4 h-4" /> 
+                {isConnected ? 'Cloud Database Connected' : 'Local Mode (No Cloud)'}
             </div>
           </div>
         </div>

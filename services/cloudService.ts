@@ -1,8 +1,8 @@
-
 import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
-import { getFirestore, doc, setDoc, collection, getDocs, Firestore } from "firebase/firestore";
+import { getFirestore, doc, setDoc, collection, getDocs, Firestore, updateDoc, query, where } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { getAuth, signInAnonymously } from "firebase/auth";
+import { Notification, UserRole } from '../types'; // Import Notification and UserRole
 
 export interface FirebaseConfig {
   apiKey: string;
@@ -75,6 +75,8 @@ const NAMESPACED_KEYS = [
   'app_settings',
   'trips_data'
 ];
+
+const NOTIFICATION_COLLECTION = 'global_notifications';
 
 // --- SYNC STATE MANAGEMENT ---
 let isSyncing = false;
@@ -338,9 +340,116 @@ export const getCloudDatabaseStats = async (config?: FirebaseConfig) => {
   }
 };
 
-// Dummies for compatibility
-export const sendSystemNotification = async (...args: any[]) => Promise.resolve();
-export const fetchSystemNotifications = async () => Promise.resolve([]);
-export const markNotificationAsRead = async (...args: any[]) => Promise.resolve();
+// --- NEW: Notification Service Functions ---
+
+// Send a system notification to Firestore
+// @ts-ignore - Updated Omit type to reflect internal timestamp and read generation
+export const sendSystemNotification = async (notification: Omit<Notification, 'id' | 'timestamp' | 'read'>) => {
+  try {
+    const app = getFirebaseApp();
+    if (!app) { console.warn("Firebase not connected for notification."); return; }
+    await ensureAuth(app);
+    const db = getDb(app);
+
+    const newNotification: Notification = {
+      ...notification,
+      id: `NOTIF-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      timestamp: new Date().toISOString(),
+      read: false,
+    };
+
+    await setDoc(doc(db, NOTIFICATION_COLLECTION, newNotification.id), newNotification);
+    // console.log("Notification sent:", newNotification.id);
+  } catch (error) {
+    console.error("Failed to send notification:", error);
+  }
+};
+
+// Fetch notifications relevant to the current user
+export const fetchSystemNotifications = async (): Promise<Notification[]> => {
+  try {
+    const app = getFirebaseApp();
+    if (!app) return [];
+    await ensureAuth(app);
+    const db = getDb(app);
+
+    const userRole = localStorage.getItem('user_role') as UserRole;
+    const sessionId = localStorage.getItem('app_session_id') || 'admin';
+    
+    let q = collection(db, NOTIFICATION_COLLECTION);
+    
+    // Base query: filter out read notifications
+    // Note: Firestore `where` clause can only handle one `array-contains`
+    // So for `targetRoles`, we have to fetch all and filter in client if multiple roles in targetRoles are possible
+    // For simplicity for now, we'll assume a single role or global.
+    
+    // For now, fetch all unread and filter on client based on more complex rules
+    // Or, if rules allow, fetch by role. For this demo, let's fetch all unread
+    // and apply client-side filtering for complex `targetRoles` logic.
+    
+    // Query notifications that are NOT read OR have targetRoles matching current user
+    // It's not efficient to combine `!=` and array-contains in Firestore without multiple queries
+    // So, we will fetch all unread, and filter on the client for targetRoles
+    const snapshot = await getDocs(q);
+    let allNotifications: Notification[] = [];
+    snapshot.forEach(doc => {
+      allNotifications.push(doc.data() as Notification);
+    });
+
+    const relevantNotifications = allNotifications.filter(notif => {
+      // 1. Filter out already read notifications (client side for simplicity with complex targetRoles)
+      if (notif.read) return false;
+
+      // 2. Check if current user's role is in targetRoles
+      const isTargetRole = notif.targetRoles.includes(userRole);
+      if (!isTargetRole) return false;
+
+      // 3. Check corporateId for CORPORATE role
+      if (userRole === UserRole.CORPORATE && notif.corporateId && notif.corporateId !== sessionId) {
+        return false;
+      }
+      // 4. Check employeeId for EMPLOYEE role
+      if (userRole === UserRole.EMPLOYEE && notif.employeeId && notif.employeeId !== sessionId) {
+        return false;
+      }
+
+      // 5. Admin (Super Admin) sees all that target ADMIN role or are global (no specific corporateId/employeeId)
+      if (userRole === UserRole.ADMIN) {
+        const isGlobalOrAdminTargeted = (!notif.corporateId && !notif.employeeId) || (notif.targetRoles.includes(UserRole.ADMIN));
+        if (isGlobalOrAdminTargeted) return true;
+        // Also admin can see notifications for their managed corporates/employees
+        // This would require fetching all corporate accounts and staff under admin
+        // For simplicity, we'll only check if targeted directly to admin role or global.
+      }
+      
+      return true; // If it passes all filters, it's relevant
+    });
+
+    // Sort by timestamp newest first
+    return relevantNotifications.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+  } catch (error) {
+    console.error("Failed to fetch notifications:", error);
+    return [];
+  }
+};
+
+// Mark a specific notification as read
+export const markNotificationAsRead = async (notificationId: string) => {
+  try {
+    const app = getFirebaseApp();
+    if (!app) { console.warn("Firebase not connected for notification."); return; }
+    await ensureAuth(app);
+    const db = getDb(app);
+
+    const notificationRef = doc(db, NOTIFICATION_COLLECTION, notificationId);
+    await updateDoc(notificationRef, { read: true });
+    // console.log("Notification marked as read:", notificationId);
+  } catch (error) {
+    console.error("Failed to mark notification as read:", error);
+  }
+};
+
+// No need for setupAutoSync and hydrateFromCloud as they are covered by autoLoadFromCloud and syncToCloud
 export const setupAutoSync = () => {};
 export const hydrateFromCloud = async () => Promise.resolve();

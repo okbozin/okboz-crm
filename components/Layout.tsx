@@ -1,12 +1,11 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, MapPin, Calendar, DollarSign, Briefcase, Menu, X, LogOut, UserCircle, Building, Settings, Target, CreditCard, ClipboardList, ReceiptIndianRupee, Navigation, Car, Building2, PhoneIncoming, GripVertical, Edit2, Check, FileText, Layers, PhoneCall, Bus, Bell, Sun, Moon, Monitor, Mail, UserCog, CarFront, BellRing, BarChart3, Map, Headset } from 'lucide-react';
+import { LayoutDashboard, Users, MapPin, Calendar, DollarSign, Briefcase, Menu, X, LogOut, UserCircle, Building, Settings, Target, CreditCard, ClipboardList, ReceiptIndianRupee, Navigation, Car, Building2, PhoneIncoming, GripVertical, Edit2, Check, FileText, Layers, PhoneCall, Bus, Bell, Sun, Moon, Monitor, Mail, UserCog, CarFront, BellRing, BarChart3, Map, Headset, BellDot } from 'lucide-react';
 import { UserRole, Enquiry, CorporateAccount, Employee } from '../types';
 import { useBranding } from '../context/BrandingContext';
 import { useTheme } from '../context/ThemeContext';
-// import { useNotification } from '../context/NotificationContext'; // Removed: Import useNotification
-// import { sendSystemNotification } = '../services/cloudService'; // Removed: Import sendSystemNotification
+import { useNotification } from '../context/NotificationContext'; // NEW: Import useNotification
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -47,25 +46,20 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
   const { theme, setTheme } = useTheme();
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
   
-  // Notification Context (Removed)
-  // const { notifications, markNotificationAsRead, playAlarmSound } = useNotification();
+  // NEW: Notification Context
+  const { notifications, unreadCount, markNotificationAsRead, markAllNotificationsAsRead } = useNotification();
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const notificationRef = useRef<HTMLDivElement>(null); // Ref for notification dropdown
   
-  // State to manage the ordered list of links
-  const [orderedLinks, setOrderedLinks] = useState(MASTER_ADMIN_LINKS);
+  const themeRef = useRef<HTMLDivElement>(null); // Still needed for theme toggle
 
-  // State for User Profile Display
+  // Calculate new task count for Tasks tab (can be enhanced to include notifications for tasks)
+  const [newTaskCount, setNewTaskCount] = useState(0);
+
+  // Load user details based on role and session
   const [userName, setUserName] = useState('');
   const [userSubtitle, setUserSubtitle] = useState('');
 
-  // State for new enquiry count for Tasks tab
-  const [newTaskCount, setNewTaskCount] = useState(0);
-
-  // Notification State (Simplified/Removed)
-  // const [notificationsOpen, setNotificationsOpen] = useState(false);
-  // const notificationRef = useRef<HTMLDivElement>(null);
-  const themeRef = useRef<HTMLDivElement>(null); // Still needed for theme toggle
-
-  // Calculate new task count based on role and enquiries
   const calculateNewTaskCount = () => {
     try {
         const enquiriesJson = localStorage.getItem('global_enquiries_data');
@@ -165,6 +159,7 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
   }, [role]);
 
   // Load order from local storage on mount
+  const [orderedLinks, setOrderedLinks] = useState(MASTER_ADMIN_LINKS); // Initialize with master
   useEffect(() => {
     if (role === UserRole.ADMIN || role === UserRole.CORPORATE) {
       const savedOrder = localStorage.getItem('admin_sidebar_order');
@@ -202,12 +197,12 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
       return () => window.removeEventListener('storage', calculateNewTaskCount);
   }, [role]); // Re-run if role changes
 
-  // Click outside to close notifications and theme menu (notifications part removed)
+  // Click outside to close notifications and theme menu
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      // if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
-      //   setNotificationsOpen(false);
-      // }
+      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
+        setNotificationsOpen(false);
+      }
       if (themeRef.current && !themeRef.current.contains(event.target as Node)) {
         setThemeMenuOpen(false);
       }
@@ -218,24 +213,15 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
     };
   }, []);
 
-  // Removed: Handle click on notification: mark read and redirect
-  // const handleNotificationClick = (notificationId: string, link?: string) => {
-  //   const userId = localStorage.getItem('app_session_id') || 'guest';
-  //   markNotificationAsRead(notificationId, userId);
-  //   setNotificationsOpen(false);
-  //   if (link) {
-  //     navigate(link);
-  //   }
-  // };
+  // Handle click on notification: mark read and redirect
+  const handleNotificationClick = (notificationId: string, link?: string) => {
+    markNotificationAsRead(notificationId);
+    setNotificationsOpen(false);
+    if (link) {
+      navigate(link);
+    }
+  };
 
-  // Removed: handleMarkAllRead
-  // const handleMarkAllRead = () => {
-  //   const userId = localStorage.getItem('app_session_id') || 'guest';
-  //   notifications.filter(n => !n.read).forEach(n => markNotificationAsRead(n.id, userId));
-  // }
-
-  // Removed: unreadCount
-  // const unreadCount = notifications.filter(n => !n.read).length;
 
   // Drag and Drop Handlers
   const handleDragStart = (e: React.DragEvent<HTMLAnchorElement>, index: number) => {
@@ -303,14 +289,11 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
   const userLinks = [
     { path: '/user', label: 'My Attendance', icon: Calendar },
     { path: '/user/tasks', label: 'My Tasks', icon: ClipboardList },
-    // { path: '/user/vehicle-enquiries', label: 'Vehicle Enquiries', icon: CarFront }, // Removed: Vehicle Enquiries for Employee
     { path: '/user/customer-care', label: 'Customer Care', icon: Headset }, // Added: Customer Care for Employee
     { path: '/user/vendors', label: 'Vendor Attachment', icon: Car },
     { path: '/user/salary', label: 'My Salary', icon: DollarSign },
     { path: '/user/documents', label: 'Documents', icon: FileText },
     { path: '/user/apply-leave', label: 'Apply Leave', icon: Briefcase },
-    // { path: '/user/reception', label: 'Reception Desk', icon: PhoneCall }, // Removed Reception Desk
-    // { path: '/user/profile', label: 'My Profile', icon: UserCircle }, // Removed Profile (Settings) as requested
   ];
 
   // Decide which set of links to render
@@ -320,30 +303,6 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
   const canDrag = role === UserRole.ADMIN && isEditingSidebar;
 
   const handleLogout = async () => {
-    // Removed: If logging out an employee, send a logout notification
-    // const loggedInEmployeeName = localStorage.getItem('logged_in_employee_name');
-    // const loggedInEmployeeId = localStorage.getItem('logged_in_employee_id');
-    // const loggedInEmployeeCorporateId = localStorage.getItem('logged_in_employee_corporate_id');
-
-    // if (loggedInEmployeeName && loggedInEmployeeId && role === UserRole.EMPLOYEE) {
-    //     await sendSystemNotification({
-    //         id: `logout-${Date.now()}`,
-    //         type: 'logout',
-    //         title: 'Employee Logged Out',
-    //         message: `${loggedInEmployeeName} (${loggedInEmployeeId}) has logged out.`,
-    //         timestamp: new Date().toISOString(),
-    //         read: false,
-    //         targetRoles: [UserRole.ADMIN, UserRole.CORPORATE],
-    //         corporateId: loggedInEmployeeCorporateId === 'admin' ? 'admin' : loggedInEmployeeCorporateId || undefined,
-    //         employeeName: loggedInEmployeeName,
-    //         employeeId: loggedInEmployeeId,
-    //         link: `/admin/staff`
-    //     });
-    //     // Clear stored employee details
-    //     localStorage.removeItem('logged_in_employee_name');
-    //     localStorage.removeItem('logged_in_employee_id');
-    //     localStorage.removeItem('logged_in_employee_corporate_id');
-    // }
     onLogout();
   };
 
@@ -470,7 +429,52 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
           </div>
 
           <div className="flex items-center gap-4">
-            
+            {/* NEW: Notification Button */}
+            <div className="relative" ref={notificationRef}>
+              <button
+                onClick={() => setNotificationsOpen(!notificationsOpen)}
+                className={`p-2 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 rounded-full transition-colors relative ${unreadCount > 0 && !notificationsOpen ? 'animate-blink-bell' : ''}`}
+                title="Notifications"
+              >
+                <BellRing className="w-5 h-5" />
+                {unreadCount > 0 && (
+                  <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+                )}
+              </button>
+
+              {notificationsOpen && (
+                <div className="absolute right-0 mt-2 w-72 bg-white dark:bg-gray-900 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200 max-h-96 overflow-y-auto custom-scrollbar">
+                  <div className="flex justify-between items-center px-4 pb-2 border-b border-gray-100 dark:border-gray-700">
+                    <h4 className="font-bold text-gray-800 dark:text-white text-sm">Notifications ({unreadCount})</h4>
+                    <button 
+                      onClick={() => { markAllNotificationsAsRead(); setNotificationsOpen(false); }}
+                      className="text-xs text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50"
+                      disabled={unreadCount === 0}
+                    >
+                      Mark All as Read
+                    </button>
+                  </div>
+                  {notifications.length === 0 ? (
+                    <p className="text-sm text-gray-500 dark:text-gray-400 p-4 text-center">No new notifications.</p>
+                  ) : (
+                    notifications.map(notif => (
+                      <div 
+                        key={notif.id}
+                        onClick={() => handleNotificationClick(notif.id, notif.link)}
+                        className={`flex flex-col gap-1 px-4 py-3 cursor-pointer border-b border-gray-50 dark:border-gray-800 last:border-b-0
+                                    ${notif.read ? 'bg-gray-50 dark:bg-gray-800 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700' : 'bg-white dark:bg-gray-900 text-gray-800 dark:text-white hover:bg-emerald-50 dark:hover:bg-gray-700'}`}
+                      >
+                        <p className={`font-semibold text-sm ${notif.read ? 'text-gray-600 dark:text-gray-400' : 'text-gray-900 dark:text-white'}`}>{notif.title}</p>
+                        <p className="text-xs text-gray-600 dark:text-gray-400">{notif.message}</p>
+                        <span className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">{new Date(notif.timestamp).toLocaleString()}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+
+
             {/* Theme Toggle */}
             <div className="relative" ref={themeRef}>
               <button
