@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
@@ -144,7 +145,11 @@ const App: React.FC = () => {
                         element={userRole === UserRole.ADMIN ? <EmailMarketing /> : <Navigate to="/admin" replace />} 
                       />
                       <Route path="/admin/reception" element={<Reception />} />
-                      <Route path="/admin/vehicle-enquiries" element={<VehicleEnquiries />} />
+                      {/* Vehicle Enquiries - Only Super Admin */}
+                      <Route 
+                        path="/admin/vehicle-enquiries" 
+                        element={userRole === UserRole.ADMIN ? <VehicleEnquiries /> : <Navigate to="/admin" replace />} 
+                      />
                       <Route path="/admin/customer-care" element={<CustomerCare />} />
                       <Route path="/admin/trips" element={<TripBooking />} /> 
                       <Route path="/admin/tracking" element={<LiveTracking />} />

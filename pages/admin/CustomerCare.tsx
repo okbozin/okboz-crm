@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Settings, Loader2, ArrowRight, ArrowRightLeft, 
@@ -62,6 +61,12 @@ const DEFAULT_PRICING_SUV: PricingRules = {
   outstationDriverAllowance: 500, outstationNightAllowance: 400 
 };
 
+// Helper function for initial enquiries state
+const getInitialEnquiries = (): Enquiry[] => {
+  const saved = localStorage.getItem('global_enquiries_data');
+  return saved ? JSON.parse(saved) : [];
+};
+
 export const CustomerCare: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [settingsVehicleType, setSettingsVehicleType] = useState<VehicleType>('Sedan');
@@ -101,6 +106,8 @@ export const CustomerCare: React.FC = () => {
   // Package Management State
   const [showAddPackage, setShowAddPackage] = useState(false);
   const [newPackage, setNewPackage] = useState({ name: '', hours: '', km: '', priceSedan: '', priceSuv: '' });
+  const [editingPackageId, setEditingPackageId] = useState<string | null>(null);
+
 
   const [generatedMessage, setGeneratedMessage] = useState('');
   const [estimatedCost, setEstimatedCost] = useState(0);
@@ -116,12 +123,6 @@ export const CustomerCare: React.FC = () => {
     staffId: ''
   });
 
-  // --- Enquiry List Management ---
-  const [enquiries, setEnquiries] = useState<Enquiry[]>(() => {
-      const saved = localStorage.getItem('global_enquiries_data');
-      return saved ? JSON.parse(saved) : [];
-  });
-
   // --- Dashboard Filter States ---
   const [filterStatus, setFilterStatus] = useState<string>('All');
   const [filterSearch, setFilterSearch] = useState<string>('');
@@ -133,6 +134,12 @@ export const CustomerCare: React.FC = () => {
 
   const sessionId = localStorage.getItem('app_session_id') || 'admin';
   const isSuperAdmin = sessionId === 'admin';
+
+  // --- Enquiry List Management ---
+  // Fix: Used the new getInitialEnquiries function
+  const [enquiries, setEnquiries] = useState<Enquiry[]>(getInitialEnquiries);
+  const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
+
 
   // Persistence
   useEffect(() => {
@@ -287,6 +294,73 @@ export const CustomerCare: React.FC = () => {
     }));
   };
 
+  // Add Package handlers
+  const handleAddPackage = () => {
+    if (!newPackage.name || !newPackage.priceSedan) return;
+    
+    if (editingPackageId) {
+        // Update existing package
+        const updatedPackages = rentalPackages.map(pkg => 
+            pkg.id === editingPackageId ? {
+                ...pkg,
+                name: newPackage.name,
+                hours: parseFloat(newPackage.hours) || 0,
+                km: parseFloat(newPackage.km) || 0,
+                priceSedan: parseFloat(newPackage.priceSedan) || 0,
+                priceSuv: parseFloat(newPackage.priceSuv) || 0,
+            } : pkg
+        );
+        setRentalPackages(updatedPackages);
+        setEditingPackageId(null);
+    } else {
+        // Add new package
+        const pkg: RentalPackage = {
+            id: `pkg-${Date.now()}`,
+            name: newPackage.name,
+            hours: parseFloat(newPackage.hours) || 0,
+            km: parseFloat(newPackage.km) || 0,
+            priceSedan: parseFloat(newPackage.priceSedan) || 0,
+            priceSuv: parseFloat(newPackage.priceSuv) || 0,
+        };
+        setRentalPackages([...rentalPackages, pkg]);
+    }
+    setShowAddPackage(false);
+    setNewPackage({ name: '', hours: '', km: '', priceSedan: '', priceSuv: '' });
+  };
+
+  const handleEditPackage = (pkg: RentalPackage) => {
+    setEditingPackageId(pkg.id);
+    setNewPackage({
+        name: pkg.name,
+        hours: pkg.hours.toString(),
+        km: pkg.km.toString(),
+        priceSedan: pkg.priceSedan.toString(),
+        priceSuv: pkg.priceSuv.toString(),
+    });
+    setShowAddPackage(true);
+  };
+
+  const handleCancelEditPackage = () => {
+    setEditingPackageId(null);
+    setNewPackage({ name: '', hours: '', km: '', priceSedan: '', priceSuv: '' });
+    setShowAddPackage(false);
+  };
+
+  const removePackage = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (window.confirm('Remove this package?')) {
+      setRentalPackages(prev => prev.filter(p => p.id !== id));
+      if (transportDetails.packageId === id) {
+        setTransportDetails(prev => ({ ...prev, packageId: '' }));
+      }
+      if (editingPackageId === id) {
+        setEditingPackageId(null);
+        setNewPackage({ name: '', hours: '', km: '', priceSedan: '', priceSuv: '' });
+      }
+    }
+  };
+
+
   // Calculation Logic
   useEffect(() => {
       let total = 0;
@@ -354,6 +428,11 @@ Book now with OK BOZ Transport!`;
   }, [estimatedCost, customerDetails, transportDetails, tripType, vehicleType, pricing, rentalPackages, enquiryCategory, outstationSubType]);
 
   const saveOrder = (status: OrderStatus, scheduleInfo?: { date: string, time: string }) => {
+      if (!customerDetails.name || !customerDetails.phone) {
+          setTimeout(() => alert("Please enter Customer Name and Phone."), 0);
+          return;
+      }
+
       // 1. Construct Details String
       let detailsText = '';
       if (enquiryCategory === 'Transport') {
@@ -380,15 +459,46 @@ Book now with OK BOZ Transport!`;
           outcome: 'Completed'
       };
 
-      // 3. Create Object
-      const newEnquiry: Enquiry = {
+      // 3. Create or Update Object
+      let updatedEnquiry: Enquiry;
+
+      if (editingOrderId) {
+        // Update existing enquiry
+        updatedEnquiry = {
+          ...enquiries.find(e => e.id === editingOrderId)!, // Find the existing one
+          type: 'Customer', // Always customer for this console
+          initialInteraction: 'Incoming',
+          name: customerDetails.name,
+          phone: customerDetails.phone,
+          email: customerDetails.email,
+          city: 'Coimbatore', 
+          details: detailsText,
+          status: status,
+          assignedTo: assignment.staffId,
+          // Merge new history log with existing history
+          history: [historyLog, ...(enquiries.find(e => e.id === editingOrderId)?.history || [])],
+          date: scheduleInfo ? scheduleInfo.date : new Date().toISOString().split('T')[0],
+          nextFollowUp: scheduleInfo ? `${scheduleData.date}T${scheduleData.time}` : undefined,
+          // Store structured data
+          enquiryCategory: enquiryCategory,
+          tripType: tripType,
+          vehicleType: vehicleType,
+          outstationSubType: tripType === 'Outstation' ? outstationSubType : undefined,
+          transportData: enquiryCategory === 'Transport' ? transportDetails : undefined,
+          estimatedPrice: enquiryCategory === 'Transport' ? estimatedCost : undefined,
+        };
+        setEnquiries(prev => prev.map(e => e.id === editingOrderId ? updatedEnquiry : e));
+        setEditingOrderId(null); // Exit edit mode
+      } else {
+        // Create new enquiry
+        updatedEnquiry = {
           id: `ORD-${Date.now()}`,
           type: 'Customer',
           initialInteraction: 'Incoming',
           name: customerDetails.name,
           phone: customerDetails.phone,
           email: customerDetails.email,
-          city: 'Coimbatore',
+          city: 'Coimbatore', // Default if not parsed
           details: detailsText,
           status: status, // Uses the expanded status types
           assignedTo: assignment.staffId,
@@ -396,15 +506,24 @@ Book now with OK BOZ Transport!`;
           history: [historyLog],
           date: scheduleInfo ? scheduleInfo.date : new Date().toISOString().split('T')[0],
           // Store scheduled time if applicable in details or meta field
-          nextFollowUp: scheduleInfo ? `${scheduleInfo.date}T${scheduleInfo.time}` : undefined
-      };
+          nextFollowUp: scheduleInfo ? `${scheduleData.date}T${scheduleData.time}` : undefined,
+          // Store structured data
+          enquiryCategory: enquiryCategory,
+          tripType: tripType,
+          vehicleType: vehicleType,
+          outstationSubType: tripType === 'Outstation' ? outstationSubType : undefined,
+          transportData: enquiryCategory === 'Transport' ? transportDetails : undefined,
+          estimatedPrice: enquiryCategory === 'Transport' ? estimatedCost : undefined,
+        };
+        setEnquiries(prev => [updatedEnquiry, ...prev]);
+      }
 
-      // 4. Save
-      const updatedList = [newEnquiry, ...enquiries];
-      setEnquiries(updatedList);
-      localStorage.setItem('global_enquiries_data', JSON.stringify(updatedList));
+      localStorage.setItem('global_enquiries_data', JSON.stringify(enquiries));
 
-      alert(`Order ${status} Successfully!`);
+      // Use setTimeout for alert to prevent UI blocking issues in certain environments
+      setTimeout(() => {
+          alert(`Order ${status} Successfully!`);
+      }, 0);
       
       // 5. Reset
       setCustomerDetails({ name: '', phone: '', email: '', pickup: '', requirements: '' });
@@ -416,7 +535,7 @@ Book now with OK BOZ Transport!`;
 
   const handleBookNow = () => {
       if (!customerDetails.name || !customerDetails.phone) {
-          alert("Please enter Customer Name and Phone.");
+          setTimeout(() => alert("Please enter Customer Name and Phone."), 0);
           return;
       }
       saveOrder('Order Accepted');
@@ -424,7 +543,7 @@ Book now with OK BOZ Transport!`;
 
   const handleOpenSchedule = () => {
       if (!customerDetails.name || !customerDetails.phone) {
-          alert("Please enter Customer Name and Phone.");
+          setTimeout(() => alert("Please enter Customer Name and Phone."), 0);
           return;
       }
       setIsScheduleModalOpen(true);
@@ -432,7 +551,7 @@ Book now with OK BOZ Transport!`;
 
   const confirmSchedule = () => {
       if (!scheduleData.date || !scheduleData.time) {
-          alert("Please select both Date and Time.");
+          setTimeout(() => alert("Please select both Date and Time."), 0);
           return;
       }
       saveOrder('Scheduled', scheduleData);
@@ -441,7 +560,10 @@ Book now with OK BOZ Transport!`;
   const handleCancelForm = () => {
       setCustomerDetails({ name: '', phone: '', email: '', pickup: '', requirements: '' });
       setTransportDetails({ drop: '', estKm: '', waitingMins: '', packageId: '', destination: '', days: '1', estTotalKm: '', nights: '0' });
-      alert("Form cleared.");
+      setGeneratedMessage('');
+      setEstimatedCost(0);
+      setEditingOrderId(null); // Exit edit mode
+      setTimeout(() => alert("Form cleared."), 0);
   };
 
   const handleStatusUpdate = (id: string, newStatus: OrderStatus) => {
@@ -462,6 +584,58 @@ Book now with OK BOZ Transport!`;
       setEnquiries(updatedList);
       localStorage.setItem('global_enquiries_data', JSON.stringify(updatedList));
   };
+
+  const handleEditOrder = (order: Enquiry) => {
+    setEditingOrderId(order.id);
+
+    // Populate Customer Details
+    setCustomerDetails({
+      name: order.name,
+      phone: order.phone,
+      email: order.email || '',
+      // Extract pickup from details string using regex
+      pickup: (order.details.match(/Pickup: (.*?)(?: ->|\.|$)/)?.[1] || '').trim(),
+      requirements: order.details.includes('\nReq: ') ? order.details.split('\nReq: ')[1] : ''
+    });
+
+    // Populate Enquiry Category
+    setEnquiryCategory(order.enquiryCategory || 'General');
+
+    // Populate Transport Details if it's a Transport enquiry
+    if (order.enquiryCategory === 'Transport' && order.transportData) {
+      setTripType(order.tripType || 'Local');
+      setVehicleType(order.vehicleType || 'Sedan');
+      setOutstationSubType(order.outstationSubType || 'RoundTrip');
+      setTransportDetails({
+        drop: order.transportData.drop || '',
+        estKm: order.transportData.estKm || '',
+        waitingMins: order.transportData.waitingMins || '',
+        packageId: order.transportData.packageId || '',
+        destination: order.transportData.destination || '',
+        days: order.transportData.days || '1',
+        estTotalKm: order.transportData.estTotalKm || '',
+        nights: order.transportData.nights || '0',
+      });
+      setEstimatedCost(order.estimatedPrice || 0);
+    } else {
+        // Reset transport specific states for General enquiries
+        setTripType('Local');
+        setVehicleType('Sedan');
+        setOutstationSubType('RoundTrip');
+        setTransportDetails({ drop: '', estKm: '', waitingMins: '', packageId: '', destination: '', days: '1', estTotalKm: '', nights: '0' });
+        setEstimatedCost(0);
+    }
+
+    // Populate Assignment (simple example, can be more complex)
+    setAssignment(prev => ({
+        ...prev,
+        staffId: order.assignedTo || ''
+    }));
+
+    // Scroll to the top of the page/form
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
 
   // --- Dashboard Logic ---
   const dashboardStats = useMemo(() => {
@@ -521,12 +695,127 @@ Book now with OK BOZ Transport!`;
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
              <div className="space-y-3 bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
                 <h4 className="text-sm font-bold text-emerald-600 uppercase tracking-wide border-b border-gray-100 pb-2 mb-2">Local Rules ({settingsVehicleType})</h4>
-                <div><label className="text-xs text-gray-500 block mb-1">Base Fare (₹)</label><input type="number" name="localBaseFare" value={pricing[settingsVehicleType].localBaseFare} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" /></div>
-             </div>
-             {/* ... More settings can be added here if needed, keeping it compact ... */}
-          </div>
-          <div className="pt-4 mt-auto">
-             <button onClick={() => setShowSettings(false)} className="w-full bg-slate-800 text-white py-2 rounded text-sm font-medium hover:bg-slate-900 transition-colors">Close</button>
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">Base Fare (₹)</label>
+                  <input type="number" name="localBaseFare" value={pricing[settingsVehicleType].localBaseFare} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">Base Km Included</label>
+                  <input type="number" name="localBaseKm" value={pricing[settingsVehicleType].localBaseKm} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">Extra Km Rate (₹/km)</label>
+                  <input type="number" name="localPerKmRate" value={pricing[settingsVehicleType].localPerKmRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">Waiting Charge (₹/min)</label>
+                  <input type="number" name="localWaitingRate" value={pricing[settingsVehicleType].localWaitingRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
+                </div>
+            </div>
+
+            {/* Outstation Settings */}
+            <div className="space-y-3 bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+              <h4 className="text-sm font-bold text-orange-600 uppercase tracking-wide border-b border-gray-100 pb-2 mb-2">Outstation Rules ({settingsVehicleType})</h4>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Min Km / Day</label>
+                <input type="number" name="outstationMinKmPerDay" value={pricing[settingsVehicleType].outstationMinKmPerDay} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Per Km Rate (₹/km)</label>
+                <input type="number" name="outstationExtraKmRate" value={pricing[settingsVehicleType].outstationExtraKmRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Base Rate (One Way Only)</label>
+                <input type="number" name="outstationBaseRate" value={pricing[settingsVehicleType].outstationBaseRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" placeholder="Not used for Round Trip" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Driver Allowance (₹/day)</label>
+                <input type="number" name="outstationDriverAllowance" value={pricing[settingsVehicleType].outstationDriverAllowance} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Driver Night Allowance (₹/night)</label>
+                <input type="number" name="outstationNightAllowance" value={pricing[settingsVehicleType].outstationNightAllowance} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
+              </div>
+            </div>
+
+            {/* Rental Settings */}
+            <div className="space-y-3 bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+              <h4 className="text-sm font-bold text-blue-600 uppercase tracking-wide border-b border-gray-100 pb-2 mb-2">Rental Rules ({settingsVehicleType})</h4>
+              
+              {/* Extra Rates */}
+              <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">Extra Hr (₹)</label>
+                    <input type="number" name="rentalExtraHrRate" value={pricing[settingsVehicleType].rentalExtraHrRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">Extra Km (₹)</label>
+                    <input type="number" name="rentalExtraKmRate" value={pricing[settingsVehicleType].rentalExtraKmRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
+                  </div>
+              </div>
+
+              {/* Package List Management */}
+              <div className="mt-4 border-t border-gray-100 pt-2">
+                  <div className="flex justify-between items-center mb-2">
+                      <label className="text-xs font-bold text-gray-700">Packages</label>
+                      <button 
+                        onClick={() => { setShowAddPackage(!showAddPackage); setEditingPackageId(null); setNewPackage({ name: '', hours: '', km: '', priceSedan: '', priceSuv: '' }); }}
+                        className="text-[10px] bg-blue-50 text-blue-600 px-2 py-1 rounded border border-blue-100 hover:bg-blue-100 flex items-center gap-1 font-bold"
+                      >
+                        <Plus className="w-3 h-3" /> New
+                      </button>
+                  </div>
+                  
+                  {showAddPackage && (
+                      <div className="bg-blue-50 p-2 rounded border border-blue-100 mb-2 space-y-2 animate-in fade-in slide-in-from-top-1">
+                          <input placeholder="Pkg Name (e.g. 10hr/100km)" className="w-full p-1.5 text-xs border rounded outline-none focus:ring-1 focus:ring-blue-500" value={newPackage.name} onChange={e => setNewPackage({...newPackage, name: e.target.value})} />
+                          <div className="flex gap-2">
+                              <input placeholder="Hrs" type="number" className="w-full p-1.5 text-xs border rounded outline-none" value={newPackage.hours} onChange={e => setNewPackage({...newPackage, hours: e.target.value})} />
+                              <input placeholder="Km" type="number" className="w-full p-1.5 text-xs border rounded outline-none" value={newPackage.km} onChange={e => setNewPackage({...newPackage, km: e.target.value})} />
+                          </div>
+                          <div className="flex gap-2">
+                              <input placeholder="Sedan ₹" type="number" className="w-full p-1.5 text-xs border rounded outline-none" value={newPackage.priceSedan} onChange={e => setNewPackage({...newPackage, priceSedan: e.target.value})} />
+                              <input placeholder="SUV ₹" type="number" className="w-full p-1.5 text-xs border rounded outline-none" value={newPackage.priceSuv} onChange={e => setNewPackage({...newPackage, priceSuv: e.target.value})} />
+                          </div>
+                          <div className="flex gap-2">
+                            {editingPackageId && (
+                                <button onClick={handleCancelEditPackage} className="flex-1 bg-white text-gray-600 text-xs font-bold py-1.5 rounded hover:bg-gray-100 transition-colors">Cancel</button>
+                            )}
+                            <button onClick={handleAddPackage} className={`flex-1 ${editingPackageId ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-blue-600 hover:bg-blue-700'} text-white text-xs font-bold py-1.5 rounded transition-colors`}>
+                                {editingPackageId ? 'Update Package' : 'Save Package'}
+                            </button>
+                          </div>
+                      </div>
+                  )}
+
+                  <div className="space-y-1 max-h-40 overflow-y-auto custom-scrollbar">
+                      {rentalPackages.map(pkg => (
+                          <div key={pkg.id} className="flex justify-between items-center p-2 hover:bg-gray-50 rounded border border-transparent hover:border-gray-200 group transition-colors">
+                              <div>
+                                  <div className="text-xs font-bold text-gray-800">{pkg.name}</div>
+                                  <div className="text-[10px] text-gray-500">{pkg.hours}hr / {pkg.km}km</div>
+                              </div>
+                              <div className="text-right flex items-center gap-2">
+                                  <div className="text-[10px] text-gray-600 font-mono text-right">
+                                      <div>S: {pkg.priceSedan}</div>
+                                      <div>X: {pkg.priceSuv}</div>
+                                  </div>
+                                  <button onClick={(e) => handleEditPackage(pkg)} className="text-gray-300 hover:text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity p-1">
+                                      <Edit2 className="w-3 h-3" />
+                                  </button>
+                                  <button onClick={(e) => removePackage(pkg.id, e)} className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-1">
+                                      <Trash2 className="w-3 h-3" />
+                                  </button>
+                              </div>
+                          </div>
+                      ))}
+                  </div>
+              </div>
+
+              <div className="pt-4 mt-auto">
+                 <button onClick={() => setShowSettings(false)} className="w-full bg-slate-800 text-white py-2 rounded text-sm font-medium hover:bg-slate-900">Close</button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -552,22 +841,6 @@ Book now with OK BOZ Transport!`;
                           value={customerDetails.phone}
                           onChange={e => setCustomerDetails({...customerDetails, phone: e.target.value})}
                       />
-                  </div>
-                  {/* Pickup Location */}
-                  <div className="mb-4">
-                      <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Pickup Location</label>
-                      {!isMapReady ? (
-                           <div className="p-2 bg-gray-100 text-gray-500 text-sm rounded flex items-center gap-2">
-                              <Loader2 className="w-4 h-4 animate-spin" /> Loading Google Maps...
-                           </div>
-                        ) : (
-                           <Autocomplete 
-                             placeholder="Search Pickup Location"
-                             onAddressSelect={(addr) => setCustomerDetails(prev => ({ ...prev, pickup: addr }))}
-                             setNewPlace={(place) => setPickupCoords(place)}
-                             defaultValue={customerDetails.pickup}
-                           />
-                        )}
                   </div>
                   
                   {/* --- NEW PLACEMENT: Trip Details directly below Customer Info --- */}
@@ -614,14 +887,32 @@ Book now with OK BOZ Transport!`;
                                           key={t}
                                           onClick={() => setTripType(t as any)}
                                           className={`flex-1 py-2 text-sm font-medium border-b-2 transition-colors ${tripType === t ? 'border-emerald-500 text-emerald-700' : 'border-transparent text-gray-500'}`}
-                                      >
-                                          {t}
-                                      </button>
-                                  ))}
+                                  >
+                                      {t}
+                                  </button>
+                              ))}
+                              </div>
+
+                              {/* Common Pickup Location for Transport */}
+                              <div className="mb-4">
+                                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Pickup Location</label>
+                                  {!isMapReady ? (
+                                      <div className="p-2 bg-gray-100 text-gray-500 text-sm rounded flex items-center gap-2">
+                                          <Loader2 className="w-4 h-4 animate-spin" /> Loading Google Maps...
+                                      </div>
+                                  ) : (
+                                      <Autocomplete 
+                                          placeholder="Search Pickup Location"
+                                          onAddressSelect={(addr) => setCustomerDetails(prev => ({ ...prev, pickup: addr }))}
+                                          setNewPlace={(place) => setPickupCoords(place)}
+                                          defaultValue={customerDetails.pickup}
+                                      />
+                                  )}
                               </div>
 
                               {tripType === 'Local' && (
                                   <div className="space-y-3">
+                                      {/* Drop Location is now here, after Pickup */}
                                       <div>
                                           <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Drop Location</label>
                                           {!isMapReady ? <div className="p-2 bg-gray-100 text-xs rounded">Loading...</div> : (
@@ -728,13 +1019,13 @@ Book now with OK BOZ Transport!`;
                                   onClick={handleOpenSchedule}
                                   className="py-3 border border-blue-200 text-blue-600 rounded-lg font-bold text-sm hover:bg-blue-50 transition-colors flex items-center justify-center gap-2"
                               >
-                                  <Calendar className="w-4 h-4" /> Schedule
+                                  <Calendar className="w-4 h-4" /> {editingOrderId ? 'Update Schedule' : 'Schedule'}
                               </button>
                               <button 
                                   onClick={handleBookNow}
                                   className="py-3 bg-emerald-600 text-white rounded-lg font-bold text-sm hover:bg-emerald-700 transition-colors shadow-md flex items-center justify-center gap-2"
                               >
-                                  <ArrowRight className="w-4 h-4" /> Book Now
+                                  <ArrowRight className="w-4 h-4" /> {editingOrderId ? 'Update Now' : 'Book Now'}
                               </button>
                           </div>
                           <div>
@@ -771,7 +1062,7 @@ Book now with OK BOZ Transport!`;
                           <MessageCircle className="w-4 h-4 text-emerald-500" /> Generated Message
                       </h4>
                       <button 
-                          onClick={() => {navigator.clipboard.writeText(generatedMessage); alert("Copied!")}}
+                          onClick={() => {navigator.clipboard.writeText(generatedMessage); setTimeout(() => alert("Copied!"), 0);}}
                           className="text-xs text-blue-600 hover:underline flex items-center gap-1"
                       >
                           <Copy className="w-3 h-3" /> Copy
@@ -879,7 +1170,7 @@ Book now with OK BOZ Transport!`;
                               <tr key={order.id} className="hover:bg-gray-50 transition-colors">
                                   <td className="px-6 py-4">
                                       <div className="font-bold text-gray-900">{order.id}</div>
-                                      <div className="text-xs text-gray-500">{order.date || order.createdAt.split(',')[0]} {order.nextFollowUp ? `• ${order.nextFollowUp.split('T')[1]}` : ''}</div>
+                                      <div className="text-xs text-gray-500">{order.date || order.createdAt.split(',')[0]} {order.nextFollowUp ? `• ${order.nextFollowUp.split('T')[1].slice(0,5)}` : ''}</div>
                                   </td>
                                   <td className="px-6 py-4">
                                       <div className="font-medium text-gray-900">{order.name}</div>
@@ -903,6 +1194,13 @@ Book now with OK BOZ Transport!`;
                                   </td>
                                   <td className="px-6 py-4 text-right">
                                       <div className="flex justify-end gap-2">
+                                          <button 
+                                              onClick={() => handleEditOrder(order)}
+                                              className="text-gray-400 hover:text-blue-500 p-1.5 rounded-full hover:bg-blue-50 transition-colors"
+                                              title="Edit Order"
+                                          >
+                                              <Edit2 className="w-4 h-4" />
+                                          </button>
                                           {order.status !== 'Completed' && order.status !== 'Cancelled' && (
                                               <>
                                                   {order.status !== 'Driver Assigned' && (

@@ -292,6 +292,9 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
     // 7. "Admin Finance" is ONLY for Super Admin
     if (link.id === 'admin-finance' && role !== UserRole.ADMIN) return false;
 
+    // 8. "Vehicle Enquiries" is hidden for Corporate users
+    if (link.id === 'vehicle-enquiries' && role === UserRole.CORPORATE) return false;
+
     return true;
   });
 

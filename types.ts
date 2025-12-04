@@ -1,6 +1,5 @@
 
 
-
 export enum UserRole {
   ADMIN = 'ADMIN',
   EMPLOYEE = 'EMPLOYEE',
@@ -92,6 +91,13 @@ export interface HistoryLog {
   outcome?: string; // Connected, Missed, Voicemail, etc.
 }
 
+// Re-using common types from CustomerCare/VehicleEnquiries for Enquiry interface
+type TripType = 'Local' | 'Rental' | 'Outstation';
+type OutstationSubType = 'RoundTrip' | 'OneWay';
+type VehicleType = 'Sedan' | 'SUV';
+type EnquiryCategory = 'Transport' | 'General';
+
+
 export interface Enquiry {
   id: string;
   type: 'Customer' | 'Vendor';
@@ -109,6 +115,22 @@ export interface Enquiry {
   nextFollowUp?: string;
   history: HistoryLog[];
   date?: string; // ADDED
+  // New fields for structured transport data
+  enquiryCategory?: EnquiryCategory;
+  tripType?: TripType;
+  vehicleType?: VehicleType;
+  outstationSubType?: OutstationSubType; // Only for Outstation
+  transportData?: {
+    drop?: string;
+    estKm?: string;
+    waitingMins?: string;
+    packageId?: string;
+    destination?: string;
+    days?: string;
+    estTotalKm?: string;
+    nights?: string;
+  };
+  estimatedPrice?: number;
 }
 
 export interface DocumentFile {
