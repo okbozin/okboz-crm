@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, Users, MapPin, Calendar, DollarSign, Briefcase, Menu, X, LogOut, UserCircle, Building, Settings, Target, CreditCard, ClipboardList, ReceiptIndianRupee, Navigation, Car, Building2, PhoneIncoming, GripVertical, Edit2, Check, FileText, Layers, PhoneCall, Bus, Bell, Sun, Moon, Monitor, Mail, UserCog, CarFront, BellRing, BarChart3, Map } from 'lucide-react';
-import { UserRole } from '../types';
+import { UserRole, Enquiry, CorporateAccount, Employee } from '../types';
 import { useBranding } from '../context/BrandingContext';
 import { useTheme } from '../context/ThemeContext';
 // import { useNotification } from '../context/NotificationContext'; // Removed: Import useNotification
@@ -33,6 +33,7 @@ const MASTER_ADMIN_LINKS = [
   { id: 'vendors', path: '/admin/vendors', label: 'Vendor Attachment', icon: CarFront },
   { id: 'payroll', path: '/admin/payroll', label: 'Payroll', icon: DollarSign },
   { id: 'expenses', path: '/admin/expenses', label: 'Office Expenses', icon: ReceiptIndianRupee },
+  { id: 'admin-finance', path: '/admin/admin-finance', label: 'Admin Finance', icon: ReceiptIndianRupee }, // New entry for Super Admin
   { id: 'corporate', path: '/admin/corporate', label: 'Corporate', icon: Building2 },
   { id: 'settings', path: '/admin/settings', label: 'Settings', icon: Settings },
 ];
@@ -56,10 +57,53 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
   const [userName, setUserName] = useState('');
   const [userSubtitle, setUserSubtitle] = useState('');
 
+  // State for new enquiry count for Tasks tab
+  const [newTaskCount, setNewTaskCount] = useState(0);
+
   // Notification State (Simplified/Removed)
   // const [notificationsOpen, setNotificationsOpen] = useState(false);
   // const notificationRef = useRef<HTMLDivElement>(null);
   const themeRef = useRef<HTMLDivElement>(null); // Still needed for theme toggle
+
+  // Calculate new task count based on role and enquiries
+  const calculateNewTaskCount = () => {
+    try {
+        const enquiriesJson = localStorage.getItem('global_enquiries_data');
+        if (!enquiriesJson) {
+            setNewTaskCount(0);
+            return;
+        }
+        const allEnquiries: Enquiry[] = JSON.parse(enquiriesJson);
+        
+        let relevantNewEnquiries: Enquiry[] = [];
+        const sessionId = localStorage.getItem('app_session_id');
+
+        if (role === UserRole.ADMIN) {
+            // Super Admin sees all new enquiries
+            relevantNewEnquiries = allEnquiries.filter(e => e.status === 'New');
+        } else if (role === UserRole.CORPORATE) {
+            // Corporate sees new enquiries for their city
+            const corporates: CorporateAccount[] = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
+            const currentCorporate = corporates.find((c: CorporateAccount) => c.email === sessionId);
+            
+            if (currentCorporate && currentCorporate.city) {
+                relevantNewEnquiries = allEnquiries.filter(e => 
+                    e.status === 'New' && e.city === currentCorporate.city
+                );
+            }
+        } else if (role === UserRole.EMPLOYEE) {
+            // Employee sees new enquiries assigned to them
+            relevantNewEnquiries = allEnquiries.filter(e => 
+                e.status === 'New' && e.assignedTo === sessionId
+            );
+        }
+        setNewTaskCount(relevantNewEnquiries.length);
+    } catch (e) {
+        console.error("Error calculating new task count:", e);
+        setNewTaskCount(0);
+    }
+  };
+
 
   // Load user details based on role and session
   useEffect(() => {
@@ -72,8 +116,8 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
     else if (role === UserRole.CORPORATE) {
       // Lookup Corporate Account details using the session ID (email)
       try {
-        const accounts = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
-        const account = accounts.find((acc: any) => acc.email === sessionId);
+        const accounts: CorporateAccount[] = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
+        const account = accounts.find((acc: CorporateAccount) => acc.email === sessionId);
         if (account) {
             setUserName(account.companyName);
             setUserSubtitle(account.city ? `${account.city} Branch` : 'Corporate Partner');
@@ -93,16 +137,16 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
        
        try {
          // 1. Check Admin Staff
-         const adminStaff = JSON.parse(localStorage.getItem('staff_data') || '[]');
-         let emp = adminStaff.find((e: any) => e.id === sessionId);
+         const adminStaff: Employee[] = JSON.parse(localStorage.getItem('staff_data') || '[]');
+         let emp = adminStaff.find((e: Employee) => e.id === sessionId);
          
          if (!emp) {
             // 2. Check All Corporate Staff Lists
-            const accounts = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
+            const accounts: CorporateAccount[] = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
             for (const acc of accounts) {
                 const corpStaffKey = `staff_data_${acc.email}`;
-                const corpStaff = JSON.parse(localStorage.getItem(corpStaffKey) || '[]');
-                emp = corpStaff.find((e: any) => e.id === sessionId);
+                const corpStaff: Employee[] = JSON.parse(localStorage.getItem(corpStaffKey) || '[]');
+                emp = corpStaff.find((e: Employee) => e.id === sessionId);
                 if (emp) break;
             }
          }
@@ -150,6 +194,13 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
       }
     }
   }, [role]);
+
+  // Effect to calculate new task count and listen for storage changes
+  useEffect(() => {
+      calculateNewTaskCount(); // Initial calculation on mount
+      window.addEventListener('storage', calculateNewTaskCount);
+      return () => window.removeEventListener('storage', calculateNewTaskCount);
+  }, [role]); // Re-run if role changes
 
   // Click outside to close notifications and theme menu (notifications part removed)
   useEffect(() => {
@@ -236,6 +287,9 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
 
     // 6. "Settings" is hidden for Corporate users (Franchise Panel)
     if (link.id === 'settings' && role === UserRole.CORPORATE) return false;
+
+    // 7. "Admin Finance" is ONLY for Super Admin
+    if (link.id === 'admin-finance' && role !== UserRole.ADMIN) return false;
 
     return true;
   });
@@ -357,8 +411,14 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
                    {canDrag && (
                      <GripVertical className="w-4 h-4 text-gray-400 shrink-0" />
                    )}
-                   <Icon className={`w-5 h-5 shrink-0 ${isActive ? '' : 'text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-200'}`} style={isActive ? { color: primaryColor } : {}} />
+                   <Icon className={`w-5 h-5 shrink-0 ${isActive ? '' : 'text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-200'}`} style={isActive ? { color: primaryColor } : {}} />
                    <span className={`truncate ${isActive ? '' : 'text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white'}`}>{link.label}</span>
+                   {/* New Task Count Badge */}
+                   {(link.id === 'tasks' || link.path === '/user/tasks') && newTaskCount > 0 && (
+                     <span className="ml-auto px-2 py-0.5 bg-red-500 text-white text-xs font-bold rounded-full min-w-[24px] text-center">
+                       {newTaskCount}
+                     </span>
+                   )}
                  </Link>
                );
              })}

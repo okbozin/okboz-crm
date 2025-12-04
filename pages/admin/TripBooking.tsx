@@ -38,7 +38,7 @@ interface Trip {
 
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'];
 
-const TripBooking: React.FC = () => {
+export const TripBooking: React.FC = () => {
   const sessionId = localStorage.getItem('app_session_id') || 'admin';
   const isSuperAdmin = sessionId === 'admin';
   
@@ -865,5 +865,3 @@ const TripBooking: React.FC = () => {
     </div>
   );
 };
-
-export default TripBooking;

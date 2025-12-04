@@ -109,12 +109,11 @@ const BranchForm: React.FC = () => {
   const mapRef = useRef<HTMLDivElement>(null);
   const [mapInstance, setMapInstance] = useState<any>(null);
   const [markerInstance, setMarkerInstance] = useState<any>(null);
-  const [location, setLocation] = useState<google.maps.LatLngLiteral>({ lat: 28.6139, lng: 77.2090 }); // Default: New Delhi
+  const [location, setLocation] = useState<google.maps.LatLngLiteral>({ lat: 11.0168, lng: 76.9558 }); // Default: Coimbatore
   const [isMapReady, setIsMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
   const [loadingAddress, setLoadingAddress] = useState(false);
 
-  // ... (Rest of Map Logic unchanged) ...
   // Callback from Autocomplete component when a place is selected
   const handleNewPlaceSelected = (newPos: google.maps.LatLngLiteral) => {
     setLocation(newPos);
@@ -136,15 +135,18 @@ const BranchForm: React.FC = () => {
 
   // Load Google Maps Script
   useEffect(() => {
+    // 1. Check global failure flag
     if (window.gm_authFailure_detected) {
       setMapError("Map API Error: Please check required APIs in Google Cloud.");
       return;
     }
+    // 2. Handle Missing API Key
     const apiKey = localStorage.getItem('maps_api_key');
     if (!apiKey) {
       setMapError("API Key is missing. Please add it in Settings > Integrations.");
       return;
     }
+    // 3. Global Auth Failure Handler
     const originalAuthFailure = window.gm_authFailure;
     window.gm_authFailure = () => {
       window.gm_authFailure_detected = true;
@@ -152,21 +154,12 @@ const BranchForm: React.FC = () => {
       if (originalAuthFailure) originalAuthFailure();
     };
 
+    // 4. Validate Existing Script
     const scriptId = 'google-maps-script';
     let script = document.getElementById(scriptId) as HTMLScriptElement;
 
-    if (script) {
-       const src = script.getAttribute('src') || '';
-       if (!src.includes(`key=${apiKey}`)) {
-          script.remove();
-          if (window.google) {
-             window.location.reload();
-             return;
-          }
-       }
-    }
-
-    if (window.google && window.google.maps) {
+    // Check if script is already fully loaded AND includes the 'places' library
+    if (window.google && window.google.maps && window.google.maps.places) {
       setIsMapReady(true);
       return;
     }
@@ -174,21 +167,39 @@ const BranchForm: React.FC = () => {
     if (!script) {
       script = document.createElement('script');
       script.id = scriptId;
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`; // Ensure libraries=places
       script.async = true;
       script.defer = true;
-      script.onload = () => setIsMapReady(true);
+      script.onload = () => {
+        // Double check after script is loaded that `places` library is truly available
+        if (window.google && window.google.maps && window.google.maps.places) {
+          setIsMapReady(true);
+        } else {
+          setMapError("Google Maps 'places' library failed to load.");
+        }
+      };
       script.onerror = () => setMapError("Network error: Failed to load Google Maps script.");
       document.head.appendChild(script);
     } else {
-        script.addEventListener('load', () => setIsMapReady(true));
+        // If script already exists but might not have finished loading 'places' library,
+        // attach load listener just in case.
+        script.addEventListener('load', () => {
+          if (window.google && window.google.maps && window.google.maps.places) {
+            setIsMapReady(true);
+          }
+        });
+        // If script is already present and theoretically loaded, but `isMapReady` is false,
+        // manually trigger check if `places` is there.
+        if (window.google && window.google.maps && window.google.maps.places) {
+            setIsMapReady(true);
+        }
     }
   }, []);
 
   // Initialize Map
   useEffect(() => {
     if (mapError) return;
-    if (isMapReady && mapRef.current && !mapInstance && window.google) {
+    if (isMapReady && mapRef.current && !mapInstance && window.google && window.google.maps) {
       try {
         const map = new window.google.maps.Map(mapRef.current, {
           center: location,
@@ -224,7 +235,7 @@ const BranchForm: React.FC = () => {
   }, [isMapReady, mapError, location]);
 
   const handleGetAddress = () => {
-    if (!window.google || !window.google.maps || !window.google.maps.Geocoder || mapError) {
+    if (!isMapReady || !window.google || !window.google.maps || !window.google.maps.Geocoder || mapError) {
       alert("Map services are currently unavailable. Please enter address manually.");
       return;
     }

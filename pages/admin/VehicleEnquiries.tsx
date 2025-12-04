@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Settings, Loader2, ArrowRight, ArrowRightLeft, 
   MessageCircle, Copy, Mail, Car, User, Edit2,
-  CheckCircle, Building2, Save, X, Phone, Truck
+  CheckCircle, Building2, Save, X, Phone, Truck, AlertTriangle, DollarSign,
+  Calendar, MapPin, Briefcase
 } from 'lucide-react';
 import Autocomplete from '../../components/Autocomplete';
 
@@ -79,6 +81,7 @@ export const VehicleEnquiries: React.FC = () => {
   });
 
   const [isMapReady, setIsMapReady] = useState(false);
+  const [mapError, setMapError] = useState<string | null>(null);
   const [dropCoords, setDropCoords] = useState<google.maps.LatLngLiteral | null>(null);
   const [destCoords, setDestCoords] = useState<google.maps.LatLngLiteral | null>(null);
   const [pickupCoords, setPickupCoords] = useState<google.maps.LatLngLiteral | null>(null);
@@ -92,34 +95,119 @@ export const VehicleEnquiries: React.FC = () => {
   const [generatedMessage, setGeneratedMessage] = useState('');
   const [estimatedCost, setEstimatedCost] = useState(0);
 
-  // Initialize rental package selection
-  useEffect(() => {
-      if (rentalPackages.length > 0 && !transportDetails.packageId) {
-          setTransportDetails(prev => ({...prev, packageId: rentalPackages[0].id}));
-      }
-  }, [rentalPackages]);
+  // --- Assignment Data ---
+  const [corporates, setCorporates] = useState<any[]>([]);
+  const [allBranches, setAllBranches] = useState<any[]>([]);
+  const [allStaff, setAllStaff] = useState<any[]>([]);
+  
+  const [assignment, setAssignment] = useState({
+    corporateId: '',
+    branchName: '',
+    staffId: ''
+  });
 
-  // Map loader
+  const sessionId = localStorage.getItem('app_session_id') || 'admin';
+  const isSuperAdmin = sessionId === 'admin';
+
   useEffect(() => {
-    if (window.google && window.google.maps) {
+      // 1. Load Data for Assignment Dropdowns
+      const corps = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
+      setCorporates(corps);
+
+      const adminBranches = JSON.parse(localStorage.getItem('branches_data') || '[]');
+      let branches = [...adminBranches.map((b: any) => ({...b, owner: 'admin'}))];
+      
+      const adminStaff = JSON.parse(localStorage.getItem('staff_data') || '[]');
+      let staff = [...adminStaff.map((s: any) => ({...s, owner: 'admin'}))];
+
+      corps.forEach((c: any) => {
+          const cBranches = JSON.parse(localStorage.getItem(`branches_data_${c.email}`) || '[]');
+          branches = [...branches, ...cBranches.map((b: any) => ({...b, owner: c.email}))];
+          
+          const cStaff = JSON.parse(localStorage.getItem(`staff_data_${c.email}`) || '[]');
+          staff = [...staff, ...cStaff.map((s: any) => ({...s, owner: c.email}))];
+      });
+
+      setAllBranches(branches);
+      setAllStaff(staff);
+      
+      setAssignment(prev => ({ ...prev, corporateId: isSuperAdmin ? 'admin' : sessionId }));
+  }, [isSuperAdmin, sessionId]);
+
+  const filteredBranches = useMemo(() => {
+      return allBranches.filter(b => 
+        assignment.corporateId === 'admin' ? b.owner === 'admin' : b.owner === assignment.corporateId
+      );
+  }, [allBranches, assignment.corporateId]);
+  
+  const filteredStaff = useMemo(() => {
+      return allStaff.filter(s => 
+        (assignment.corporateId === 'admin' ? s.owner === 'admin' : s.owner === assignment.corporateId) &&
+        (assignment.branchName === '' || s.branch === assignment.branchName)
+      );
+  }, [allStaff, assignment.corporateId, assignment.branchName]);
+
+
+  // --- Google Maps Script Loader ---
+  useEffect(() => {
+    if (window.gm_authFailure_detected) {
+      setMapError("Map API Error: Check required APIs (Maps JS, Places).");
+      return;
+    }
+    const apiKey = localStorage.getItem('maps_api_key');
+    if (!apiKey) {
+      setMapError("API Key is missing. Please add it in Settings > Integrations.");
+      return;
+    }
+    const originalAuthFailure = window.gm_authFailure;
+    window.gm_authFailure = () => {
+      window.gm_authFailure_detected = true;
+      setMapError("Map Load Error: API Key invalid or APIs not enabled.");
+      if (originalAuthFailure) originalAuthFailure();
+    };
+
+    const scriptId = 'google-maps-script';
+    let script = document.getElementById(scriptId) as HTMLScriptElement;
+
+    if (window.google && window.google.maps && window.google.maps.places) {
       setIsMapReady(true);
-    } else {
-        const interval = setInterval(() => {
-            if (window.google && window.google.maps) {
-                setIsMapReady(true);
-                clearInterval(interval);
+      return;
+    }
+
+    if (!script) {
+        script = document.createElement('script');
+        script.id = scriptId;
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+        script.async = true;
+        script.defer = true;
+        script.onload = () => {
+            if (window.google && window.google.maps && window.google.maps.places) {
+              setIsMapReady(true);
+            } else {
+              setMapError("Google Maps 'places' library failed to load.");
             }
-        }, 1000);
-        return () => clearInterval(interval);
+        };
+        script.onerror = () => setMapError("Network error: Failed to load Google Maps script.");
+        document.head.appendChild(script);
+    } else {
+        script.addEventListener('load', () => {
+          if (window.google && window.google.maps && window.google.maps.places) {
+            setIsMapReady(true);
+          }
+        });
+        if (window.google && window.google.maps && window.google.maps.places) {
+            setIsMapReady(true);
+        }
     }
   }, []);
 
   // --- Auto Distance Calculation Effect ---
   useEffect(() => {
-    if (!isMapReady || !window.google || !pickupCoords) return;
+    if (!isMapReady || !window.google || !window.google.maps.DistanceMatrixService || !pickupCoords) return;
+
+    const service = new window.google.maps.DistanceMatrixService();
 
     const calculateDistance = (destination: google.maps.LatLngLiteral, isRoundTripCalculation: boolean, isOutstationState: boolean) => {
-        const service = new window.google.maps.DistanceMatrixService();
         service.getDistanceMatrix(
             {
                 origins: [pickupCoords],
@@ -140,6 +228,8 @@ export const VehicleEnquiries: React.FC = () => {
                         ...prev, 
                         [isOutstationState ? 'estTotalKm' : 'estKm']: formattedDist 
                     }));
+                } else {
+                    console.error("Error calculating distance:", status, response);
                 }
             }
         );
@@ -223,6 +313,7 @@ Regards,
 OK BOZ Support Team`;
       } else {
           // Transport Estimate Message
+          const pkg = rentalPackages.find(p => p.id === transportDetails.packageId);
           msg = `Hello ${customerDetails.name || 'Customer'},
 Here is your ${tripType} estimate from OK BOZ! 🚕
 
@@ -233,468 +324,365 @@ ${tripType === 'Local' ? `📍 Drop: ${transportDetails.drop}` : ''}
 ${tripType === 'Outstation' ? `🌍 Destination: ${transportDetails.destination}` : ''}
 📝 Details: ${details}
 ${tripType === 'Local' ? `⏳ Waiting Time: ${transportDetails.waitingMins} mins` : ''}
+${tripType === 'Rental' ? `📦 Package: ${pkg?.name || 'Custom'}` : ''}
 
-💰 *Base Fare: ₹${total.toFixed(0)} (Includes ${tripType === 'Local' ? rules.localBaseKm + ' km' : 'charges'})*
-💰 *Total Estimate: ₹${total.toFixed(0)}*
+💰 *Base Fare: ₹${total.toFixed(0)}*
+(Includes ${tripType === 'Local' ? 'Base Fare + Km' : tripType === 'Rental' ? 'Package Rate' : 'Driver Allowance + Km'})
 
-Note: Tax, Toll and permit will be extra.
+*Toll and Parking Extra.*
 
-Book now with OK BOZ! 🚕`;
+Book now with OK BOZ Transport!`;
       }
 
       setGeneratedMessage(msg);
-
-  }, [tripType, vehicleType, outstationSubType, transportDetails, customerDetails, pricing, rentalPackages, enquiryCategory, callerType]);
+  }, [estimatedCost, customerDetails, transportDetails, tripType, vehicleType, pricing, rentalPackages, enquiryCategory, outstationSubType]);
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6">
-      {/* Left Column: Input Form */}
-      <div className="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
-          <Car className="w-6 h-6 text-emerald-600" /> Vehicle Enquiry
-        </h2>
-
-        <div className="space-y-6">
-          {/* Customer Info */}
-          <div className="space-y-4">
-              <h4 className="text-sm font-bold text-gray-800 flex items-center gap-2">
-                  <User className="w-4 h-4 text-gray-400" /> Caller Information
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                      <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Name</label>
-                      <input 
-                          className="w-full p-3 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none" 
-                          value={customerDetails.name} 
-                          onChange={e => setCustomerDetails({...customerDetails, name: e.target.value})} 
-                          placeholder="Caller Name"
-                      />
-                  </div>
-                  <div>
-                      <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Phone</label>
-                      <input 
-                          className="w-full p-3 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none" 
-                          value={customerDetails.phone} 
-                          onChange={e => setCustomerDetails({...customerDetails, phone: e.target.value})} 
-                          placeholder="9566348085"
-                      />
-                  </div>
-              </div>
-              
-              {/* Caller Type Toggle */}
-              <div className="flex gap-2">
-                  <button 
-                    onClick={() => setCallerType('Customer')}
-                    className={`flex-1 py-2 text-sm font-medium border rounded-lg transition-colors flex items-center justify-center gap-2 ${callerType === 'Customer' ? 'border-blue-500 bg-blue-50 text-blue-600' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
-                  >
-                    <User className="w-4 h-4" /> Customer
-                  </button>
-                  <button 
-                    onClick={() => setCallerType('Vendor')}
-                    className={`flex-1 py-2 text-sm font-medium border rounded-lg transition-colors flex items-center justify-center gap-2 ${callerType === 'Vendor' ? 'border-orange-500 bg-orange-50 text-orange-600' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
-                  >
-                    <Truck className="w-4 h-4" /> Vendor
-                  </button>
-              </div>
-
-              {/* Enquiry Category Toggle */}
-              <div className="flex gap-2">
-                  <button 
-                    onClick={() => setEnquiryCategory('Transport')}
-                    className={`flex-1 py-2 text-sm font-medium border rounded-lg transition-colors ${enquiryCategory === 'Transport' ? 'border-emerald-500 bg-emerald-50 text-emerald-600' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
-                  >
-                    Transport Enquiry
-                  </button>
-                  <button 
-                    onClick={() => setEnquiryCategory('General')}
-                    className={`flex-1 py-2 text-sm font-medium border rounded-lg transition-colors ${enquiryCategory === 'General' ? 'border-purple-500 bg-purple-50 text-purple-600' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
-                  >
-                    General Enquiry
-                  </button>
-              </div>
-
-              {/* Customer Info Section (Always Visible) */}
-              <div className="space-y-4">
-                  {/* Pickup Location - Moved above Drop/Destination for layout preference */}
-                  {enquiryCategory === 'Transport' && (
-                      <div>
-                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Pickup Location</label>
-                          {!isMapReady ? (
-                              <div className="p-3 bg-gray-50 text-gray-500 text-sm rounded-lg flex items-center gap-2">
-                                  <Loader2 className="w-4 h-4 animate-spin" /> Loading Google Maps...
-                              </div>
-                          ) : (
-                              <Autocomplete 
-                                  placeholder="Search Google Maps for Pickup"
-                                  onAddressSelect={addr => setCustomerDetails({...customerDetails, pickup: addr})}
-                                  setNewPlace={setPickupCoords}
-                                  defaultValue={customerDetails.pickup}
-                              />
-                          )}
-                      </div>
-                  )}
-              </div>
-
-              <div className="bg-green-50 text-green-700 p-3 rounded-lg flex justify-between items-center text-sm font-medium">
-                  <span className="flex items-center gap-2"><CheckCircle className="w-4 h-4" /> Details Locked</span>
-                  <button className="text-green-800 hover:underline">Change</button>
-              </div>
-          </div>
-          
-          {/* Conditional Rendering based on Enquiry Type */}
-          <div className="space-y-4 pt-4 border-t border-gray-100">
-              
-              {enquiryCategory === 'Transport' ? (
-                <>
-                  {/* Settings Toggle Header */}
-                  <div className="flex justify-between items-center">
-                      <h4 className="text-sm font-bold text-gray-800 flex items-center gap-2">
-                          <Truck className="w-4 h-4 text-gray-400" /> Trip Details
-                      </h4>
-                      <button 
-                          type="button"
-                          onClick={() => setShowSettings(!showSettings)}
-                          className="text-xs text-gray-500 hover:text-gray-800 flex items-center gap-1 font-medium border px-2 py-1 rounded"
-                      >
-                          <Settings className="w-3 h-3" /> {showSettings ? 'Close Config' : 'Rates'}
-                      </button>
-                  </div>
-
-                  {/* SETTINGS PANEL */}
-                  {showSettings && (
-                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 animate-in fade-in slide-in-from-top-2">
-                      <div className="flex items-center justify-between mb-3">
-                        <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2"><Edit2 className="w-3 h-3" /> Fare Configuration</h3>
-                        <div className="flex bg-white rounded border">
-                            <button onClick={() => setSettingsVehicleType('Sedan')} className={`px-3 py-1 text-xs font-bold ${settingsVehicleType === 'Sedan' ? 'bg-emerald-500 text-white' : 'text-gray-600'}`}>Sedan</button>
-                            <button onClick={() => setSettingsVehicleType('SUV')} className={`px-3 py-1 text-xs font-bold ${settingsVehicleType === 'SUV' ? 'bg-emerald-500 text-white' : 'text-gray-600'}`}>SUV</button>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="space-y-2">
-                          <h4 className="text-[10px] font-bold text-emerald-600 uppercase">Local Rules ({settingsVehicleType})</h4>
-                          <div className="grid grid-cols-1 gap-2">
-                            <div>
-                                <label className="text-[10px] text-gray-500">Base Fare (₹)</label>
-                                <input type="number" name="localBaseFare" value={pricing[settingsVehicleType].localBaseFare} onChange={handlePricingChange} className="w-full p-1.5 border rounded text-xs" />
-                            </div>
-                            <div>
-                                <label className="text-[10px] text-gray-500">Base Km Included</label>
-                                <input type="number" name="localBaseKm" value={pricing[settingsVehicleType].localBaseKm} onChange={handlePricingChange} className="w-full p-1.5 border rounded text-xs" />
-                            </div>
-                            <div>
-                                <label className="text-[10px] text-gray-500">Extra Km Rate (₹/km)</label>
-                                <input type="number" name="localPerKmRate" value={pricing[settingsVehicleType].localPerKmRate} onChange={handlePricingChange} className="w-full p-1.5 border rounded text-xs" />
-                            </div>
-                            <div>
-                                <label className="text-[10px] text-gray-500">Waiting Charge (₹/min)</label>
-                                <input type="number" name="localWaitingRate" value={pricing[settingsVehicleType].localWaitingRate} onChange={handlePricingChange} className="w-full p-1.5 border rounded text-xs" />
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="space-y-2">
-                          <h4 className="text-[10px] font-bold text-orange-600 uppercase">Outstation Rules ({settingsVehicleType})</h4>
-                          <div className="grid grid-cols-1 gap-2">
-                            <div>
-                                <label className="text-[10px] text-gray-500">Min Km / Day</label>
-                                <input type="number" name="outstationMinKmPerDay" value={pricing[settingsVehicleType].outstationMinKmPerDay} onChange={handlePricingChange} className="w-full p-1.5 border rounded text-xs" />
-                            </div>
-                            <div>
-                                <label className="text-[10px] text-gray-500">Per Km Rate (₹/km)</label>
-                                <input type="number" name="outstationExtraKmRate" value={pricing[settingsVehicleType].outstationExtraKmRate} onChange={handlePricingChange} className="w-full p-1.5 border rounded text-xs" />
-                            </div>
-                            <div>
-                                <label className="text-[10px] text-gray-500">Base Rate (One Way Only)</label>
-                                <input type="number" name="outstationBaseRate" value={pricing[settingsVehicleType].outstationBaseRate} onChange={handlePricingChange} className="w-full p-1.5 border rounded text-xs" />
-                            </div>
-                            <div>
-                                <label className="text-[10px] text-gray-500">Driver Allowance (₹/day)</label>
-                                <input type="number" name="outstationDriverAllowance" value={pricing[settingsVehicleType].outstationDriverAllowance} onChange={handlePricingChange} className="w-full p-1.5 border rounded text-xs" />
-                            </div>
-                            <div>
-                                <label className="text-[10px] text-gray-500">Driver Night Allowance (₹/night)</label>
-                                <input type="number" name="outstationNightAllowance" value={pricing[settingsVehicleType].outstationNightAllowance} onChange={handlePricingChange} className="w-full p-1.5 border rounded text-xs" />
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="space-y-2">
-                          <h4 className="text-[10px] font-bold text-blue-600 uppercase">Rental Rules ({settingsVehicleType})</h4>
-                          <div className="grid grid-cols-1 gap-2">
-                            <div>
-                                <label className="text-[10px] text-gray-500">Extra Hr Rate (₹/hr)</label>
-                                <input type="number" name="rentalExtraHrRate" value={pricing[settingsVehicleType].rentalExtraHrRate} onChange={handlePricingChange} className="w-full p-1.5 border rounded text-xs" />
-                            </div>
-                            <div>
-                                <label className="text-[10px] text-gray-500">Extra Km Rate (₹/km)</label>
-                                <input type="number" name="rentalExtraKmRate" value={pricing[settingsVehicleType].rentalExtraKmRate} onChange={handlePricingChange} className="w-full p-1.5 border rounded text-xs" />
-                            </div>
-                          </div>
-                          <div className="pt-4">
-                            <button onClick={() => setShowSettings(false)} className="w-full bg-slate-800 text-white py-1.5 rounded text-xs font-medium hover:bg-slate-900">Done</button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Vehicle & Trip Type */}
-                  <div className="flex gap-4">
-                      <div className="flex bg-gray-100 p-1 rounded-lg flex-1">
-                          {['Local', 'Rental', 'Outstation'].map(type => (
-                              <button
-                                  key={type}
-                                  onClick={() => setTripType(type as TripType)}
-                                  className={`flex-1 py-2 text-xs font-bold transition-colors rounded ${tripType === type ? 'bg-white text-emerald-600 shadow-sm' : 'text-gray-500'}`}
-                              >
-                                  {type}
-                              </button>
-                          ))}
-                      </div>
-                      <div className="flex gap-2">
-                          {['Sedan', 'SUV'].map(type => (
-                              <button
-                                  key={type}
-                                  onClick={() => setVehicleType(type as VehicleType)}
-                                  className={`px-4 py-2 text-xs font-bold rounded-lg border ${vehicleType === type ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-gray-600 border-gray-200'}`}
-                              >
-                                  {type}
-                              </button>
-                          ))}
-                      </div>
-                  </div>
-
-                  {/* Dynamic Inputs */}
-                  {tripType === 'Local' && (
-                      <>
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Drop Location</label>
-                            {!isMapReady ? (
-                                <div className="p-3 bg-gray-50 text-gray-500 text-sm rounded-lg flex items-center gap-2">
-                                    <Loader2 className="w-4 h-4 animate-spin" /> Loading Google Maps...
-                                </div>
-                            ) : (
-                                <Autocomplete 
-                                    placeholder="Search Google Maps for Drop"
-                                    onAddressSelect={(addr) => setTransportDetails(prev => ({ ...prev, drop: addr }))}
-                                    setNewPlace={(place) => setDropCoords(place)}
-                                />
-                            )}
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Est Distance (KM)</label>
-                                <input 
-                                    type="number" 
-                                    value={transportDetails.estKm}
-                                    onChange={e => setTransportDetails({...transportDetails, estKm: e.target.value})}
-                                    className="w-full p-3 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"
-                                    placeholder="0"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Wait Time (Mins)</label>
-                                <input 
-                                    type="number" 
-                                    value={transportDetails.waitingMins}
-                                    onChange={e => setTransportDetails({...transportDetails, waitingMins: e.target.value})}
-                                    className="w-full p-3 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"
-                                    placeholder="0"
-                                />
-                            </div>
-                        </div>
-                      </>
-                  )}
-
-                  {tripType === 'Rental' && (
-                      <div className="space-y-4">
-                          <div>
-                              <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Select Rental Package</label>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-60 overflow-y-auto pr-1">
-                                  {rentalPackages.map(pkg => (
-                                      <div 
-                                          key={pkg.id}
-                                          onClick={() => setTransportDetails(prev => ({...prev, packageId: pkg.id}))}
-                                          className={`relative p-3 rounded-xl border-2 cursor-pointer transition-all group ${transportDetails.packageId === pkg.id ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 hover:border-emerald-200'}`}
-                                      >
-                                          <div className="flex justify-between items-center">
-                                              <div>
-                                                 <span className="font-bold text-gray-800 block text-sm">{pkg.name}</span>
-                                                 <span className="text-xs text-gray-500">{pkg.hours} Hr / {pkg.km} Km</span>
-                                              </div>
-                                              <div className="text-right">
-                                                  <span className="text-emerald-600 font-bold block text-sm">₹{vehicleType === 'Sedan' ? pkg.priceSedan : pkg.priceSuv}</span>
-                                                  <span className="text-[10px] text-gray-400 uppercase">{vehicleType}</span>
-                                              </div>
-                                          </div>
-                                      </div>
-                                  ))}
-                              </div>
-                          </div>
-                          
-                          <div className="text-xs text-gray-500 italic bg-blue-50 p-2 rounded border border-blue-100">
-                              Extra Charges: Hours (₹{pricing[vehicleType].rentalExtraHrRate}/hr) & Km (₹{pricing[vehicleType].rentalExtraKmRate}/km) applies.
-                          </div>
-                      </div>
-                  )}
-
-                  {tripType === 'Outstation' && (
-                      <div className="space-y-4">
-                          <div className="flex gap-4">
-                              <button onClick={() => setOutstationSubType('RoundTrip')} className={`flex-1 py-2 text-xs font-bold border rounded-lg ${outstationSubType === 'RoundTrip' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-white text-gray-500'}`}>Round Trip</button>
-                              <button onClick={() => setOutstationSubType('OneWay')} className={`flex-1 py-2 text-xs font-bold border rounded-lg ${outstationSubType === 'OneWay' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-white text-gray-500'}`}>One Way</button>
-                          </div>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <div className="md:col-span-2">
-                                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Destination</label>
-                                  {!isMapReady ? (
-                                      <div className="p-3 bg-gray-50 text-gray-500 text-sm rounded-lg flex items-center gap-2">
-                                          <Loader2 className="w-4 h-4 animate-spin" /> Loading Maps...
-                                      </div>
-                                  ) : (
-                                      <Autocomplete 
-                                          placeholder="Destination City"
-                                          onAddressSelect={(addr) => setTransportDetails(prev => ({ ...prev, destination: addr }))}
-                                          setNewPlace={(place) => setDestCoords(place)}
-                                      />
-                                  )}
-                              </div>
-                              <div>
-                                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Days</label>
-                                  <input 
-                                      type="number" 
-                                      value={transportDetails.days}
-                                      onChange={e => setTransportDetails({...transportDetails, days: e.target.value})}
-                                      className="w-full p-3 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"
-                                  />
-                              </div>
-                              <div>
-                                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Total Km</label>
-                                  <input 
-                                      type="number" 
-                                      value={transportDetails.estTotalKm}
-                                      onChange={e => setTransportDetails({...transportDetails, estTotalKm: e.target.value})}
-                                      className="w-full p-3 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"
-                                  />
-                              </div>
-                          </div>
-                      </div>
-                  )}
-                </>
-              ) : (
-                 /* GENERAL ENQUIRY VIEW */
-                 <div className="space-y-4">
-                    <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Requirements / Query</label>
-                        <textarea 
-                            className="w-full p-3 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-purple-500 h-32 resize-none"
-                            placeholder="Enter detailed requirements here..."
-                            value={customerDetails.requirements}
-                            onChange={e => setCustomerDetails({...customerDetails, requirements: e.target.value})}
-                        />
-                    </div>
-                 </div>
-              )}
-
-              {enquiryCategory === 'Transport' && (
-                <div>
-                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Requirement Details</label>
-                    <textarea 
-                        className="w-full p-3 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500 resize-none" 
-                        placeholder="Special requests, extra luggage, etc..."
-                        rows={2}
-                        value={customerDetails.requirements}
-                        onChange={e => setCustomerDetails({...customerDetails, requirements: e.target.value})}
-                    />
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="md:col-span-3">
-                      <label className="block text-xs font-bold text-gray-500 uppercase mb-1 flex items-center gap-1"><Building2 className="w-3 h-3"/> Assign Enquiry To</label>
-                      <div className="flex gap-2">
-                          <select className="flex-1 p-2 border border-gray-200 rounded-lg text-sm bg-white"><option>Head Office</option></select>
-                          <select className="flex-1 p-2 border border-gray-200 rounded-lg text-sm bg-white"><option>All Branches</option></select>
-                          <select className="flex-1 p-2 border border-gray-200 rounded-lg text-sm bg-white"><option>Select Staff</option></select>
-                      </div>
-                  </div>
-              </div>
-
-              <div className="flex gap-4 pt-2">
-                  <button className="flex-1 py-3 border border-blue-200 bg-blue-50 text-blue-600 font-bold rounded-xl hover:bg-blue-100 transition-colors flex items-center justify-center gap-2">
-                      <ArrowRight className="w-4 h-4" /> Schedule
-                  </button>
-                  <button className="flex-1 py-3 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 shadow-md transition-colors flex items-center justify-center gap-2">
-                      <ArrowRight className="w-4 h-4" /> Book Now
-                  </button>
-              </div>
-              <div className="flex gap-4">
-                  <button className="flex-1 py-3 text-gray-500 font-medium hover:bg-gray-50 rounded-xl transition-colors text-sm flex items-center justify-center gap-2">
-                      <X className="w-4 h-4" /> Cancel
-                  </button>
-                  <button className="flex-1 py-3 bg-green-50 text-green-700 font-bold rounded-xl border border-green-200 hover:bg-green-100 transition-colors flex items-center justify-center gap-2">
-                      <Save className="w-4 h-4" /> Save Enquiry
-                  </button>
-              </div>
-          </div>
+    <div className="max-w-6xl mx-auto space-y-6">
+      {/* Header */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+             <Truck className="w-8 h-8 text-emerald-600" /> Vehicle Enquiries
+          </h2>
+          <p className="text-gray-500">Manage transport requests and generate estimates</p>
+        </div>
+        <div className="flex gap-2">
+            <button 
+                onClick={() => setShowSettings(!showSettings)}
+                className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50"
+            >
+                <Settings className="w-4 h-4" /> Rates
+            </button>
         </div>
       </div>
 
-      {/* Right Column: Estimate Card */}
-      <div className="w-full lg:w-96 space-y-6">
-          {enquiryCategory === 'Transport' && (
-            <div className="bg-slate-900 rounded-xl p-6 text-white shadow-xl relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-5 rounded-full -mr-10 -mt-10"></div>
-                <div className="relative z-10">
-                    <p className="text-xs font-bold text-slate-400 uppercase mb-1">Estimated Cost</p>
-                    <h3 className="text-4xl font-bold mb-4">₹{estimatedCost.toLocaleString()}</h3>
-                    
-                    <div className="border-t border-slate-700 pt-4 flex justify-between items-center text-sm">
-                        <span className="font-bold">Total</span>
-                        <span className="font-bold">₹{estimatedCost.toLocaleString()}</span>
-                    </div>
-                </div>
-            </div>
-          )}
+      {/* Settings Panel */}
+      {showSettings && (
+          <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 mb-4">
+              <p className="text-sm text-gray-600">Rate settings are managed in Transport Settings page.</p>
+          </div>
+      )}
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-              <div className="flex justify-between items-center mb-3">
-                  <h4 className="font-bold text-gray-800 flex items-center gap-2 text-sm">
-                      <MessageCircle className="w-4 h-4 text-gray-400" /> Client Message
-                  </h4>
-                  <button 
-                      onClick={() => {navigator.clipboard.writeText(generatedMessage); alert("Copied!")}}
-                      className="text-xs text-emerald-600 hover:underline flex items-center gap-1"
-                  >
-                      <Copy className="w-3 h-3" /> Copy
-                  </button>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Left Column: Input Form */}
+          <div className="space-y-6">
+              <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                  <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                      <User className="w-4 h-4" /> Customer Info
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                      <input 
+                          placeholder="Name" 
+                          className="p-2 border rounded-lg w-full outline-none focus:ring-2 focus:ring-emerald-500"
+                          value={customerDetails.name}
+                          onChange={e => setCustomerDetails({...customerDetails, name: e.target.value})}
+                      />
+                      <input 
+                          placeholder="Phone" 
+                          className="p-2 border rounded-lg w-full outline-none focus:ring-2 focus:ring-emerald-500"
+                          value={customerDetails.phone}
+                          onChange={e => setCustomerDetails({...customerDetails, phone: e.target.value})}
+                      />
+                  </div>
+                  {/* Pickup Location - Moved to Customer Info */}
+                  <div className="mb-4">
+                      <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Pickup Location</label>
+                      {!isMapReady ? (
+                           <div className="p-2 bg-gray-100 text-gray-500 text-sm rounded flex items-center gap-2">
+                              <Loader2 className="w-4 h-4 animate-spin" /> Loading Google Maps...
+                           </div>
+                        ) : (
+                           <Autocomplete 
+                             placeholder="Search Pickup Location"
+                             onAddressSelect={(addr) => setCustomerDetails(prev => ({ ...prev, pickup: addr }))}
+                             setNewPlace={(place) => setPickupCoords(place)}
+                             defaultValue={customerDetails.pickup}
+                           />
+                        )}
+                  </div>
+                  
+                  <div className="flex bg-gray-100 p-1 rounded-lg mb-4">
+                      <button 
+                          onClick={() => setEnquiryCategory('Transport')}
+                          className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${enquiryCategory === 'Transport' ? 'bg-white shadow text-emerald-600' : 'text-gray-500'}`}
+                      >
+                          Transport
+                      </button>
+                      <button 
+                          onClick={() => setEnquiryCategory('General')}
+                          className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${enquiryCategory === 'General' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}
+                      >
+                          General
+                      </button>
+                  </div>
+
+                  {enquiryCategory === 'General' ? (
+                      <div className="p-4 bg-gray-50 rounded-lg text-sm text-gray-500 italic text-center">
+                          Switch to Transport for fare calculation. <br/> Use the Requirement Details below for general notes.
+                      </div>
+                  ) : (
+                      <div className="space-y-4">
+                          {/* Trip Details Header */}
+                          <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+                              <h4 className="text-sm font-bold text-gray-700">Trip Details</h4>
+                              {/* Vehicle Selection */}
+                              <div className="flex gap-2">
+                                  {['Sedan', 'SUV'].map(v => (
+                                      <button
+                                          key={v}
+                                          onClick={() => setVehicleType(v as any)}
+                                          className={`px-3 py-1 text-xs rounded border transition-colors ${vehicleType === v ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-gray-600 border-gray-200'}`}
+                                      >
+                                          {v}
+                                      </button>
+                                  ))}
+                              </div>
+                          </div>
+
+                          {/* Trip Type Tabs */}
+                          <div className="flex border-b border-gray-200">
+                              {['Local', 'Rental', 'Outstation'].map(t => (
+                                  <button
+                                      key={t}
+                                      onClick={() => setTripType(t as any)}
+                                      className={`flex-1 py-2 text-sm font-medium border-b-2 transition-colors ${tripType === t ? 'border-emerald-500 text-emerald-700' : 'border-transparent text-gray-500'}`}
+                                  >
+                                      {t}
+                                  </button>
+                              ))}
+                          </div>
+
+                          {/* Dynamic Inputs based on Trip Type */}
+                          {tripType === 'Local' && (
+                              <div className="space-y-3">
+                                  <div>
+                                      <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Drop Location</label>
+                                      {!isMapReady ? (
+                                         <div className="p-2 bg-gray-100 text-gray-500 text-sm rounded flex items-center gap-2">
+                                            <Loader2 className="w-4 h-4 animate-spin" /> Loading Maps...
+                                         </div>
+                                      ) : (
+                                          <Autocomplete 
+                                              placeholder="Search Drop Location"
+                                              onAddressSelect={(addr) => setTransportDetails(prev => ({ ...prev, drop: addr }))}
+                                              setNewPlace={(place) => setDropCoords(place)}
+                                              defaultValue={transportDetails.drop}
+                                          />
+                                      )}
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-3">
+                                      <input 
+                                          type="number" 
+                                          placeholder="Est Km" 
+                                          className="p-2 border rounded-lg w-full"
+                                          value={transportDetails.estKm}
+                                          onChange={e => setTransportDetails({...transportDetails, estKm: e.target.value})}
+                                      />
+                                      <input 
+                                          type="number" 
+                                          placeholder="Wait Mins" 
+                                          className="p-2 border rounded-lg w-full"
+                                          value={transportDetails.waitingMins}
+                                          onChange={e => setTransportDetails({...transportDetails, waitingMins: e.target.value})}
+                                      />
+                                  </div>
+                              </div>
+                          )}
+
+                          {tripType === 'Rental' && (
+                              <div className="grid grid-cols-2 gap-2">
+                                  {rentalPackages.map(pkg => (
+                                      <button 
+                                          key={pkg.id}
+                                          onClick={() => setTransportDetails(prev => ({...prev, packageId: pkg.id}))}
+                                          className={`p-2 border rounded-lg text-left text-sm ${transportDetails.packageId === pkg.id ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 hover:bg-gray-50'}`}
+                                      >
+                                          <div className="font-bold">{pkg.name}</div>
+                                          <div className="text-gray-500">₹{vehicleType === 'Sedan' ? pkg.priceSedan : pkg.priceSuv}</div>
+                                      </button>
+                                  ))}
+                              </div>
+                          )}
+
+                          {tripType === 'Outstation' && (
+                              <div className="space-y-3">
+                                  <div className="flex bg-gray-100 p-1 rounded-lg">
+                                      <button onClick={() => setOutstationSubType('RoundTrip')} className={`flex-1 py-1 text-xs rounded ${outstationSubType === 'RoundTrip' ? 'bg-white shadow text-emerald-600' : 'text-gray-500'}`}>Round Trip</button>
+                                      <button onClick={() => setOutstationSubType('OneWay')} className={`flex-1 py-1 text-xs rounded ${outstationSubType === 'OneWay' ? 'bg-white shadow text-emerald-600' : 'text-gray-500'}`}>One Way</button>
+                                  </div>
+                                  <div>
+                                      <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Destination</label>
+                                      {!isMapReady ? (
+                                         <div className="p-2 bg-gray-100 text-gray-500 text-sm rounded flex items-center gap-2">
+                                            <Loader2 className="w-4 h-4 animate-spin" /> Loading Maps...
+                                         </div>
+                                      ) : (
+                                          <Autocomplete 
+                                              placeholder="Search Destination"
+                                              onAddressSelect={(addr) => setTransportDetails(prev => ({ ...prev, destination: addr }))}
+                                              setNewPlace={(place) => setDestCoords(place)}
+                                              defaultValue={transportDetails.destination}
+                                          />
+                                      )}
+                                  </div>
+                                  <div className="grid grid-cols-3 gap-3">
+                                      <input 
+                                          type="number" 
+                                          placeholder="Days" 
+                                          className="p-2 border rounded-lg w-full"
+                                          value={transportDetails.days}
+                                          onChange={e => setTransportDetails({...transportDetails, days: e.target.value})}
+                                      />
+                                      <input 
+                                          type="number" 
+                                          placeholder="Km" 
+                                          className="p-2 border rounded-lg w-full"
+                                          value={transportDetails.estTotalKm}
+                                          onChange={e => setTransportDetails({...transportDetails, estTotalKm: e.target.value})}
+                                      />
+                                      {outstationSubType === 'RoundTrip' && (
+                                          <input 
+                                              type="number" 
+                                              placeholder="Nights" 
+                                              className="p-2 border rounded-lg w-full"
+                                              value={transportDetails.nights}
+                                              onChange={e => setTransportDetails({...transportDetails, nights: e.target.value})}
+                                          />
+                                      )}
+                                  </div>
+                              </div>
+                          )}
+                      </div>
+                  )}
+
+                  {/* New Sections: Requirement Details & Assignments */}
+                  <div className="mt-6 pt-6 border-t border-gray-100 space-y-5">
+                      {/* 1. Requirement Details */}
+                      <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Requirement Details</label>
+                          <textarea 
+                              rows={2}
+                              className="w-full p-3 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 resize-none text-sm"
+                              placeholder="Special requests, extra luggage, etc..."
+                              value={customerDetails.requirements}
+                              onChange={e => setCustomerDetails({...customerDetails, requirements: e.target.value})}
+                          />
+                      </div>
+
+                      {/* 2. Assign Enquiry To */}
+                      <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase mb-2 flex items-center gap-1">
+                              <Building2 className="w-3 h-3" /> Assign Enquiry To
+                          </label>
+                          <div className="flex gap-2">
+                              {/* Corporate Selection (Super Admin Only) */}
+                              {isSuperAdmin && (
+                                  <select 
+                                      className="flex-1 p-2 border border-gray-300 rounded-lg text-sm outline-none bg-white"
+                                      value={assignment.corporateId}
+                                      onChange={(e) => setAssignment({...assignment, corporateId: e.target.value, branchName: '', staffId: ''})}
+                                  >
+                                      <option value="admin">Head Office</option>
+                                      {corporates.map((c: any) => (
+                                          <option key={c.email} value={c.email}>{c.companyName}</option>
+                                      ))}
+                                  </select>
+                              )}
+                              
+                              <select 
+                                  className="flex-1 p-2 border border-gray-300 rounded-lg text-sm outline-none bg-white"
+                                  value={assignment.branchName}
+                                  onChange={(e) => setAssignment({...assignment, branchName: e.target.value, staffId: ''})}
+                              >
+                                  <option value="">All Branches</option>
+                                  {filteredBranches.map((b: any) => (
+                                      <option key={b.id} value={b.name}>{b.name}</option>
+                                  ))}
+                              </select>
+
+                              <select 
+                                  className="flex-1 p-2 border border-gray-300 rounded-lg text-sm outline-none bg-white"
+                                  value={assignment.staffId}
+                                  onChange={(e) => setAssignment({...assignment, staffId: e.target.value})}
+                              >
+                                  <option value="">Select Staff</option>
+                                  {filteredStaff.map((s: any) => (
+                                      <option key={s.id} value={s.id}>{s.name}</option>
+                                  ))}
+                              </select>
+                          </div>
+                      </div>
+
+                      {/* 3. Action Buttons */}
+                      <div className="grid grid-cols-2 gap-3 pt-2">
+                          <button className="py-2.5 border border-blue-200 text-blue-600 rounded-lg font-bold text-sm hover:bg-blue-50 transition-colors flex items-center justify-center gap-2">
+                              <Calendar className="w-4 h-4" /> Schedule
+                          </button>
+                          <button className="py-2.5 bg-emerald-600 text-white rounded-lg font-bold text-sm hover:bg-emerald-700 transition-colors shadow-md flex items-center justify-center gap-2">
+                              <ArrowRight className="w-4 h-4" /> Book Now
+                          </button>
+                          
+                          <button className="py-2.5 text-gray-500 hover:text-red-500 rounded-lg font-medium text-sm hover:bg-gray-50 transition-colors flex items-center justify-center gap-1">
+                              <X className="w-4 h-4" /> Cancel
+                          </button>
+                          <button className="py-2.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg font-bold text-sm hover:bg-emerald-100 transition-colors flex items-center justify-center gap-2">
+                              <Save className="w-4 h-4" /> Save Enquiry
+                          </button>
+                      </div>
+                  </div>
               </div>
-              <textarea 
-                  value={generatedMessage}
-                  readOnly
-                  className="w-full h-64 p-3 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-gray-600 resize-none focus:outline-none mb-4"
-              />
-              <div className="grid grid-cols-2 gap-3">
-                  <button 
-                      onClick={() => {
-                          const url = `https://wa.me/${customerDetails.phone.replace(/\D/g, '')}?text=${encodeURIComponent(generatedMessage)}`;
-                          window.open(url, '_blank');
-                      }}
-                      className="bg-green-500 hover:bg-green-600 text-white py-2 rounded-lg font-medium flex items-center justify-center gap-2 transition-colors text-sm shadow-sm"
-                  >
-                      <MessageCircle className="w-4 h-4" /> WhatsApp
-                  </button>
-                  <button 
-                      onClick={() => {
-                          const url = `mailto:${customerDetails.email}?subject=${encodeURIComponent(tripType + ' Estimate')}&body=${encodeURIComponent(generatedMessage)}`;
-                          window.location.href = url;
-                      }}
-                      className="bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-lg font-medium flex items-center justify-center gap-2 transition-colors text-sm shadow-sm"
-                  >
-                      <Mail className="w-4 h-4" /> Email
-                  </button>
+          </div>
+
+          {/* Right Column: Output */}
+          <div className="space-y-6">
+              <div className="bg-slate-900 text-white p-6 rounded-xl shadow-lg relative overflow-hidden">
+                  <div className="relative z-10">
+                      <p className="text-slate-400 text-xs uppercase font-bold mb-1">Estimated Cost</p>
+                      <h3 className="text-4xl font-bold mb-4">₹{estimatedCost.toLocaleString()}</h3>
+                      <div className="text-sm text-slate-300 border-t border-slate-700 pt-3">
+                          {enquiryCategory === 'Transport' ? (
+                              <p>Includes basic fare calculations. Tolls & Parking extra.</p>
+                          ) : (
+                              <p>Standard Enquiry. No cost calculated.</p>
+                          )}
+                      </div>
+                  </div>
+                  <div className="absolute right-0 bottom-0 opacity-10">
+                      <DollarSign className="w-32 h-32 text-white" />
+                  </div>
+              </div>
+
+              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                  <div className="flex justify-between items-center mb-2">
+                      <h4 className="font-bold text-gray-800 flex items-center gap-2">
+                          <MessageCircle className="w-4 h-4 text-emerald-500" /> Generated Message
+                      </h4>
+                      <button 
+                          onClick={() => {navigator.clipboard.writeText(generatedMessage); alert("Copied!")}}
+                          className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+                      >
+                          <Copy className="w-3 h-3" /> Copy
+                      </button>
+                  </div>
+                  <textarea 
+                      className="w-full h-40 p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none resize-none mb-3"
+                      value={generatedMessage}
+                      readOnly
+                  />
+                  <div className="grid grid-cols-2 gap-3">
+                      <button 
+                          onClick={() => window.open(`https://wa.me/${customerDetails.phone.replace(/\D/g, '')}?text=${encodeURIComponent(generatedMessage)}`, '_blank')}
+                          className="bg-green-500 hover:bg-green-600 text-white py-2 rounded-lg font-medium flex items-center justify-center gap-2"
+                      >
+                          <MessageCircle className="w-4 h-4" /> WhatsApp
+                      </button>
+                      <button 
+                          className="bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-lg font-medium flex items-center justify-center gap-2"
+                      >
+                          <Mail className="w-4 h-4" /> Email
+                      </button>
+                  </div>
               </div>
           </div>
       </div>

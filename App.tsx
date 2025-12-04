@@ -18,7 +18,7 @@ import Documents from './pages/Documents';
 import Leads from './pages/admin/Leads';
 import Reception from './pages/admin/Reception';
 import Reports from './pages/admin/Reports'; 
-import TripBooking from './pages/admin/TripBooking'; 
+import { TripBooking } from './pages/admin/TripBooking'; 
 import { VehicleEnquiries } from './pages/admin/VehicleEnquiries'; 
 import UserAttendance from './pages/user/UserAttendance';
 import UserSalary from './pages/user/UserSalary';
@@ -156,6 +156,7 @@ const App: React.FC = () => {
                         <>
                           <Route path="/admin/corporate" element={<Corporate />} />
                           <Route path="/admin/settings" element={<Settings />} />
+                          <Route path="/admin/admin-finance" element={<Expenses />} /> {/* NEW: Admin Finance tab */}
                         </>
                       )}
                       

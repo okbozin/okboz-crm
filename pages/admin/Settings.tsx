@@ -31,7 +31,11 @@ const Settings: React.FC = () => {
   const isPermanent = !!(HARDCODED_FIREBASE_CONFIG.apiKey && HARDCODED_FIREBASE_CONFIG.apiKey.length > 5);
 
   useEffect(() => {
-    checkConnection();
+    try {
+      checkConnection();
+    } catch (e) {
+      console.error("Connection check failed on mount", e);
+    }
   }, []);
 
   const generateCollectionStats = (cloudData: any) => {
@@ -72,17 +76,22 @@ const Settings: React.FC = () => {
   };
 
   const checkConnection = async () => {
-    const s = await getCloudDatabaseStats();
-    
-    // Generate stats regardless of connection, cloud will just be '-' if not connected
-    const statsList = generateCollectionStats(s);
-    setCollectionStats(statsList);
+    try {
+      const s = await getCloudDatabaseStats();
+      
+      // Generate stats regardless of connection, cloud will just be '-' if not connected
+      const statsList = generateCollectionStats(s);
+      setCollectionStats(statsList);
 
-    if (s) {
-      setStats(s);
-      setDbStatus('Connected');
-    } else {
-      setDbStatus('Disconnected');
+      if (s) {
+        setStats(s);
+        setDbStatus('Connected');
+      } else {
+        setDbStatus('Disconnected');
+      }
+    } catch (e) {
+      console.error("Failed to check connection", e);
+      setDbStatus('Error');
     }
   };
 
@@ -181,9 +190,10 @@ const Settings: React.FC = () => {
             <Cloud className="w-5 h-5 text-blue-500" /> Cloud Database
           </h3>
           <div className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 ${
-            dbStatus === 'Connected' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+            dbStatus === 'Connected' ? 'bg-green-100 text-green-700' : 
+            dbStatus === 'Error' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'
           }`}>
-            <div className={`w-2 h-2 rounded-full ${dbStatus === 'Connected' ? 'bg-green-500' : 'bg-red-500'}`}></div>
+            <div className={`w-2 h-2 rounded-full ${dbStatus === 'Connected' ? 'bg-green-500' : dbStatus === 'Error' ? 'bg-red-500' : 'bg-gray-500'}`}></div>
             {dbStatus}
           </div>
         </div>
