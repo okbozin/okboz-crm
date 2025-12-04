@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, MapPin, Calendar, DollarSign, Briefcase, Menu, X, LogOut, UserCircle, Building, Settings, Target, CreditCard, ClipboardList, ReceiptIndianRupee, Navigation, Car, Building2, PhoneIncoming, GripVertical, Edit2, Check, FileText, Layers, PhoneCall, Bus, Bell, Sun, Moon, Monitor, Mail, UserCog, CarFront, BellRing, BarChart3, Map } from 'lucide-react';
+import { LayoutDashboard, Users, MapPin, Calendar, DollarSign, Briefcase, Menu, X, LogOut, UserCircle, Building, Settings, Target, CreditCard, ClipboardList, ReceiptIndianRupee, Navigation, Car, Building2, PhoneIncoming, GripVertical, Edit2, Check, FileText, Layers, PhoneCall, Bus, Bell, Sun, Moon, Monitor, Mail, UserCog, CarFront, BellRing, BarChart3, Map, Headset } from 'lucide-react';
 import { UserRole, Enquiry, CorporateAccount, Employee } from '../types';
 import { useBranding } from '../context/BrandingContext';
 import { useTheme } from '../context/ThemeContext';
@@ -21,6 +21,7 @@ const MASTER_ADMIN_LINKS = [
   { id: 'marketing', path: '/admin/marketing', label: 'Email Marketing', icon: Mail },
   { id: 'reception', path: '/admin/reception', label: 'Reception Desk', icon: PhoneCall },
   { id: 'vehicle-enquiries', path: '/admin/vehicle-enquiries', label: 'Vehicle Enquiries', icon: Car },
+  { id: 'customer-care', path: '/admin/customer-care', label: 'Customer Care', icon: Headset },
   { id: 'trips', path: '/admin/trips', label: 'Trip Booking', icon: Map },
   { id: 'tracking', path: '/admin/tracking', label: 'Live Tracking', icon: Navigation },
   { id: 'leads', path: '/admin/leads', label: 'Franchisee Leads', icon: Layers },

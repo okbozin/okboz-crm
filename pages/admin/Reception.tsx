@@ -5,7 +5,7 @@ import {
   Edit2, X, Save, UserPlus, History, Filter, Download, Truck, Calculator, 
   MessageCircle, Mail, Copy, MapPin, Calendar as CalendarIcon, RefreshCcw, 
   Sparkles, Wand2, Loader2, Building2, CheckCircle, ChevronDown, Bell,
-  MoreHorizontal, Phone, CheckSquare, ArrowRightLeft
+  MoreHorizontal, Phone, CheckSquare, ArrowRightLeft, Plus, Trash2
 } from 'lucide-react';
 import Autocomplete from '../../components/Autocomplete';
 import { MOCK_EMPLOYEES } from '../../constants';
@@ -117,6 +117,12 @@ const Reception: React.FC = () => {
     return saved ? JSON.parse(saved) : DEFAULT_RENTAL_PACKAGES;
   });
 
+  // --- Settings UI State ---
+  const [showSettings, setShowSettings] = useState(false);
+  const [settingsVehicleType, setSettingsVehicleType] = useState<'Sedan' | 'SUV'>('Sedan');
+  const [showAddPackage, setShowAddPackage] = useState(false);
+  const [newPackage, setNewPackage] = useState({ name: '', hours: '', km: '', priceSedan: '', priceSuv: '' });
+
   // Save history
   useEffect(() => {
     localStorage.setItem('reception_recent_transfers', JSON.stringify(recentTransfers));
@@ -126,6 +132,13 @@ const Reception: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('global_enquiries_data', JSON.stringify(enquiries));
   }, [enquiries]);
+
+  // Sync Settings changes
+  useEffect(() => {
+      const suffix = isSuperAdmin ? '' : `_${sessionId}`;
+      localStorage.setItem(`transport_pricing_rules_v2${suffix}`, JSON.stringify(pricing));
+      localStorage.setItem(`transport_rental_packages_v2${suffix}`, JSON.stringify(rentalPackages));
+  }, [pricing, rentalPackages, isSuperAdmin, sessionId]);
 
   // --- UI State ---
   const [activeTab, setActiveTab] = useState<'Incoming' | 'Outgoing'>('Incoming');
@@ -188,6 +201,39 @@ const Reception: React.FC = () => {
   const [editEstimateMsg, setEditEstimateMsg] = useState('');
 
   // --- Handlers ---
+
+  const handlePricingChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setPricing(prev => ({
+      ...prev,
+      [settingsVehicleType]: {
+        ...prev[settingsVehicleType],
+        [name]: parseFloat(value) || 0
+      }
+    }));
+  };
+
+  const handleAddPackage = () => {
+    if (!newPackage.name || !newPackage.priceSedan) return;
+    const pkg: RentalPackage = {
+      id: `pkg-${Date.now()}`,
+      name: newPackage.name,
+      hours: parseFloat(newPackage.hours) || 0,
+      km: parseFloat(newPackage.km) || 0,
+      priceSedan: parseFloat(newPackage.priceSedan) || 0,
+      priceSuv: parseFloat(newPackage.priceSuv) || 0,
+    };
+    setRentalPackages([...rentalPackages, pkg]);
+    setShowAddPackage(false);
+    setNewPackage({ name: '', hours: '', km: '', priceSedan: '', priceSuv: '' });
+  };
+
+  const removePackage = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (window.confirm('Remove this package?')) {
+      setRentalPackages(prev => prev.filter(p => p.id !== id));
+    }
+  };
 
   useEffect(() => {
     // Basic check for maps
@@ -530,7 +576,16 @@ const Reception: React.FC = () => {
       
       {/* 1. Header & Stats Row */}
       <div className="space-y-4">
-         <h2 className="text-2xl font-bold text-gray-800">Reception Desk</h2>
+         <div className="flex justify-between items-center">
+            <h2 className="text-2xl font-bold text-gray-800">Reception Desk</h2>
+            <button 
+                onClick={() => setShowSettings(!showSettings)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${showSettings ? 'bg-slate-800 text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}`}
+            >
+                <Edit2 className="w-4 h-4" /> {showSettings ? 'Hide Rates' : 'Edit Rates'}
+            </button>
+         </div>
+         
          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
                <div>
@@ -562,6 +617,148 @@ const Reception: React.FC = () => {
             </div>
          </div>
       </div>
+
+      {/* SETTINGS PANEL (Inline Rate Editor) */}
+      {showSettings && (
+        <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 animate-in fade-in slide-in-from-top-2 mb-4">
+          <div className="flex items-center justify-between mb-4">
+             <h3 className="font-bold text-slate-800 flex items-center gap-2"><Edit2 className="w-4 h-4" /> Fare Configuration</h3>
+             
+             {/* Vehicle Type Toggle for Settings */}
+             <div className="bg-white border border-gray-300 rounded-lg p-1 flex">
+                <button 
+                   onClick={() => setSettingsVehicleType('Sedan')}
+                   className={`px-4 py-1 text-xs font-bold rounded transition-colors ${settingsVehicleType === 'Sedan' ? 'bg-emerald-500 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+                >
+                   Sedan
+                </button>
+                <button 
+                   onClick={() => setSettingsVehicleType('SUV')}
+                   className={`px-4 py-1 text-xs font-bold rounded transition-colors ${settingsVehicleType === 'SUV' ? 'bg-emerald-500 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+                >
+                   SUV
+                </button>
+             </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Local Settings */}
+            <div className="space-y-3 bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+              <h4 className="text-sm font-bold text-emerald-600 uppercase tracking-wide border-b border-gray-100 pb-2 mb-2">Local Rules ({settingsVehicleType})</h4>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Base Fare (₹)</label>
+                <input type="number" name="localBaseFare" value={pricing[settingsVehicleType].localBaseFare} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Base Km Included</label>
+                <input type="number" name="localBaseKm" value={pricing[settingsVehicleType].localBaseKm} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Extra Km Rate (₹/km)</label>
+                <input type="number" name="localPerKmRate" value={pricing[settingsVehicleType].localPerKmRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Waiting Charge (₹/min)</label>
+                <input type="number" name="localWaitingRate" value={pricing[settingsVehicleType].localWaitingRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
+              </div>
+            </div>
+
+            {/* Outstation Settings */}
+            <div className="space-y-3 bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+              <h4 className="text-sm font-bold text-orange-600 uppercase tracking-wide border-b border-gray-100 pb-2 mb-2">Outstation Rules ({settingsVehicleType})</h4>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Min Km / Day</label>
+                <input type="number" name="outstationMinKmPerDay" value={pricing[settingsVehicleType].outstationMinKmPerDay} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Per Km Rate (₹/km)</label>
+                <input type="number" name="outstationExtraKmRate" value={pricing[settingsVehicleType].outstationExtraKmRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Base Rate (One Way Only)</label>
+                <input type="number" name="outstationBaseRate" value={pricing[settingsVehicleType].outstationBaseRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" placeholder="Not used for Round Trip" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Driver Allowance (₹/day)</label>
+                <input type="number" name="outstationDriverAllowance" value={pricing[settingsVehicleType].outstationDriverAllowance} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Driver Night Allowance (₹/night)</label>
+                <input type="number" name="outstationNightAllowance" value={pricing[settingsVehicleType].outstationNightAllowance} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
+              </div>
+            </div>
+
+            {/* Rental Settings */}
+            <div className="space-y-3 bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+              <h4 className="text-sm font-bold text-blue-600 uppercase tracking-wide border-b border-gray-100 pb-2 mb-2">Rental Rules ({settingsVehicleType})</h4>
+              
+              {/* Extra Rates */}
+              <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">Extra Hr (₹)</label>
+                    <input type="number" name="rentalExtraHrRate" value={pricing[settingsVehicleType].rentalExtraHrRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">Extra Km (₹)</label>
+                    <input type="number" name="rentalExtraKmRate" value={pricing[settingsVehicleType].rentalExtraKmRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
+                  </div>
+              </div>
+
+              {/* Package List Management */}
+              <div className="mt-4 border-t border-gray-100 pt-2">
+                  <div className="flex justify-between items-center mb-2">
+                      <label className="text-xs font-bold text-gray-700">Packages</label>
+                      <button 
+                        onClick={() => setShowAddPackage(!showAddPackage)}
+                        className="text-[10px] bg-blue-50 text-blue-600 px-2 py-1 rounded border border-blue-100 hover:bg-blue-100 flex items-center gap-1 font-bold"
+                      >
+                        <Plus className="w-3 h-3" /> New
+                      </button>
+                  </div>
+                  
+                  {showAddPackage && (
+                      <div className="bg-blue-50 p-2 rounded border border-blue-100 mb-2 space-y-2 animate-in fade-in slide-in-from-top-1">
+                          <input placeholder="Pkg Name (e.g. 10hr/100km)" className="w-full p-1.5 text-xs border rounded outline-none focus:ring-1 focus:ring-blue-500" value={newPackage.name} onChange={e => setNewPackage({...newPackage, name: e.target.value})} />
+                          <div className="flex gap-2">
+                              <input placeholder="Hrs" type="number" className="w-full p-1.5 text-xs border rounded outline-none" value={newPackage.hours} onChange={e => setNewPackage({...newPackage, hours: e.target.value})} />
+                              <input placeholder="Km" type="number" className="w-full p-1.5 text-xs border rounded outline-none" value={newPackage.km} onChange={e => setNewPackage({...newPackage, km: e.target.value})} />
+                          </div>
+                          <div className="flex gap-2">
+                              <input placeholder="Sedan ₹" type="number" className="w-full p-1.5 text-xs border rounded outline-none" value={newPackage.priceSedan} onChange={e => setNewPackage({...newPackage, priceSedan: e.target.value})} />
+                              <input placeholder="SUV ₹" type="number" className="w-full p-1.5 text-xs border rounded outline-none" value={newPackage.priceSuv} onChange={e => setNewPackage({...newPackage, priceSuv: e.target.value})} />
+                          </div>
+                          <button onClick={handleAddPackage} className="w-full bg-blue-600 text-white text-xs font-bold py-1.5 rounded hover:bg-blue-700 transition-colors">Save Package</button>
+                      </div>
+                  )}
+
+                  <div className="space-y-1 max-h-40 overflow-y-auto custom-scrollbar">
+                      {rentalPackages.map(pkg => (
+                          <div key={pkg.id} className="flex justify-between items-center p-2 hover:bg-gray-50 rounded border border-transparent hover:border-gray-200 group transition-colors">
+                              <div>
+                                  <div className="text-xs font-bold text-gray-800">{pkg.name}</div>
+                                  <div className="text-[10px] text-gray-500">{pkg.hours}hr / {pkg.km}km</div>
+                              </div>
+                              <div className="text-right flex items-center gap-2">
+                                  <div className="text-[10px] text-gray-600 font-mono text-right">
+                                      <div>S: {pkg.priceSedan}</div>
+                                      <div>X: {pkg.priceSuv}</div>
+                                  </div>
+                                  <button onClick={(e) => removePackage(pkg.id, e)} className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-1">
+                                      <Trash2 className="w-3 h-3" />
+                                  </button>
+                              </div>
+                          </div>
+                      ))}
+                  </div>
+              </div>
+
+              <div className="pt-4 mt-auto">
+                 <button onClick={() => setShowSettings(false)} className="w-full bg-slate-800 text-white py-2 rounded text-sm font-medium hover:bg-slate-900 transition-colors">Close</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-14rem)] min-h-[600px]">
          

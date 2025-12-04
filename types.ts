@@ -101,7 +101,7 @@ export interface Enquiry {
   city: string;
   email?: string;
   details: string; // The query/requirement
-  status: 'New' | 'In Progress' | 'Converted' | 'Closed' | 'Booked' | 'Scheduled'; // ADDED 'Booked' and 'Scheduled'
+  status: 'New' | 'In Progress' | 'Converted' | 'Closed' | 'Booked' | 'Scheduled' | 'Order Accepted' | 'Driver Assigned' | 'Completed' | 'Cancelled';
   isExistingVendor?: boolean; // If they were found in the vendor DB
   vendorId?: string; // Link to vendor if exists
   assignedTo?: string; // Employee ID

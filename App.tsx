@@ -20,6 +20,7 @@ import Reception from './pages/admin/Reception';
 import Reports from './pages/admin/Reports'; 
 import { TripBooking } from './pages/admin/TripBooking'; 
 import { VehicleEnquiries } from './pages/admin/VehicleEnquiries'; 
+import { CustomerCare } from './pages/admin/CustomerCare';
 import UserAttendance from './pages/user/UserAttendance';
 import UserSalary from './pages/user/UserSalary';
 import ApplyLeave from './pages/user/ApplyLeave';
@@ -64,17 +65,23 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!isAuthenticated) return;
 
-    // Only run if API key is present
-    if (HARDCODED_FIREBASE_CONFIG.apiKey || localStorage.getItem('firebase_config')) {
-        const interval = setInterval(async () => {
-            // Silently sync data to cloud every 30 seconds
-            // Note: syncToCloud has a built-in safety guard to skip if it detects Mock Data (like "John Doe").
-            // This prevents polluting the production database with test data during deployment.
+    // Use a recursive setTimeout instead of setInterval to prevent overlapping sync calls
+    // which can lead to "write stream exhausted" errors if network is slow.
+    let timeoutId: any;
+    
+    const runSync = async () => {
+        if (HARDCODED_FIREBASE_CONFIG.apiKey || localStorage.getItem('firebase_config')) {
+            // Silently sync data to cloud
             await syncToCloud();
-        }, 30000); 
+        }
+        // Schedule next sync 30 seconds AFTER current sync finishes
+        timeoutId = setTimeout(runSync, 30000); 
+    };
 
-        return () => clearInterval(interval);
-    }
+    // Initial delay to let app load first
+    timeoutId = setTimeout(runSync, 5000);
+
+    return () => clearTimeout(timeoutId);
   }, [isAuthenticated]);
 
   // Handle Login
@@ -138,6 +145,7 @@ const App: React.FC = () => {
                       />
                       <Route path="/admin/reception" element={<Reception />} />
                       <Route path="/admin/vehicle-enquiries" element={<VehicleEnquiries />} />
+                      <Route path="/admin/customer-care" element={<CustomerCare />} />
                       <Route path="/admin/trips" element={<TripBooking />} /> 
                       <Route path="/admin/tracking" element={<LiveTracking />} />
                       <Route path="/admin/leads" element={<Leads />} />

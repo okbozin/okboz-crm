@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Settings, Loader2, ArrowRight, ArrowRightLeft, 
@@ -7,6 +6,7 @@ import {
   Calendar, MapPin, Briefcase
 } from 'lucide-react';
 import Autocomplete from '../../components/Autocomplete';
+import { Enquiry, HistoryLog } from '../../types';
 
 // Types
 type TripType = 'Local' | 'Rental' | 'Outstation';
@@ -104,6 +104,12 @@ export const VehicleEnquiries: React.FC = () => {
     corporateId: '',
     branchName: '',
     staffId: ''
+  });
+
+  // --- Enquiry List Management ---
+  const [enquiries, setEnquiries] = useState<Enquiry[]>(() => {
+      const saved = localStorage.getItem('global_enquiries_data');
+      return saved ? JSON.parse(saved) : [];
   });
 
   const sessionId = localStorage.getItem('app_session_id') || 'admin';
@@ -336,6 +342,80 @@ Book now with OK BOZ Transport!`;
 
       setGeneratedMessage(msg);
   }, [estimatedCost, customerDetails, transportDetails, tripType, vehicleType, pricing, rentalPackages, enquiryCategory, outstationSubType]);
+
+  const handleEnquiryAction = (action: 'Schedule' | 'Book' | 'Save') => {
+      if (!customerDetails.name || !customerDetails.phone) {
+          alert("Please enter Customer Name and Phone.");
+          return;
+      }
+
+      // 1. Construct Details String
+      let detailsText = '';
+      if (enquiryCategory === 'Transport') {
+          detailsText = `[${vehicleType} - ${tripType}] `;
+          if (tripType === 'Local') detailsText += `Pickup: ${customerDetails.pickup} -> Drop: ${transportDetails.drop}. Dist: ${transportDetails.estKm}km.`;
+          if (tripType === 'Rental') {
+              const pkg = rentalPackages.find(p => p.id === transportDetails.packageId);
+              detailsText += `Package: ${pkg?.name}. Pickup: ${customerDetails.pickup}.`;
+          }
+          if (tripType === 'Outstation') detailsText += `Dest: ${transportDetails.destination}. ${transportDetails.days} Days. Pickup: ${customerDetails.pickup}.`;
+          detailsText += ` Estimate: ₹${estimatedCost}`;
+      } else {
+          detailsText = "General Enquiry. ";
+      }
+      
+      if (customerDetails.requirements) detailsText += `\nReq: ${customerDetails.requirements}`;
+
+      // 2. Determine Status
+      let status: Enquiry['status'] = 'New';
+      if (action === 'Book') status = 'Booked';
+      if (action === 'Schedule') status = 'Scheduled';
+
+      // 3. Create History Log
+      const historyLog: HistoryLog = {
+          id: Date.now(),
+          type: 'Note',
+          message: `Enquiry ${action === 'Book' ? 'Booked' : action === 'Schedule' ? 'Scheduled' : 'Saved'} via Vehicle Console. ${estimatedCost > 0 ? `Est: ₹${estimatedCost}` : ''}`,
+          date: new Date().toLocaleString(),
+          outcome: 'Completed'
+      };
+
+      // 4. Create Object
+      const newEnquiry: Enquiry = {
+          id: `ENQ-${Date.now()}`,
+          type: 'Customer',
+          initialInteraction: 'Incoming',
+          name: customerDetails.name,
+          phone: customerDetails.phone,
+          email: customerDetails.email,
+          city: 'Coimbatore', // Default if not parsed
+          details: detailsText,
+          status: status,
+          assignedTo: assignment.staffId,
+          createdAt: new Date().toLocaleString(),
+          history: [historyLog],
+          date: new Date().toISOString().split('T')[0]
+      };
+
+      // 5. Save
+      const updatedList = [newEnquiry, ...enquiries];
+      setEnquiries(updatedList);
+      localStorage.setItem('global_enquiries_data', JSON.stringify(updatedList));
+
+      alert(`Enquiry ${status} Successfully!`);
+      
+      // 6. Reset
+      setCustomerDetails({ name: '', phone: '', email: '', pickup: '', requirements: '' });
+      setTransportDetails({ drop: '', estKm: '', waitingMins: '', packageId: '', destination: '', days: '1', estTotalKm: '', nights: '0' });
+      setGeneratedMessage('');
+      setEstimatedCost(0);
+  };
+
+  const handleCancel = () => {
+      setCustomerDetails({ name: '', phone: '', email: '', pickup: '', requirements: '' });
+      setTransportDetails({ drop: '', estKm: '', waitingMins: '', packageId: '', destination: '', days: '1', estTotalKm: '', nights: '0' });
+      alert("Form cleared.");
+  };
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -616,17 +696,29 @@ Book now with OK BOZ Transport!`;
 
                       {/* 3. Action Buttons */}
                       <div className="grid grid-cols-2 gap-3 pt-2">
-                          <button className="py-2.5 border border-blue-200 text-blue-600 rounded-lg font-bold text-sm hover:bg-blue-50 transition-colors flex items-center justify-center gap-2">
+                          <button 
+                              onClick={() => handleEnquiryAction('Schedule')}
+                              className="py-2.5 border border-blue-200 text-blue-600 rounded-lg font-bold text-sm hover:bg-blue-50 transition-colors flex items-center justify-center gap-2"
+                          >
                               <Calendar className="w-4 h-4" /> Schedule
                           </button>
-                          <button className="py-2.5 bg-emerald-600 text-white rounded-lg font-bold text-sm hover:bg-emerald-700 transition-colors shadow-md flex items-center justify-center gap-2">
+                          <button 
+                              onClick={() => handleEnquiryAction('Book')}
+                              className="py-2.5 bg-emerald-600 text-white rounded-lg font-bold text-sm hover:bg-emerald-700 transition-colors shadow-md flex items-center justify-center gap-2"
+                          >
                               <ArrowRight className="w-4 h-4" /> Book Now
                           </button>
                           
-                          <button className="py-2.5 text-gray-500 hover:text-red-500 rounded-lg font-medium text-sm hover:bg-gray-50 transition-colors flex items-center justify-center gap-1">
+                          <button 
+                              onClick={handleCancel}
+                              className="py-2.5 text-gray-500 hover:text-red-500 rounded-lg font-medium text-sm hover:bg-gray-50 transition-colors flex items-center justify-center gap-1"
+                          >
                               <X className="w-4 h-4" /> Cancel
                           </button>
-                          <button className="py-2.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg font-bold text-sm hover:bg-emerald-100 transition-colors flex items-center justify-center gap-2">
+                          <button 
+                              onClick={() => handleEnquiryAction('Save')}
+                              className="py-2.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg font-bold text-sm hover:bg-emerald-100 transition-colors flex items-center justify-center gap-2"
+                          >
                               <Save className="w-4 h-4" /> Save Enquiry
                           </button>
                       </div>

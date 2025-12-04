@@ -61,7 +61,7 @@ const GLOBAL_KEYS = [
   'salary_advances',
   'app_branding',
   'app_theme',
-  'maps_api_key'
+  'maps_api_key' // Ensures Maps Key set by Admin syncs to Franchise panels
 ];
 
 const NAMESPACED_KEYS = [
@@ -75,6 +75,11 @@ const NAMESPACED_KEYS = [
   'app_settings',
   'trips_data'
 ];
+
+// --- SYNC STATE MANAGEMENT ---
+let isSyncing = false;
+// Cache to track what has been written to cloud to avoid redundant writes
+const lastSyncedData: Record<string, string> = {};
 
 // Helper to check for mock data to prevent pollution of production DB
 const isMockDataPresent = (): boolean => {
@@ -149,6 +154,14 @@ export const syncToCloud = async (config?: FirebaseConfig) => {
     return { success: true, message: "Sync Skipped: Mock Data Present" };
   }
 
+  // CONCURRENCY GUARD: Prevent overlapping syncs
+  if (isSyncing) {
+    console.log("⏳ Sync skipped: Previous sync still in progress.");
+    return { success: false, message: "Sync in progress" };
+  }
+
+  isSyncing = true;
+
   try {
     const app = getFirebaseApp(config);
     if (!app) return { success: false, message: "Not Connected" };
@@ -159,20 +172,32 @@ export const syncToCloud = async (config?: FirebaseConfig) => {
     const corporateAccountsStr = localStorage.getItem('corporate_accounts');
     const corporates = corporateAccountsStr ? JSON.parse(corporateAccountsStr) : [];
 
-    const allBaseKeys = [...GLOBAL_KEYS, ...NAMESPACED_KEYS];
-    
-    // Save Global Data
-    for (const key of allBaseKeys) {
-      const data = localStorage.getItem(key);
-      if (data) {
+    let writeCount = 0;
+
+    // Helper to write only if changed
+    const writeIfChanged = async (key: string) => {
+        const data = localStorage.getItem(key);
+        if (!data) return; // Nothing to save
+
+        // Optimization: Only write if data has changed since last sync
+        if (lastSyncedData[key] === data) return;
+
         await setDoc(doc(db, "ok_boz_live_data", key), {
           content: data,
           lastUpdated: new Date().toISOString()
         });
-      }
+        
+        lastSyncedData[key] = data; // Update cache
+        writeCount++;
+    };
+    
+    // 1. Save Global & Root Namespaced Data (Head Office)
+    const rootKeys = [...GLOBAL_KEYS, ...NAMESPACED_KEYS];
+    for (const key of rootKeys) {
+      await writeIfChanged(key);
     }
 
-    // Save Corporate Specific Data
+    // 2. Save Corporate Specific Data
     if (Array.isArray(corporates)) {
       for (const corp of corporates) {
         const email = corp.email;
@@ -180,23 +205,27 @@ export const syncToCloud = async (config?: FirebaseConfig) => {
 
         for (const prefix of NAMESPACED_KEYS) {
           const key = `${prefix}_${email}`;
-          const data = localStorage.getItem(key);
-          if (data) {
-            await setDoc(doc(db, "ok_boz_live_data", key), {
-              content: data,
-              lastUpdated: new Date().toISOString()
-            });
-          }
+          await writeIfChanged(key);
         }
       }
     }
 
-    return { success: true, message: "Sync complete! Data is safe in Cloud." };
+    if (writeCount > 0) {
+        console.log(`☁️ Synced ${writeCount} updated records to cloud.`);
+    }
+
+    return { success: true, message: `Sync complete! (${writeCount} updates)` };
   } catch (error: any) {
+    console.error("Sync Error:", error);
     if (error.code === 'permission-denied') {
         return { success: false, message: "Permission Denied. Set Firestore rules to Test Mode." };
     }
+    if (error.code === 'resource-exhausted') {
+        return { success: false, message: "Quota exceeded or too many writes. Retrying later." };
+    }
     return { success: false, message: `Sync failed: ${error.message}` };
+  } finally {
+    isSyncing = false;
   }
 };
 
@@ -219,6 +248,8 @@ export const restoreFromCloud = async (config?: FirebaseConfig) => {
         const data = doc.data();
         if (data.content) {
             localStorage.setItem(doc.id, data.content);
+            // Update cache to prevent immediate re-upload
+            lastSyncedData[doc.id] = data.content;
         }
     });
 

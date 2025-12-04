@@ -495,16 +495,56 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
     { name: 'Leave/Off', value: stats.paidLeave + stats.weekOff },
   ].filter(d => d.value > 0);
 
+  // Common List View Renderer
+  const renderListView = () => (
+    <div className="space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar">
+      {attendanceData.map((day, idx) => (
+          <div key={idx} className="flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors">
+              <div className="flex items-center gap-4">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold border ${
+                    day.status === AttendanceStatus.PRESENT ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                    day.status === AttendanceStatus.ABSENT ? 'bg-red-50 text-red-700 border-red-200' :
+                    day.status === AttendanceStatus.HALF_DAY ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                    day.status === AttendanceStatus.PAID_LEAVE ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                    day.status === AttendanceStatus.WEEK_OFF ? 'bg-slate-50 text-slate-500 border-slate-200' :
+                    'bg-white text-gray-400 border-gray-200'
+                }`}>
+                    {new Date(day.date).getDate()}
+                </div>
+                <div>
+                    <p className="font-medium text-gray-900">{new Date(day.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+                    <p className="text-xs text-gray-500">{day.status.replace('_', ' ')}</p>
+                </div>
+              </div>
+              <div className="text-right flex flex-col items-end gap-1 min-w-[100px]">
+                {day.checkIn ? (
+                    <>
+                      <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] text-gray-400 uppercase tracking-wide">In</span>
+                          <p className="font-mono text-xs font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">{day.checkIn}</p>
+                      </div>
+                      {day.checkOut && (
+                          <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] text-gray-400 uppercase tracking-wide">Out</span>
+                              <p className="font-mono text-xs font-bold text-red-500 bg-red-50 px-1.5 py-0.5 rounded border border-red-100">{day.checkOut}</p>
+                          </div>
+                      )}
+                    </>
+                ) : (
+                    <span className="text-xs text-gray-300 italic">No Punch Data</span>
+                )}
+              </div>
+          </div>
+      ))}
+    </div>
+  );
+
   // EMPLOYEE VIEW
   if (!isAdmin && selectedEmployee) {
     // Determine which punch methods are allowed
-    // Default to true/false if config is missing to be safe, but use the object if present
     const config = selectedEmployee.attendanceConfig || { gpsGeofencing: false, qrScan: false, manualPunch: true };
-    
-    // If no methods are enabled, we might default to manual or show error
     const noMethodsEnabled = !config.manualPunch && !config.qrScan;
     const isGpsRequiredAndDenied = config.gpsGeofencing && (location.includes("Denied") || location.includes("Fetching"));
-
 
     return (
       <div className="space-y-6 max-w-7xl mx-auto">
@@ -563,10 +603,9 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
                   )}
                </div>
 
-               {/* Dynamic Punch Buttons based on Restrictions */}
+               {/* Dynamic Punch Buttons */}
                <div className="space-y-3 w-full flex flex-col items-center">
                    {isCheckedIn ? (
-                       // Check Out button
                        <button
                           onClick={handleManualPunch}
                           className="w-40 h-40 rounded-full flex flex-col items-center justify-center transition-all duration-300 shadow-xl border-4 bg-red-50 border-red-100 text-red-600 hover:bg-red-100"
@@ -750,47 +789,7 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
                     <AttendanceCalendar data={attendanceData} stats={stats} />
                  </div>
               ) : (
-                 <div className="space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar">
-                    {attendanceData.map((day, idx) => (
-                        <div key={idx} className="flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors">
-                           <div className="flex items-center gap-4">
-                              {/* MILD COLOR BACKGROUNDS FOR LIST VIEW */}
-                              <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold border ${
-                                 day.status === AttendanceStatus.PRESENT ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                                 day.status === AttendanceStatus.ABSENT ? 'bg-red-50 text-red-700 border-red-200' :
-                                 day.status === AttendanceStatus.HALF_DAY ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                                 day.status === AttendanceStatus.PAID_LEAVE ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                                 day.status === AttendanceStatus.WEEK_OFF ? 'bg-slate-50 text-slate-500 border-slate-200' :
-                                 'bg-white text-gray-400 border-gray-200'
-                              }`}>
-                                 {new Date(day.date).getDate()}
-                              </div>
-                              <div>
-                                 <p className="font-medium text-gray-900">{new Date(day.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
-                                 <p className="text-xs text-gray-500">{day.status.replace('_', ' ')}</p>
-                              </div>
-                           </div>
-                           <div className="text-right flex flex-col items-end gap-1 min-w-[80px]">
-                              {day.checkIn ? (
-                                  <>
-                                    <div className="flex items-center gap-1.5">
-                                        <span className="text-[9px] text-gray-400 uppercase tracking-wide">In</span>
-                                        <p className="font-mono text-xs font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">{day.checkIn}</p>
-                                    </div>
-                                    {day.checkOut && (
-                                        <div className="flex items-center gap-1.5">
-                                            <span className="text-[9px] text-gray-400 uppercase tracking-wide">Out</span>
-                                            <p className="font-mono text-xs font-bold text-red-500 bg-red-50 px-1.5 py-0.5 rounded border border-red-100">{day.checkOut}</p>
-                                        </div>
-                                    )}
-                                  </>
-                              ) : (
-                                  <span className="text-xs text-gray-300">--:--</span>
-                              )}
-                           </div>
-                        </div>
-                    ))}
-                 </div>
+                 renderListView()
               )}
            </div>
         </div>
@@ -800,7 +799,7 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
 
   // ADMIN VIEW
   return (
-    <div className={`mx-auto space-y-6 ${activeTab === 'report' ? 'max-w-6xl' : 'max-w-5xl'}`}> {/* Increased width for admin */}
+    <div className={`mx-auto space-y-6 ${activeTab === 'report' ? 'max-w-6xl' : 'max-w-5xl'}`}> 
       
       {/* Header & Controls */}
       <div className="flex flex-col md:flex-row justify-between items-end gap-4">
@@ -961,43 +960,7 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
                             />
                         </div>
                     ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                            {attendanceData.map((day, idx) => (
-                                <div 
-                                    key={idx} 
-                                    onClick={() => handleDateClick(day)}
-                                    className="flex items-center gap-3 p-3 rounded-lg border border-gray-100 hover:border-emerald-200 hover:bg-emerald-50 transition-all cursor-pointer group"
-                                >
-                                    {/* MILD COLOR BACKGROUNDS FOR LIST VIEW - MATCHING CALENDAR */}
-                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold border ${
-                                        day.status === AttendanceStatus.PRESENT ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                                        day.status === AttendanceStatus.ABSENT ? 'bg-red-50 text-red-700 border-red-200' :
-                                        day.status === AttendanceStatus.HALF_DAY ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                                        day.status === AttendanceStatus.PAID_LEAVE ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                                        day.status === AttendanceStatus.WEEK_OFF ? 'bg-slate-50 text-slate-500 border-slate-200' :
-                                        'bg-white text-gray-400 border-gray-200'
-                                    }`}>
-                                        {new Date(day.date).getDate()}
-                                    </div>
-                                    <div className="flex-1">
-                                        <p className="text-xs font-bold text-gray-700">{new Date(day.date).toLocaleDateString('en-US', { weekday: 'short' })}</p>
-                                        <p className="text-[10px] text-gray-500">{day.status.replace('_', ' ')}</p>
-                                    </div>
-                                    <div className="text-right min-w-[80px]">
-                                        {day.checkIn ? (
-                                            <div className="flex flex-col items-end gap-1">
-                                                <span className="text-xs font-mono font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">In: {day.checkIn}</span>
-                                                {day.checkOut && (
-                                                    <span className="text-xs font-mono font-bold text-red-500 bg-red-50 px-1.5 py-0.5 rounded">Out: {day.checkOut}</span>
-                                                )}
-                                            </div>
-                                        ) : (
-                                            <span className="text-xs text-gray-300">-</span>
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
+                        renderListView()
                     )}
                 </div>
              </div>
