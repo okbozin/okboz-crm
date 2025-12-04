@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo, useEffect } from 'react';
 import AttendanceCalendar from '../../components/AttendanceCalendar';
 import { MOCK_EMPLOYEES, getEmployeeAttendance } from '../../constants';
@@ -6,7 +7,8 @@ import { AttendanceStatus, DailyAttendance, Employee } from '../../types';
 import { 
   ChevronLeft, ChevronRight, Calendar, List, CheckCircle, XCircle, 
   User, MapPin, Clock, Fingerprint, Download, X, 
-  PieChart as PieChartIcon, Activity, ScanLine, Loader2, Navigation
+  PieChart as PieChartIcon, Activity, ScanLine, Loader2, Navigation,
+  Phone, DollarSign, Plane, Briefcase
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useBranding } from '../../context/BrandingContext';
@@ -419,8 +421,8 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
     }
   };
 
-  // Handle Status Update (Admin)
-  const handleStatusUpdate = (newStatus: AttendanceStatus) => {
+  // Handle Status Update (Admin) - MODIFIED TO INCLUDE PUNCH TIMES
+  const handleStatusUpdate = (newStatus: AttendanceStatus, newCheckIn: string, newCheckOut: string) => {
     if (!editingDay || !selectedEmployee) return;
     
     const year = currentDate.getFullYear();
@@ -429,12 +431,21 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
 
     const updatedData = attendanceData.map(item => {
         if (item.date === editingDay.date) {
+            // Recalculate isLate based on newCheckIn only if status is PRESENT
+            let isLate = false;
+            if (newStatus === AttendanceStatus.PRESENT && newCheckIn) {
+                const [hours, minutes] = newCheckIn.split(':').map(Number);
+                if (hours > 9 || (hours === 9 && minutes > 30)) { // Assuming 9:30 AM is target punch-in
+                    isLate = true;
+                }
+            }
+
             return {
                 ...item,
                 status: newStatus,
-                checkIn: newStatus === AttendanceStatus.PRESENT ? '09:30 AM' : undefined,
-                checkOut: newStatus === AttendanceStatus.PRESENT ? '06:30 PM' : undefined,
-                isLate: false
+                checkIn: newCheckIn, // Use the new time
+                checkOut: newCheckOut, // Use the new time
+                isLate: isLate // Recalculated
             };
         }
         return item;
@@ -442,7 +453,7 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
     
     setAttendanceData(updatedData);
     localStorage.setItem(key, JSON.stringify(updatedData));
-    setEditingDay(null);
+    setEditingDay(null); // Close modal
   };
 
   const handleMarkAllPresent = () => {
@@ -457,7 +468,8 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
           ...day,
           status: AttendanceStatus.PRESENT,
           checkIn: '09:30 AM',
-          checkOut: '06:30 PM'
+          checkOut: '06:30 PM',
+          isLate: false
         };
       }
       return day;
@@ -473,12 +485,13 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
     const key = `attendance_data_${selectedEmployee.id}_${year}_${month}`;
 
     const updated = attendanceData.map(day => {
-      if (day.status === AttendanceStatus.PRESENT) {
+      if (day.status === AttendanceStatus.PRESENT || day.status === AttendanceStatus.HALF_DAY || day.status === AttendanceStatus.PAID_LEAVE) {
         return {
           ...day,
           status: AttendanceStatus.ABSENT,
           checkIn: undefined,
-          checkOut: undefined
+          checkOut: undefined,
+          isLate: false
         };
       }
       return day;
@@ -849,9 +862,9 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
                     
                     {/* Date Nav */}
                     <div className="flex items-center bg-gray-50 rounded-lg border border-gray-200 p-1">
-                        <button onClick={handlePrevMonth} className="p-1.5 hover:bg-white rounded-md shadow-sm transition-all"><ChevronLeft className="w-4 h-4 text-gray-600"/></button>
+                        <button onClick={handlePrevMonth} className="p-1.5 hover:bg-white rounded-md shadow-sm transition-all"><ChevronLeft className="w-4 h-4" /></button>
                         <span className="px-3 text-sm font-bold text-gray-700 w-24 text-center">{monthLabel}</span>
-                        <button onClick={handleNextMonth} className="p-1.5 hover:bg-white rounded-md shadow-sm transition-all"><ChevronRight className="w-4 h-4 text-gray-600"/></button>
+                        <button onClick={handleNextMonth} className="p-1.5 hover:bg-white rounded-md shadow-sm transition-all"><ChevronRight className="w-4 h-4" /></button>
                     </div>
                 </div>
 
@@ -931,7 +944,7 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
              <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                 <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
                     <h3 className="font-bold text-gray-800 text-sm flex items-center gap-2">
-                        <Calendar className="w-4 h-4 text-emerald-500" /> 
+                        <Calendar className="w-4 h-4" /> 
                         Attendance Log ({fullMonthLabel})
                     </h3>
                     <div className="flex bg-white rounded-lg border border-gray-200 p-1">
@@ -967,67 +980,7 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
           </div>
       )}
 
-      {/* Report / Muster Roll View */}
-      {activeTab === 'report' && (
-          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-               <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
-                  <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-                     <div className="px-4 py-2 border border-gray-200 rounded-lg text-gray-700 bg-gray-50 font-medium text-sm">
-                        Report for: {monthLabel}
-                     </div>
-                     <select className="px-4 py-2 border border-gray-200 rounded-lg text-gray-700 text-sm outline-none bg-white focus:ring-2 focus:ring-emerald-500 cursor-pointer">
-                        <option>All Departments</option>
-                        <option>Sales</option>
-                        <option>Tech</option>
-                     </select>
-                  </div>
-                  <button className="flex items-center gap-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border border-indigo-100 px-5 py-2 rounded-lg font-medium transition-colors text-sm w-full md:w-auto justify-center">
-                     <Download className="w-4 h-4" /> Export CSV
-                  </button>
-               </div>
-
-               <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                  <div className="overflow-x-auto">
-                     <table className="w-full text-left border-collapse min-w-[800px]">
-                        <thead className="bg-gray-50 text-xs font-bold text-gray-500 uppercase border-b border-gray-100">
-                           <tr>
-                              <th className="px-6 py-4">Employee</th>
-                              <th className="px-6 py-4">Role</th>
-                              <th className="px-6 py-4 text-center">Present</th>
-                              <th className="px-6 py-4 text-center">Absent</th>
-                              <th className="px-6 py-4 text-center">Late</th>
-                              <th className="px-6 py-4 text-center">Perf %</th>
-                           </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100 text-sm">
-                           {reportData.map((emp) => (
-                              <tr key={emp.id} className="hover:bg-gray-50/80 transition-colors">
-                                 <td className="px-6 py-4 font-medium text-gray-900 flex items-center gap-3">
-                                    <img src={emp.avatar} className="w-8 h-8 rounded-full" alt="" />
-                                    {emp.name}
-                                 </td>
-                                 <td className="px-6 py-4 text-gray-600">{emp.role}</td>
-                                 <td className="px-6 py-4 text-center font-bold text-emerald-600">{emp.stats.present}</td>
-                                 <td className="px-6 py-4 text-center font-bold text-red-500">{emp.stats.absent}</td>
-                                 <td className="px-6 py-4 text-center font-bold text-orange-500">{emp.stats.lateHalf}</td>
-                                 <td className="px-6 py-4 text-center">
-                                    <div className="flex items-center justify-center gap-2">
-                                        <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                                            <div className="h-full bg-emerald-500 rounded-full" style={{width: `${emp.stats.percentage}%`}}></div>
-                                        </div>
-                                        <span className="text-xs font-bold">{emp.stats.percentage}%</span>
-                                    </div>
-                                 </td>
-                              </tr>
-                           ))}
-                        </tbody>
-                     </table>
-                  </div>
-               </div>
-          </div>
-      )}
-
-      {/* Edit Modal (Common for Admin) */}
+      {/* Edit Modal (Common for Admin) - MODIFIED FOR PUNCH TIMES */}
       {editingDay && activeTab === 'history' && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200">
@@ -1039,19 +992,43 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
               <button onClick={() => setEditingDay(null)} className="p-1 hover:bg-gray-200 rounded-full text-gray-500"><X className="w-5 h-5" /></button>
             </div>
             <div className="p-6 grid grid-cols-2 gap-3">
-              <button onClick={() => handleStatusUpdate(AttendanceStatus.PRESENT)} className={`p-3 rounded-xl border transition-all flex flex-col items-center gap-1 ${editingDay.status === AttendanceStatus.PRESENT ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-gray-200 bg-white hover:bg-emerald-50 hover:border-emerald-200 text-gray-600'}`}>
+              {/* Punch-in/out Time Inputs */}
+              <div className="col-span-2 space-y-3 mb-4 p-3 bg-gray-50 rounded-lg border border-gray-100">
+                  <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Punch Times</h4>
+                  <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Check-in Time</label>
+                      <input 
+                          type="time" 
+                          value={editingDay.checkIn || ''} 
+                          onChange={(e) => setEditingDay(prev => prev ? { ...prev, checkIn: e.target.value } : null)} 
+                          className="w-full p-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500" 
+                      />
+                  </div>
+                  <div>
+                      <label className="block text-xs font-bold text-gray-700 mb-1">Check-out Time</label>
+                      <input 
+                          type="time" 
+                          value={editingDay.checkOut || ''} 
+                          onChange={(e) => setEditingDay(prev => prev ? { ...prev, checkOut: e.target.value } : null)} 
+                          className="w-full p-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500" 
+                      />
+                  </div>
+              </div>
+
+              {/* Status Buttons */}
+              <button onClick={() => handleStatusUpdate(AttendanceStatus.PRESENT, editingDay.checkIn || '', editingDay.checkOut || '')} className={`p-3 rounded-xl border transition-all flex flex-col items-center gap-1 ${editingDay.status === AttendanceStatus.PRESENT ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-gray-200 bg-white hover:bg-emerald-50 hover:border-emerald-200 text-gray-600'}`}>
                 <div className="w-3 h-3 rounded-full bg-emerald-500 mb-1"></div><span className="font-semibold">Present</span>
               </button>
-              <button onClick={() => handleStatusUpdate(AttendanceStatus.ABSENT)} className={`p-3 rounded-xl border transition-all flex flex-col items-center gap-1 ${editingDay.status === AttendanceStatus.ABSENT ? 'border-red-500 bg-red-50 text-red-700' : 'border-gray-200 bg-white hover:bg-red-50 hover:border-red-200 text-gray-600'}`}>
+              <button onClick={() => handleStatusUpdate(AttendanceStatus.ABSENT, editingDay.checkIn || '', editingDay.checkOut || '')} className={`p-3 rounded-xl border transition-all flex flex-col items-center gap-1 ${editingDay.status === AttendanceStatus.ABSENT ? 'border-red-500 bg-red-50 text-red-700' : 'border-gray-200 bg-white hover:bg-red-50 hover:border-red-200 text-gray-600'}`}>
                 <div className="w-3 h-3 rounded-full bg-red-500 mb-1"></div><span className="font-semibold">Absent</span>
               </button>
-              <button onClick={() => handleStatusUpdate(AttendanceStatus.HALF_DAY)} className={`p-3 rounded-xl border transition-all flex flex-col items-center gap-1 ${editingDay.status === AttendanceStatus.HALF_DAY ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-gray-200 bg-white hover:bg-amber-50 hover:border-amber-200 text-gray-600'}`}>
+              <button onClick={() => handleStatusUpdate(AttendanceStatus.HALF_DAY, editingDay.checkIn || '', editingDay.checkOut || '')} className={`p-3 rounded-xl border transition-all flex flex-col items-center gap-1 ${editingDay.status === AttendanceStatus.HALF_DAY ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-gray-200 bg-white hover:bg-amber-50 hover:border-amber-200 text-gray-600'}`}>
                 <div className="w-3 h-3 rounded-full bg-amber-400 mb-1"></div><span className="font-semibold">Half Day</span>
               </button>
-              <button onClick={() => handleStatusUpdate(AttendanceStatus.PAID_LEAVE)} className={`p-3 rounded-xl border transition-all flex flex-col items-center gap-1 ${editingDay.status === AttendanceStatus.PAID_LEAVE ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white hover:bg-blue-50 hover:border-blue-200 text-gray-600'}`}>
+              <button onClick={() => handleStatusUpdate(AttendanceStatus.PAID_LEAVE, editingDay.checkIn || '', editingDay.checkOut || '')} className={`p-3 rounded-xl border transition-all flex flex-col items-center gap-1 ${editingDay.status === AttendanceStatus.PAID_LEAVE ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white hover:bg-blue-50 hover:border-blue-200 text-gray-600'}`}>
                 <div className="w-3 h-3 rounded-full bg-blue-400 mb-1"></div><span className="font-semibold whitespace-nowrap">Paid Leave</span>
               </button>
-              <button onClick={() => handleStatusUpdate(AttendanceStatus.WEEK_OFF)} className={`col-span-2 p-3 rounded-xl border transition-all flex flex-col items-center gap-1 ${editingDay.status === AttendanceStatus.WEEK_OFF ? 'border-slate-400 bg-slate-50 text-slate-800' : 'border-gray-200 bg-white hover:bg-slate-50 hover:border-slate-200 text-gray-600'}`}>
+              <button onClick={() => handleStatusUpdate(AttendanceStatus.WEEK_OFF, editingDay.checkIn || '', editingDay.checkOut || '')} className={`col-span-2 p-3 rounded-xl border transition-all flex flex-col items-center gap-1 ${editingDay.status === AttendanceStatus.WEEK_OFF ? 'border-slate-400 bg-slate-50 text-slate-800' : 'border-gray-200 bg-white hover:bg-slate-50 hover:border-slate-200 text-gray-600'}`}>
                 <div className="w-3 h-3 rounded-full bg-slate-400 mb-1"></div><span className="font-semibold">Week Off</span>
               </button>
             </div>
