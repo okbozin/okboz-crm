@@ -1,5 +1,4 @@
 
-
 export enum UserRole {
   ADMIN = 'ADMIN',
   EMPLOYEE = 'EMPLOYEE',
@@ -227,6 +226,21 @@ export interface LeaveRequest { // Moved this from ApplyLeave.tsx to types.ts fo
   reason: string;
   appliedOn: string;
   corporateId?: string; // NEW: To link leave request to a specific corporate
+}
+
+export interface Task {
+  id: string;
+  title: string;
+  description: string;
+  assignedTo: string; // Employee ID
+  assignedByName: string;
+  corporateId?: string; // To link to specific franchise
+  corporateName?: string; // Display name
+  branch?: string; // NEW: Added branch to Task interface
+  status: 'Todo' | 'In Progress' | 'Review' | 'Done';
+  priority: 'Low' | 'Medium' | 'High';
+  dueDate: string;
+  createdAt: string;
 }
 
 

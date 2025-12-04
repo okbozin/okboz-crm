@@ -1,14 +1,15 @@
 
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import AttendanceCalendar from '../../components/AttendanceCalendar';
 // Added COLORS import from constants.ts
 import { MOCK_EMPLOYEES, getEmployeeAttendance, COLORS } from '../../constants';
-import { AttendanceStatus, DailyAttendance, Employee, Branch } from '../../types';
+import { AttendanceStatus, DailyAttendance, Employee, Branch, CorporateAccount } from '../../types';
 import { 
   ChevronLeft, ChevronRight, Calendar, List, CheckCircle, XCircle, 
   User, MapPin, Clock, Fingerprint, Download, X, 
   PieChart as PieChartIcon, Activity, ScanLine, Loader2, Navigation,
-  Phone, DollarSign, Plane, Briefcase, Camera, AlertCircle
+  Phone, DollarSign, Plane, Briefcase, Camera, AlertCircle, Building2, RefreshCcw
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useBranding } from '../../context/BrandingContext';
@@ -52,7 +53,16 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
   const getSessionId = () => localStorage.getItem('app_session_id') || 'admin';
   const currentSessionId = getSessionId();
   const isSuperAdmin = currentSessionId === 'admin';
-  
+  const isCorporateAdmin = !isSuperAdmin && isAdmin; // Flag for corporate user in admin panel
+
+  // NEW: Filter States for Admin Panel
+  const [filterCorporate, setFilterCorporate] = useState<string>('All');
+  const [filterBranch, setFilterBranch] = useState<string>('All');
+  const [filterStaffId, setFilterStaffId] = useState<string>('All');
+  const [filterPeriodType, setFilterPeriodType] = useState<'Daily' | 'Monthly'>('Monthly'); // Default to Monthly for overview
+  const [filterDate, setFilterDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [filterMonth, setFilterMonth] = useState<string>(new Date().toISOString().slice(0, 7));
+
   // Helper to find an employee by ID across all storage locations
   const findEmployeeById = (id: string): Employee | undefined => {
       // 1. Check Admin Staff
@@ -76,23 +86,53 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
       return MOCK_EMPLOYEES.find(e => e.id === id);
   };
 
-  // Load employees list (For Admin View Only)
+  // NEW: Load Corporates and all Branches for filters
+  const [corporatesList, setCorporatesList] = useState<CorporateAccount[]>([]);
+  const [allBranchesList, setAllBranchesList] = useState<(Branch & { owner?: string, ownerName?: string })[]>([]);
+
+  useEffect(() => {
+    if (isAdmin) {
+      // Load Corporates
+      try {
+        const corps = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
+        setCorporatesList(corps);
+      } catch (e) { console.error("Failed to load corporate accounts", e); }
+
+      // Load All Branches (Aggregated)
+      let aggregatedBranches: (Branch & { owner?: string, ownerName?: string })[] = [];
+      try {
+        const adminBranches = JSON.parse(localStorage.getItem('branches_data') || '[]');
+        aggregatedBranches = [...aggregatedBranches, ...adminBranches.map((b: Branch) => ({ ...b, owner: 'admin', ownerName: 'Head Office' }))];
+        
+        const corps = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
+        corps.forEach((c: CorporateAccount) => {
+          const corpBranchesKey = `branches_data_${c.email}`;
+          const corpBranchesData = localStorage.getItem(corpBranchesKey);
+          if (corpBranchesData) {
+            const corpBranches = JSON.parse(corpBranchesData).map((b: Branch) => ({ ...b, owner: c.email, ownerName: c.companyName }));
+            aggregatedBranches = [...aggregatedBranches, ...corpBranches];
+          }
+        });
+      } catch (e) { console.error("Failed to load all branches", e); }
+      setAllBranchesList(aggregatedBranches);
+    }
+  }, [isAdmin, isSuperAdmin]);
+
+
+  // Load employees list (For Admin View Only) - Now includes corporateId and corporateName for filtering
   const [employees, setEmployees] = useState<Employee[]>(() => {
     if (isAdmin) {
       if (isSuperAdmin) {
-          // --- SUPER ADMIN AGGREGATION ---
           let allStaff: Employee[] = [];
           
-          // 1. Admin Data (Head Office)
           const adminData = localStorage.getItem('staff_data');
           if (adminData) {
               try { 
                   const parsed = JSON.parse(adminData);
-                  allStaff = [...allStaff, ...parsed.map((e: any) => ({...e, name: `${e.name} (Head Office)`}))];
+                  allStaff = [...allStaff, ...parsed.map((e: any) => ({...e, corporateId: 'admin', corporateName: 'Head Office'}))];
               } catch (e) {}
           }
 
-          // 2. Corporate Data
           try {
             const corporates = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
             corporates.forEach((corp: any) => {
@@ -100,22 +140,18 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
                 if (cData) {
                     try {
                         const parsed = JSON.parse(cData);
-                        // Append franchise name to employee name for clarity in dropdown
-                        const tagged = parsed.map((e: any) => ({...e, name: `${e.name} (${corp.companyName})`}));
+                        const tagged = parsed.map((e: any) => ({...e, corporateId: corp.email, corporateName: corp.companyName}));
                         allStaff = [...allStaff, ...tagged];
                     } catch (e) {}
                 }
             });
           } catch(e) {}
           
-          // 3. Fallback to Mocks if absolutely nothing exists
-          if (allStaff.length === 0) return MOCK_EMPLOYEES;
           return allStaff;
-      } else {
-          // Regular Franchise/Corporate Admin - Only see their own staff
+      } else { // Corporate Admin
           const key = `staff_data_${currentSessionId}`;
           const saved = localStorage.getItem(key);
-          return saved ? JSON.parse(saved) : [];
+          return saved ? JSON.parse(saved).map((e: any) => ({...e, corporateId: currentSessionId, corporateName: 'My Branch'})) : [];
       }
     }
     return [];
@@ -126,7 +162,6 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
   // Resolve Logged In User
   useEffect(() => {
     if (!isAdmin) {
-      const storedRole = localStorage.getItem('user_role');
       const storedSessionId = localStorage.getItem('app_session_id');
 
       if (storedSessionId) {
@@ -136,14 +171,42 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
     }
   }, [isAdmin]);
 
+  // NEW: Memoized list of employees filtered by admin panel filters
+  const filteredEmployeesForDisplay = useMemo(() => {
+    let list = employees;
+
+    // Apply Corporate Filter (Admin Only)
+    if (isSuperAdmin && filterCorporate !== 'All') {
+      list = list.filter(emp => emp.corporateId === filterCorporate);
+    }
+    
+    // Apply Branch Filter
+    if (filterBranch !== 'All') {
+      list = list.filter(emp => emp.branch === filterBranch);
+    }
+
+    // Apply Staff Filter
+    if (filterStaffId !== 'All') {
+      list = list.filter(emp => emp.id === filterStaffId);
+    }
+
+    return list;
+  }, [employees, filterCorporate, filterBranch, filterStaffId, isSuperAdmin]);
+
+
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null); 
   const [employeeBranch, setEmployeeBranch] = useState<Branch | null>(null); // NEW: Store employee's branch details
   
-  // Sync selectedEmployee
+  // Sync selectedEmployee based on filters for admin view, or loggedInUser for employee view
   useEffect(() => {
     if (isAdmin) {
-      if (employees.length > 0 && !selectedEmployee) {
-        setSelectedEmployee(employees[0]);
+      if (filteredEmployeesForDisplay.length > 0 && !selectedEmployee) {
+        setSelectedEmployee(filteredEmployeesForDisplay[0]);
+      } else if (filteredEmployeesForDisplay.length === 0) {
+        setSelectedEmployee(null);
+      } else if (selectedEmployee && !filteredEmployeesForDisplay.some(e => e.id === selectedEmployee.id)) {
+        // If current selected employee is no longer in filtered list, pick the first one
+        setSelectedEmployee(filteredEmployeesForDisplay[0]);
       }
     } else {
       // For employee view, wait for loggedInUser to be resolved
@@ -151,7 +214,8 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
           setSelectedEmployee(loggedInUser);
       }
     }
-  }, [isAdmin, employees, loggedInUser]);
+  }, [isAdmin, filteredEmployeesForDisplay, loggedInUser, selectedEmployee]); // Add selectedEmployee to dependency array
+
 
   // NEW: Load employee's assigned branch details
   useEffect(() => {
@@ -276,7 +340,7 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
 
       requestPermissions();
     }
-  }, [isAdmin, selectedEmployee, employeeBranch]); // Rerun if employee or their branch changes
+  }, [isAdmin, selectedEmployee, employeeBranch, currentSessionId, locationStatus]); // Rerun if employee or their branch changes
 
   // Restore active punch session on mount (for employee view)
   useEffect(() => {
@@ -989,7 +1053,7 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
     <div className={`mx-auto space-y-6 ${activeTab === 'report' ? 'max-w-6xl' : 'max-w-5xl'}`}> 
       
       {/* Header & Controls */}
-      <div className="flex flex-col md:flex-row justify-between items-end gap-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
            <h2 className="text-2xl font-bold text-gray-800">Attendance Management</h2>
            <p className="text-gray-500">Monitor and manage staff attendance</p>
@@ -1011,11 +1075,112 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
         </div>
       </div>
 
+      {/* NEW: Filter Bar for Admin */}
+      {isAdmin && (
+        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-wrap gap-4 items-center">
+          {isSuperAdmin && (
+            <select
+              value={filterCorporate}
+              onChange={(e) => {
+                setFilterCorporate(e.target.value);
+                setFilterBranch('All');
+                setFilterStaffId('All');
+              }}
+              className="px-3 py-2 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 bg-white text-sm"
+            >
+              <option value="All">All Corporates</option>
+              <option value="admin">Head Office</option>
+              {corporatesList.map(c => (
+                <option key={c.email} value={c.email}>{c.companyName}</option>
+              ))}
+            </select>
+          )}
+
+          <select
+            value={filterBranch}
+            onChange={(e) => {
+              setFilterBranch(e.target.value);
+              setFilterStaffId('All');
+            }}
+            className="px-3 py-2 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 bg-white text-sm"
+          >
+            <option value="All">All Branches</option>
+            {allBranchesList.filter(b => 
+                (filterCorporate === 'All' && (isSuperAdmin || b.owner === currentSessionId)) ||
+                (filterCorporate === 'admin' && b.owner === 'admin') ||
+                (b.owner === filterCorporate)
+              ).map(b => (
+                <option key={b.id} value={b.name}>{b.name} {isSuperAdmin && b.ownerName !== 'Head Office' && b.ownerName !== 'My Branch' ? `(${b.ownerName})` : ''}</option>
+            ))}
+          </select>
+
+          <select
+            value={filterStaffId}
+            onChange={(e) => setFilterStaffId(e.target.value)}
+            className="px-3 py-2 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 bg-white text-sm"
+          >
+            <option value="All">All Staff</option>
+            {filteredEmployeesForDisplay.map(emp => (
+              <option key={emp.id} value={emp.id}>{emp.name} ({emp.role})</option>
+            ))}
+          </select>
+
+          <div className="w-px h-6 bg-gray-200 mx-1"></div>
+
+          <div className="flex bg-gray-100 p-1 rounded-lg">
+            <button
+              onClick={() => setFilterPeriodType('Daily')}
+              className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${filterPeriodType === 'Daily' ? 'bg-white shadow text-emerald-600' : 'text-gray-500'}`}
+            >
+              Daily
+            </button>
+            <button
+              onClick={() => setFilterPeriodType('Monthly')}
+              className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${filterPeriodType === 'Monthly' ? 'bg-white shadow text-emerald-600' : 'text-gray-500'}`}
+            >
+              Monthly
+            </button>
+          </div>
+
+          {filterPeriodType === 'Daily' ? (
+            <input
+              type="date"
+              value={filterDate}
+              onChange={(e) => setFilterDate(e.target.value)}
+              className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm outline-none bg-white"
+            />
+          ) : (
+            <input
+              type="month"
+              value={filterMonth}
+              onChange={(e) => setFilterMonth(e.target.value)}
+              className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm outline-none bg-white"
+            />
+          )}
+
+          {(filterCorporate !== 'All' || filterBranch !== 'All' || filterStaffId !== 'All' || filterDate !== new Date().toISOString().split('T')[0] || filterMonth !== new Date().toISOString().slice(0, 7) || filterPeriodType !== 'Monthly') && (
+            <button
+              onClick={() => {
+                setFilterCorporate('All');
+                setFilterBranch('All');
+                setFilterStaffId('All');
+                setFilterPeriodType('Monthly');
+                setFilterDate(new Date().toISOString().split('T')[0]);
+                setFilterMonth(new Date().toISOString().slice(0, 7));
+              }}
+              className="px-3 py-2 text-red-500 hover:bg-red-50 rounded-lg text-sm font-medium flex items-center gap-1 transition-colors"
+            >
+              <RefreshCcw className="w-4 h-4" /> Reset Filters
+            </button>
+          )}
+        </div>
+      )}
+
       {/* ADMIN: INDIVIDUAL VIEW (With Dashboard Analytics) */}
       {activeTab === 'history' && (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
              
-             {/* Toolbar: Select Employee & Date */}
+             {/* Toolbar: Employee Select (Now driven by filters) & Date */}
              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
                 <div className="flex items-center gap-3 w-full md:w-auto">
                     <div className="relative flex-1 md:flex-none">
@@ -1027,9 +1192,9 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
                             onChange={(e) => setSelectedEmployee(employees.find(emp => emp.id === e.target.value) || null)}
                             className="pl-10 pr-8 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-gray-50 hover:bg-white transition-colors min-w-[220px]"
                         >
-                            {employees.length === 0 && <option>No Staff Found</option>}
-                            {employees.map(emp => (
-                                <option key={emp.id} value={emp.id}>{emp.name} - {emp.role}</option>
+                            {filteredEmployeesForDisplay.length === 0 && <option>No Staff Found</option>}
+                            {filteredEmployeesForDisplay.map(emp => (
+                                <option key={emp.id} value={emp.id}>{emp.name} - {emp.role} {emp.corporateName && emp.corporateName !== 'My Branch' && `(${emp.corporateName})`}</option>
                             ))}
                         </select>
                     </div>
@@ -1090,26 +1255,30 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
                     <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col h-40 lg:h-auto">
                         <h4 className="text-xs font-bold text-gray-500 uppercase mb-2">Monthly Distribution</h4>
                         <div className="flex-1 min-h-0">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <PieChart>
-                                    <Pie
-                                        data={pieData}
-                                        cx="50%"
-                                        cy="50%"
-                                        innerRadius={30}
-                                        outerRadius={50}
-                                        paddingAngle={5}
-                                        dataKey="value"
-                                    >
-                                        {/* Used COLORS from constants.ts */}
-                                        {pieData.map((entry, index) => (
-                                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                        ))}
-                                    </Pie>
-                                    <ReTooltip />
-                                    <Legend iconSize={8} layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{fontSize: '10px'}} />
-                                </PieChart>
-                            </ResponsiveContainer>
+                            {pieData.length > 0 ? (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <PieChart>
+                                        <Pie
+                                            data={pieData}
+                                            cx="50%"
+                                            cy="50%"
+                                            innerRadius={30}
+                                            outerRadius={50}
+                                            paddingAngle={5}
+                                            dataKey="value"
+                                        >
+                                            {/* Used COLORS from constants.ts */}
+                                            {pieData.map((entry, index) => (
+                                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                            ))}
+                                        </Pie>
+                                        <ReTooltip />
+                                        <Legend iconSize={8} layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{fontSize: '10px'}} />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                            ) : (
+                                <div className="h-full flex items-center justify-center text-gray-400 text-xs">No data yet</div>
+                            )}
                         </div>
                     </div>
                 </div>
