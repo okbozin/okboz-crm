@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Settings, Loader2, ArrowRight, ArrowRightLeft, 
@@ -71,7 +70,8 @@ const getInitialEnquiries = (role: UserRole, sessionId: string): Enquiry[] => {
     // Filter enquiries by the current corporate's ID (email)
     return allEnquiries.filter(e => e.corporateId === sessionId);
   }
-  // Super Admin sees all enquiries
+  // Super Admin and Employee roles see all enquiries initially, 
+  // then employees filter by assignedTo in Layout/TaskManagement
   return allEnquiries;
 };
 
@@ -194,8 +194,13 @@ export const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
           const cStaff = JSON.parse(localStorage.getItem(`staff_data_${c.email}`) || '[]');
           staff = [...staff, ...cStaff.map((s: any) => ({...s, owner: c.email}))];
       });
-
+      
+      // Filter branches by current session ID if not Super Admin
+      if (!isSuperAdmin) {
+          branches = branches.filter(b => b.owner === sessionId);
+      }
       setAllBranches(branches);
+
       setAllStaff(staff);
       
       setAssignment(prev => ({ ...prev, corporateId: isSuperAdmin ? 'admin' : sessionId }));
@@ -593,8 +598,9 @@ Book now with OK BOZ Transport!`;
       let updatedGlobalEnquiries = [...allGlobalEnquiries.filter((e: Enquiry) => 
         e.id !== updatedEnquiry.id && (!isSuperAdmin && e.corporateId !== sessionId ? true : false) // Keep other corp's enquiries
       )];
-      updatedGlobalEnquiries = [...updatedGlobalEnquiries, updatedEnquiry];
-      
+      if (updatedEnquiry) {
+          updatedGlobalEnquiries = [...updatedGlobalEnquiries, updatedEnquiry];
+      }
       try {
         localStorage.setItem('global_enquiries_data', JSON.stringify(updatedGlobalEnquiries));
       } catch (error) {
@@ -770,7 +776,7 @@ Book now with OK BOZ Transport!`;
           setGeneralFollowUpPriority(order.priority || 'Warm');
       }
 
-      const cleanNumber = order.phone.replace(/\D/g, '');
+      const cleanNumber = customerDetails.phone.replace(/\D/g, '');
       const previousEnquiries = enquiries.filter(e => e.phone.replace(/\D/g, '') === cleanNumber && e.id !== order.id);
       setExistingEnquiriesForPhone(previousEnquiries);
       setPhoneLookupResult(previousEnquiries.length > 0 ? 'Existing' : 'New');
@@ -1143,4 +1149,438 @@ Book now with OK BOZ Transport!`;
                       </div>
                   )}
 
-                  <div className="space-y-1 max-h-40 overflow
+                  <div className="space-y-1 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
+                      {rentalPackages.map(pkg => (
+                          <div key={pkg.id} className="flex justify-between items-center p-2 hover:bg-gray-50 rounded border border-transparent hover:border-gray-200 group transition-colors">
+                              <div>
+                                  <div className="text-xs font-bold text-gray-800">{pkg.name}</div>
+                                  <div className="text-[10px] text-gray-500">{pkg.hours}hr / {pkg.km}km</div>
+                              </div>
+                              <div className="text-right flex items-center gap-2">
+                                  <div className="text-[10px] text-gray-600 font-mono text-right">
+                                      <div>S: {pkg.priceSedan}</div>
+                                      <div>X: {pkg.priceSuv}</div>
+                                  </div>
+                                  <button onClick={(e) => handleEditPackage(pkg)} className="text-gray-300 hover:text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity p-1">
+                                    <Edit2 className="w-3 h-3" />
+                                  </button>
+                                  <button onClick={(e) => removePackage(pkg.id, e)} className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-1">
+                                      <Trash2 className="w-3 h-3" />
+                                  </button>
+                              </div>
+                          </div>
+                      ))}
+                  </div>
+              </div>
+              <div className="pt-4 mt-auto">
+                 <button onClick={() => setShowSettings(false)} className="w-full bg-slate-800 text-white py-2 rounded text-sm font-medium hover:bg-slate-900 transition-colors">Close</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+      {mapError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg flex items-center gap-2">
+          <AlertCircle className="w-5 h-5" /> {mapError}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-6">
+              <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                  <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                      <User className="w-4 h-4" /> Customer Details
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                      <input 
+                          placeholder="Name" 
+                          className="p-2 border rounded-lg w-full outline-none focus:ring-2 focus:ring-emerald-500"
+                          value={customerDetails.name}
+                          onChange={e => setCustomerDetails({...customerDetails, name: e.target.value})}
+                      />
+                      <div>
+                        <input 
+                            placeholder="Phone" 
+                            className="p-2 border rounded-lg w-full outline-none focus:ring-2 focus:ring-emerald-500"
+                            value={customerDetails.phone}
+                            onChange={e => setCustomerDetails({...customerDetails, phone: e.target.value})}
+                            onBlur={handlePhoneInputCheck}
+                        />
+                        {isPhoneChecked && (
+                            <div className={`mt-1 text-xs flex items-center gap-1 ${phoneLookupResult === 'Existing' ? 'text-blue-600' : 'text-emerald-600'}`}>
+                                {phoneLookupResult === 'Existing' ? <CheckCircle className="w-3 h-3" /> : <UserCheck className="w-3 h-3" />}
+                                {phoneLookupResult === 'Existing' ? 'Existing Customer/Vendor' : 'New Customer'}
+                            </div>
+                        )}
+                        {existingEnquiriesForPhone.length > 0 && (
+                            <div className="mt-2 bg-gray-50 p-2 rounded-lg text-xs border border-gray-100 max-h-24 overflow-y-auto">
+                                <p className="font-bold text-gray-700 mb-1">Previous Enquiries:</p>
+                                {existingEnquiriesForPhone.map(e => (
+                                    <p key={e.id} className="text-gray-600 truncate">{e.id}: {e.details}</p>
+                                ))}
+                            </div>
+                        )}
+                      </div>
+                  </div>
+                  <input 
+                    placeholder="Email (Optional)" 
+                    type="email"
+                    className="p-2 border rounded-lg w-full outline-none focus:ring-2 focus:ring-emerald-500"
+                    value={customerDetails.email}
+                    onChange={e => setCustomerDetails({...customerDetails, email: e.target.value})}
+                  />
+                  <div className="mt-4">
+                      <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Pickup Location</label>
+                      {!isMapReady ? (
+                           <div className="p-2 bg-gray-100 text-gray-500 text-sm rounded flex items-center gap-2">
+                              <Loader2 className="w-4 h-4 animate-spin" /> Loading Google Maps...
+                           </div>
+                        ) : (
+                           <Autocomplete 
+                             placeholder="Search Google Maps for Pickup"
+                             onAddressSelect={(addr) => setCustomerDetails(prev => ({ ...prev, pickup: addr }))}
+                             setNewPlace={(place) => setPickupCoords(place)}
+                             defaultValue={customerDetails.pickup}
+                           />
+                        )}
+                  </div>
+                  
+                  <div className="flex bg-gray-100 p-1 rounded-lg mt-4">
+                      <button 
+                          onClick={() => setEnquiryCategory('Transport')}
+                          className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${enquiryCategory === 'Transport' ? 'bg-white shadow text-emerald-600' : 'text-gray-500'}`}
+                      >
+                          Transport Quote
+                      </button>
+                      <button 
+                          onClick={() => setEnquiryCategory('General')}
+                          className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${enquiryCategory === 'General' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}
+                      >
+                          General Enquiry
+                      </button>
+                  </div>
+
+                  {enquiryCategory === 'General' ? (
+                      <div className="p-4 bg-gray-50 rounded-lg text-sm text-gray-500 italic text-center mt-4">
+                          This is a general enquiry. Use the Requirement Details below for notes or follow-up scheduling.
+                      </div>
+                  ) : (
+                      <div className="space-y-4 mt-4">
+                          <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+                              <h4 className="text-sm font-bold text-gray-700">Trip Details</h4>
+                              <div className="flex gap-2">
+                                  {['Sedan', 'SUV'].map(v => (
+                                      <button
+                                          key={v}
+                                          onClick={() => setVehicleType(v as any)}
+                                          className={`px-3 py-1 text-xs rounded border transition-colors ${vehicleType === v ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-gray-600 border-gray-200'}`}
+                                      >
+                                          {v}
+                                      </button>
+                                  ))}
+                              </div>
+                          </div>
+
+                          <div className="flex border-b border-gray-200">
+                              {['Local', 'Rental', 'Outstation'].map(t => (
+                                  <button
+                                      key={t}
+                                      onClick={() => setTripType(t as TripType)}
+                                      className={`flex-1 py-2 text-sm font-medium border-b-2 transition-colors ${tripType === t ? 'border-emerald-500 text-emerald-700' : 'border-transparent text-gray-500'}`}
+                                  >
+                                      {t}
+                                  </button>
+                              ))}
+                          </div>
+
+                          {tripType === 'Local' && (
+                              <div className="space-y-3">
+                                  <div>
+                                      <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Drop Location</label>
+                                      {!isMapReady ? (
+                                         <div className="p-2 bg-gray-100 text-gray-500 text-sm rounded flex items-center gap-2">
+                                            <Loader2 className="w-4 h-4 animate-spin" /> Loading Maps...
+                                         </div>
+                                      ) : (
+                                          <Autocomplete 
+                                              placeholder="Search Google Maps for Drop"
+                                              onAddressSelect={(addr) => setTransportDetails(prev => ({ ...prev, drop: addr }))}
+                                              setNewPlace={(place) => setDropCoords(place)}
+                                              defaultValue={transportDetails.drop}
+                                          />
+                                      )}
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-3">
+                                      <input 
+                                          type="number" 
+                                          placeholder="Est Km" 
+                                          className="p-2 border rounded-lg w-full"
+                                          value={transportDetails.estKm}
+                                          onChange={e => setTransportDetails({...transportDetails, estKm: e.target.value})}
+                                      />
+                                      <input 
+                                          type="number" 
+                                          placeholder="Wait Mins" 
+                                          className="p-2 border rounded-lg w-full"
+                                          value={transportDetails.waitingMins}
+                                          onChange={e => setTransportDetails({...transportDetails, waitingMins: e.target.value})}
+                                      />
+                                  </div>
+                              </div>
+                          )}
+
+                          {tripType === 'Rental' && (
+                              <div className="grid grid-cols-2 gap-2">
+                                  {rentalPackages.map(pkg => (
+                                      <button 
+                                          key={pkg.id}
+                                          onClick={() => setTransportDetails(prev => ({...prev, packageId: pkg.id}))}
+                                          className={`p-2 border rounded-lg text-left text-sm ${transportDetails.packageId === pkg.id ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 hover:bg-gray-50'}`}
+                                      >
+                                          <div className="font-bold">{pkg.name}</div>
+                                          <div className="text-gray-500">₹{vehicleType === 'Sedan' ? pkg.priceSedan : pkg.priceSuv}</div>
+                                      </button>
+                                  ))}
+                              </div>
+                          )}
+
+                          {tripType === 'Outstation' && (
+                              <div className="space-y-3">
+                                  <div className="flex bg-gray-100 p-1 rounded-lg">
+                                      <button onClick={() => setOutstationSubType('RoundTrip')} className={`flex-1 py-1 text-xs rounded ${outstationSubType === 'RoundTrip' ? 'bg-white shadow text-emerald-600' : 'text-gray-500'}`}>Round Trip</button>
+                                      <button onClick={() => setOutstationSubType('OneWay')} className={`flex-1 py-1 text-xs rounded ${outstationSubType === 'OneWay' ? 'bg-white shadow text-emerald-600' : 'text-gray-500'}`}>One Way</button>
+                                  </div>
+                                  <div>
+                                      <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Destination</label>
+                                      {!isMapReady ? (
+                                         <div className="p-2 bg-gray-100 text-gray-500 text-sm rounded flex items-center gap-2">
+                                            <Loader2 className="w-4 h-4 animate-spin" /> Loading Maps...
+                                         </div>
+                                      ) : (
+                                          <Autocomplete 
+                                              placeholder="Search Destination"
+                                              onAddressSelect={(addr) => setTransportDetails(prev => ({ ...prev, destination: addr }))}
+                                              setNewPlace={(place) => setDestCoords(place)}
+                                              defaultValue={transportDetails.destination}
+                                          />
+                                      )}
+                                  </div>
+                                  <div className="grid grid-cols-3 gap-3">
+                                      <input 
+                                          type="number" 
+                                          placeholder="Days" 
+                                          className="p-2 border rounded-lg w-full"
+                                          value={transportDetails.days}
+                                          onChange={e => setTransportDetails({...transportDetails, days: e.target.value})}
+                                      />
+                                      <input 
+                                          type="number" 
+                                          placeholder="Km" 
+                                          className="p-2 border rounded-lg w-full"
+                                          value={transportDetails.estTotalKm}
+                                          onChange={e => setTransportDetails({...transportDetails, estTotalKm: e.target.value})}
+                                      />
+                                      {outstationSubType === 'RoundTrip' && (
+                                          <input 
+                                              type="number" 
+                                              placeholder="Nights" 
+                                              className="p-2 border rounded-lg w-full"
+                                              value={transportDetails.nights}
+                                              onChange={e => setTransportDetails({...transportDetails, nights: e.target.value})}
+                                          />
+                                      )}
+                                  </div>
+                              </div>
+                          )}
+                      </div>
+                  )}
+
+                  <div className="mt-6 pt-6 border-t border-gray-100 space-y-5">
+                      <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Requirement Details</label>
+                          <textarea 
+                              rows={2}
+                              className="w-full p-3 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 resize-none text-sm"
+                              placeholder="Special requests, extra luggage, etc..."
+                              value={customerDetails.requirements}
+                              onChange={e => setCustomerDetails({...customerDetails, requirements: e.target.value})}
+                          />
+                      </div>
+
+                      <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase mb-2 flex items-center gap-1">
+                              <Building2 className="w-3 h-3" /> Assign Enquiry To
+                          </label>
+                          <div className="flex gap-2">
+                              {isSuperAdmin && (
+                                  <select 
+                                      className="flex-1 p-2 border border-gray-300 rounded-lg text-sm outline-none bg-white"
+                                      value={assignment.corporateId}
+                                      onChange={(e) => setAssignment({...assignment, corporateId: e.target.value, branchName: '', staffId: ''})}
+                                  >
+                                      <option value="admin">Head Office</option>
+                                      {corporates.map((c: any) => (
+                                          <option key={c.email} value={c.email}>{c.companyName}</option>
+                                      ))}
+                                  </select>
+                              )}
+                              
+                              <select 
+                                  className="flex-1 p-2 border border-gray-300 rounded-lg text-sm outline-none bg-white"
+                                  value={assignment.branchName}
+                                  onChange={(e) => setAssignment({...assignment, branchName: e.target.value, staffId: ''})}
+                              >
+                                  <option value="">All Branches</option>
+                                  {filteredBranches.map((b: any) => (
+                                      <option key={b.id} value={b.name}>{b.name}</option>
+                                  ))}
+                              </select>
+
+                              <select 
+                                  className="flex-1 p-2 border border-gray-300 rounded-lg text-sm outline-none bg-white"
+                                  value={assignment.staffId}
+                                  onChange={(e) => setAssignment({...assignment, staffId: e.target.value})}
+                              >
+                                  <option value="">Select Staff</option>
+                                  {filteredStaff.map((s: any) => (
+                                      <option key={s.id} value={s.id}>{s.name}</option>
+                                  ))}
+                              </select>
+                          </div>
+                      </div>
+
+                      {enquiryCategory === 'General' && (
+                          <div className="pt-2 border-t border-gray-100 space-y-3">
+                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Schedule Follow-up</label>
+                              <div className="grid grid-cols-3 gap-2">
+                                  <input type="date" value={generalFollowUpDate} onChange={(e) => setGeneralFollowUpDate(e.target.value)} className="p-2 border rounded-lg text-sm col-span-1" />
+                                  <input type="time" value={generalFollowUpTime} onChange={(e) => setGeneralFollowUpTime(e.target.value)} className="p-2 border rounded-lg text-sm col-span-1" />
+                                  <select value={generalFollowUpPriority} onChange={(e) => setGeneralFollowUpPriority(e.target.value as any)} className="p-2 border rounded-lg text-sm col-span-1">
+                                      <option>Low</option>
+                                      <option>Warm</option>
+                                      <option>Hot</option>
+                                  </select>
+                              </div>
+                              <button 
+                                  onClick={handleSaveGeneralFollowUp}
+                                  className="w-full py-2.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg font-bold text-sm hover:bg-blue-100 transition-colors flex items-center justify-center gap-2"
+                              >
+                                  <Calendar className="w-4 h-4" /> Save Follow-up Task
+                              </button>
+                          </div>
+                      )}
+
+                      <div className="grid grid-cols-2 gap-3 pt-2">
+                          <button 
+                              onClick={handleCancelForm}
+                              className="py-2.5 text-gray-500 hover:text-red-500 rounded-lg font-medium text-sm hover:bg-gray-50 transition-colors flex items-center justify-center gap-1"
+                          >
+                              <X className="w-4 h-4" /> Clear Form
+                          </button>
+                          <button 
+                              onClick={handleBookNow}
+                              className="py-2.5 bg-emerald-600 text-white rounded-lg font-bold text-sm hover:bg-emerald-700 transition-colors shadow-md flex items-center justify-center gap-2"
+                          >
+                              <CheckCircle className="w-4 h-4" /> {enquiryCategory === 'Transport' ? 'Book Order' : 'Save Enquiry'}
+                          </button>
+                      </div>
+                  </div>
+              </div>
+          </div>
+
+          <div className="space-y-6">
+              <div className="bg-slate-900 text-white p-6 rounded-xl shadow-lg relative overflow-hidden">
+                  <div className="relative z-10">
+                      <p className="text-slate-400 text-xs uppercase font-bold mb-1">Estimated Cost</p>
+                      <h3 className="text-4xl font-bold mb-4">₹{estimatedCost.toLocaleString()}</h3>
+                      <div className="text-sm text-slate-300 border-t border-slate-700 pt-3">
+                          {enquiryCategory === 'Transport' ? (
+                              <p>Includes basic fare calculations. Tolls & Parking extra.</p>
+                          ) : (
+                              <p>Standard Enquiry. No cost calculated.</p>
+                          )}
+                      </div>
+                  </div>
+                  <div className="absolute right-0 bottom-0 opacity-10">
+                      <DollarSign className="w-32 h-32 text-white" />
+                  </div>
+              </div>
+
+              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                  <div className="flex justify-between items-center mb-2">
+                      <h4 className="font-bold text-gray-800 flex items-center gap-2">
+                          <MessageCircle className="w-4 h-4 text-emerald-500" /> Generated Message
+                      </h4>
+                      <button 
+                          onClick={() => {navigator.clipboard.writeText(generatedMessage); setTimeout(() => alert("Copied!"), 0);}}
+                          className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+                      >
+                          <Copy className="w-3 h-3" /> Copy
+                      </button>
+                  </div>
+                  <textarea 
+                      ref={messageTextareaRef}
+                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none resize-none mb-3"
+                      value={generatedMessage}
+                      readOnly
+                  />
+                  <div className="grid grid-cols-2 gap-3">
+                      <button 
+                          onClick={() => window.open(`https://wa.me/${customerDetails.phone.replace(/\D/g, '')}?text=${encodeURIComponent(generatedMessage)}`, '_blank')}
+                          className="bg-green-500 hover:bg-green-600 text-white py-2 rounded-lg font-medium flex items-center justify-center gap-2"
+                      >
+                          <MessageCircle className="w-4 h-4" /> WhatsApp
+                      </button>
+                      <button 
+                          onClick={() => {
+                            const subject = enquiryCategory === 'Transport' ? `${tripType} Trip Estimate` : 'Regarding your Enquiry with OK BOZ';
+                            const url = `mailto:${customerDetails.email || ''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(generatedMessage)}`;
+                            window.location.href = url;
+                          }}
+                          className="bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-lg font-medium flex items-center justify-center gap-2"
+                      >
+                          <Mail className="w-4 h-4" /> Email
+                      </button>
+                  </div>
+              </div>
+          </div>
+      </div>
+
+      {isScheduleModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+              <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm animate-in fade-in zoom-in duration-200">
+                  <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                      <h3 className="font-bold text-gray-800">Schedule Order</h3>
+                      <button onClick={() => setIsScheduleModalOpen(false)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5"/></button>
+                  </div>
+                  <div className="p-6 space-y-4">
+                      <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                          <input 
+                              type="date" 
+                              value={scheduleData.date}
+                              onChange={(e) => setScheduleData({...scheduleData, date: e.target.value})}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500"
+                          />
+                      </div>
+                      <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Time</label>
+                          <input 
+                              type="time" 
+                              value={scheduleData.time}
+                              onChange={(e) => setScheduleData({...scheduleData, time: e.target.value})}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500"
+                          />
+                      </div>
+                      <div className="flex justify-end pt-2">
+                          <button onClick={confirmSchedule} className="bg-emerald-600 text-white py-2.5 px-6 rounded-lg font-bold hover:bg-emerald-700 transition-colors">
+                              Confirm Schedule
+                          </button>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      )}
+    </div>
+  );
+};

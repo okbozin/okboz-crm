@@ -48,6 +48,19 @@ export interface Employee {
   currentLocation?: { lat: number; lng: number; accuracy: number; }; // NEW: Last known accurate location
   attendanceLocationStatus?: 'idle' | 'fetching' | 'granted' | 'denied' | 'outside_geofence' | 'within_geofence'; // NEW: Status of location access for attendance
   cameraPermissionStatus?: 'idle' | 'granted' | 'denied'; // NEW: Status of camera access
+  // NEW: Profile fields
+  dob?: string;
+  gender?: string;
+  bloodGroup?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  emergencyContactRelationship?: string;
+  homeAddress?: string;
+  maritalStatus?: string;
+  spouseName?: string;
+  children?: number;
+  idProof1Url?: string; // For Aadhar/PAN scans etc
+  idProof2Url?: string; // For Aadhar/PAN scans etc
 }
 
 export interface DailyAttendance {

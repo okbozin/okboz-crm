@@ -1,6 +1,7 @@
-
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import path from 'path'; // Import path
+import { fileURLToPath } from 'url'; // Import fileURLToPath
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -17,5 +18,11 @@ export default defineConfig({
         secure: false,
       }
     }
-  }
+  },
+  resolve: {
+    alias: {
+      // Use path.resolve with fileURLToPath and import.meta.url for cross-platform compatibility
+      '@': path.resolve(fileURLToPath(new URL('.', import.meta.url)), './'), 
+    },
+  },
 });

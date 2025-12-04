@@ -1,4 +1,3 @@
-
 import React, { useMemo, useState, useEffect } from 'react';
 // @google/genai: Add missing import for Headset
 import { Users, UserCheck, UserX, MapPin, ArrowRight, Building2, Car, TrendingUp, DollarSign, Clock, BarChart3, Calendar, Truck, CheckCircle, Headset } from 'lucide-react';
@@ -37,6 +36,7 @@ const Dashboard = () => {
   const { theme } = useTheme();
 
   const isSuperAdmin = (localStorage.getItem('app_session_id') || 'admin') === 'admin';
+  const sessionId = localStorage.getItem('app_session_id') || 'admin';
 
   // --- 1. Global Filter States ---
   const [filterCorporate, setFilterCorporate] = useState<string>('All');
@@ -74,6 +74,11 @@ const Dashboard = () => {
             const cBranches = JSON.parse(localStorage.getItem(`branches_data_${c.email}`) || '[]');
             allBranches = [...allBranches, ...cBranches.map((b: any) => ({...b, corporateId: c.email}))];
         });
+        
+        // Filter branches if not a Super Admin
+        if (!isSuperAdmin) {
+            allBranches = allBranches.filter(b => b.corporateId === sessionId);
+        }
         setBranches(allBranches);
     } catch(e) {}
 
@@ -99,7 +104,6 @@ const Dashboard = () => {
         });
     } else {
         // Single Corporate/User View
-        const sessionId = localStorage.getItem('app_session_id') || 'admin';
         const key = `staff_data_${sessionId}`; 
         try {
             const saved = localStorage.getItem(key);
@@ -136,7 +140,6 @@ const Dashboard = () => {
             }
         });
     } else {
-        const sessionId = localStorage.getItem('app_session_id') || 'admin';
         const key = `trips_data_${sessionId}`;
         try {
             const saved = localStorage.getItem(key);
@@ -152,7 +155,7 @@ const Dashboard = () => {
     if (savedApprovals) setPendingApprovals(JSON.parse(savedApprovals));
     else setPendingApprovals([]);
 
-  }, [isSuperAdmin]);
+  }, [isSuperAdmin, sessionId]);
 
   // --- 4. Filtering Logic ---
   
@@ -189,13 +192,13 @@ const Dashboard = () => {
 
   const filteredEnquiries = useMemo(() => {
       return enquiries.filter(e => {
-          const corpKey = e.assignedCorporate || 'Head Office';
-          const branchKey = e.assignedBranch || '';
+          const corpKey = e.corporateId || 'admin'; // Use corporateId, fallback to 'admin'
+          const branchKey = e.transportData?.drop || ''; // Assuming branch is derived from transportData or can be added directly to Enquiry
 
           // Match Corporate
           let matchCorp = true;
           if (filterCorporate !== 'All') {
-              if (filterCorporate === 'admin') matchCorp = corpKey === 'Head Office';
+              if (filterCorporate === 'admin') matchCorp = corpKey === 'admin';
               else matchCorp = corpKey === filterCorporate; // Matches email
           }
 
@@ -204,7 +207,7 @@ const Dashboard = () => {
           
           // Date Filtering
           let matchDate = true;
-          const enqDate = e.date || e.createdAt.split(',')[0]; 
+          const enqDate = e.date || e.createdAt.split('T')[0]; 
           
           if (filterType === 'Daily') {
               matchDate = enqDate === selectedDate;
@@ -268,17 +271,22 @@ const Dashboard = () => {
   // Vehicle Stats (Dynamic Revenue Parsing)
   const vehicleStats = useMemo(() => {
       const total = filteredEnquiries.length;
-      const booked = filteredEnquiries.filter(e => e.status === 'Booked' || (e as any).outcome === 'Booked').length;
+      const booked = filteredEnquiries.filter(e => e.status === 'Booked' || e.status === 'Order Accepted' || e.status === 'Driver Assigned' || e.status === 'Completed').length;
       const conversion = total > 0 ? Math.round((booked / total) * 100) : 0;
       
       // Attempt to parse revenue from "Total Estimate: ₹XXX" string in details
       const amount = filteredEnquiries.reduce((sum, e) => {
-          if (e.status === 'Booked' || (e as any).outcome === 'Booked') {
+          if (e.status === 'Booked' || e.status === 'Order Accepted' || e.status === 'Driver Assigned' || e.status === 'Completed') {
+              // Try to use estimatedPrice directly if available and numerical
+              if (typeof e.estimatedPrice === 'number') {
+                return sum + e.estimatedPrice;
+              }
+              // Fallback to parsing from details if estimatedPrice is not a number
               const match = e.details.match(/Estimate: ₹([\d,]+)/) || e.details.match(/₹([\d,]+)/);
               if (match) {
                   return sum + parseInt(match[1].replace(/,/g, ''));
               }
-              return sum + 2500; // Fallback average if not parsed
+              return sum; // If no price found, add 0
           }
           return sum;
       }, 0);
@@ -320,13 +328,18 @@ const Dashboard = () => {
           const monthLabel = d.toLocaleDateString('en-US', { month: 'short' });
           
           const revenue = filteredEnquiries
-              .filter(e => e.createdAt.startsWith(monthStr) && (e.status === 'Booked' || (e as any).outcome === 'Booked'))
+              .filter(e => (e.createdAt || '').startsWith(monthStr) && (e.status === 'Booked' || e.status === 'Order Accepted' || e.status === 'Driver Assigned' || e.status === 'Completed'))
               .reduce((sum, e) => {
+                  // Use estimatedPrice first if it's a number
+                  if (typeof e.estimatedPrice === 'number') {
+                    return sum + e.estimatedPrice;
+                  }
+                  // Fallback to parsing from details
                   const match = e.details.match(/Estimate: ₹([\d,]+)/) || e.details.match(/₹([\d,]+)/);
                   if (match) {
                       return sum + parseInt(match[1].replace(/,/g, ''));
                   }
-                  return sum + 2500;
+                  return sum; // Add 0 if no price is found
               }, 0);
           
           data.push({ name: monthLabel, revenue });

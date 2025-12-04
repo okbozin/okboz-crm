@@ -1,15 +1,13 @@
-
-import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  PhoneIncoming, PhoneOutgoing, ArrowRight, Search, Clock, User, Car, 
-  Edit2, X, Save, UserPlus, History, Filter, Download, Truck, Calculator, 
-  MessageCircle, Mail, Copy, MapPin, Calendar as CalendarIcon, RefreshCcw, 
-  Sparkles, Wand2, Loader2, Building2, CheckCircle, ChevronDown, Bell,
-  MoreHorizontal, Phone, CheckSquare, ArrowRightLeft, Plus, Trash2
-} from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Autocomplete from '../../components/Autocomplete';
 import { MOCK_EMPLOYEES } from '../../constants';
 import { Employee, Enquiry, HistoryLog } from '../../types';
+import { generateGeminiResponse } from '../../services/geminiService';
+import {
+  Bell, Calculator, CheckCircle, Clock, Copy, Edit2, Loader2, Mail, MessageCircle,
+  Phone, PhoneIncoming, PhoneOutgoing, Plus, RefreshCcw, ArrowRight, ArrowRightLeft,
+  Save, Trash2, Truck, User, UserPlus, X, Building2, History, AlertCircle
+} from 'lucide-react';
 
 interface HistoryItem {
   id: number;
@@ -75,7 +73,7 @@ const getExistingVendors = () => {
   return globalData ? JSON.parse(globalData) : [];
 };
 
-const Reception: React.FC = () => {
+export const Reception: React.FC = () => {
   const sessionId = localStorage.getItem('app_session_id') || 'admin';
   const isSuperAdmin = sessionId === 'admin';
 
@@ -155,6 +153,10 @@ const Reception: React.FC = () => {
   const [formCity, setFormCity] = useState('');
   const [formNote, setFormNote] = useState('');
   const [formCallerType, setFormCallerType] = useState<'Customer' | 'Vendor'>('Customer');
+  // Form state for assignment, will be used in handleLogCall
+  const [formLog, setFormLog] = useState({
+    assignedTo: ''
+  });
   
   // Console Transport Enquiry State
   const [consoleEnquiryType, setConsoleEnquiryType] = useState<'General' | 'Transport'>('General');
@@ -187,9 +189,17 @@ const Reception: React.FC = () => {
 
   // Edit Modal State
   const [editingItem, setEditingItem] = useState<HistoryItem | null>(null);
-  const [editEnquiryType, setEditEnquiryType] = useState<'General' | 'Transport'>('General');
+  const [editFormData, setEditFormData] = useState({
+    name: '',
+    city: '',
+    details: '',
+    status: '',
+    assignedTo: ''
+  });
   
   // Transport Calculator State (Edit Modal)
+  const [editEnquiryType, setEditEnquiryType] = useState<'General' | 'Transport'>('General');
+  const [editTransportService, setEditTransportService] = useState<'Taxi' | 'Load Xpress'>('Taxi');
   const [editTaxiType, setEditTaxiType] = useState<'Local' | 'Rental' | 'Outstation'>('Local');
   const [editOutstationType, setEditOutstationType] = useState<'OneWay' | 'RoundTrip'>('RoundTrip');
   const [editVehicleType, setEditVehicleType] = useState<'Sedan' | 'SUV'>('Sedan'); // Added vehicle type to Edit
@@ -352,6 +362,7 @@ const Reception: React.FC = () => {
             status: status,
             name: formName,
             city: formCity,
+            assignedTo: formLog.assignedTo, // Using formLog.assignedTo here
             phone: phoneNumber,
             loggedBy: sessionId
         };
@@ -613,7 +624,7 @@ const Reception: React.FC = () => {
                   <p className="text-xs font-bold text-indigo-200 uppercase">System Status</p>
                   <h3 className="text-lg font-bold">Online</h3>
                </div>
-               <div className="p-2 bg-white/20 rounded-lg animate-pulse"><Bell className="w-5 h-5 text-white"/></div>
+               <div className="p-2 bg-white/20 rounded-lg animate-pulse"><Bell className="w-5 h-5"/></div>
             </div>
          </div>
       </div>
@@ -1112,9 +1123,9 @@ const Reception: React.FC = () => {
 
       {/* Edit Modal (Includes Transport Calculator) */}
       {editingItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-           <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col animate-in fade-in zoom-in duration-200">
-              <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-2xl">
+         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col animate-in fade-in zoom-in duration-200">
+               <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-2xl">
                  <div className="flex gap-4 items-center">
                     <h3 className="font-bold text-gray-800 text-lg">Update Record</h3>
                     {/* Toggle for Transport Calculator */}
@@ -1247,5 +1258,3 @@ const Reception: React.FC = () => {
     </div>
   );
 };
-
-export default Reception;

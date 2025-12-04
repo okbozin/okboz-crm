@@ -1,30 +1,39 @@
 
-import React, { useState, useEffect } from 'react';
-import { User, Mail, Phone, MapPin, Briefcase, Calendar, CreditCard, Shield, Edit2, AlertCircle, Lock, CheckCircle, Eye, EyeOff } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  User, Mail, Phone, MapPin, Briefcase, Calendar, CreditCard, Shield, 
+  Edit2, AlertCircle, Lock, CheckCircle, Eye, EyeOff, Building, Heart, Baby, BookUser, Home
+} from 'lucide-react';
 import { MOCK_EMPLOYEES } from '../../constants';
-import { Employee } from '../../types';
+import { Employee, CorporateAccount } from '../../types';
 
 const UserProfile: React.FC = () => {
   const [user, setUser] = useState<Employee | null>(null);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [isEditingPassword, setIsEditingPassword] = useState(false);
   
+  // Form data for editable fields in profile
+  const [profileFormData, setProfileFormData] = useState<Partial<Employee>>({});
+
   // Password Change State
   const [passwords, setPasswords] = useState({
       current: '',
       new: '',
       confirm: ''
   });
-  const [showPasswords, setShowPasswords] = useState({ current: false, new: false });
-  const [msg, setMsg] = useState({ type: '', text: '' });
+  const [showPasswords, setShowPasswords] = useState({ current: false, new: false, newConfirm: false });
+  const [msg, setMsg] = useState({ type: '', text: '' }); // General messages for profile and password
 
-  // Helper to find employee by ID
+  // Helper to find employee by ID across all storage locations
   const findEmployeeById = (id: string): Employee | undefined => {
+      // 1. Check Admin Staff
       try {
         const adminStaff = JSON.parse(localStorage.getItem('staff_data') || '[]');
         let found = adminStaff.find((e: any) => e.id === id);
         if (found) return found;
       } catch(e) {}
 
+      // 2. Check Corporate Staff
       try {
         const corporates = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
         for (const corp of corporates) {
@@ -37,15 +46,74 @@ const UserProfile: React.FC = () => {
       return MOCK_EMPLOYEES.find(e => e.id === id);
   };
 
+  // Load user data on mount
   useEffect(() => {
       const storedSessionId = localStorage.getItem('app_session_id');
       if (storedSessionId) {
           const found = findEmployeeById(storedSessionId);
           setUser(found || MOCK_EMPLOYEES[0]);
+          // Initialize form data with user's current profile
+          setProfileFormData(found || {});
       } else {
           setUser(MOCK_EMPLOYEES[0]);
+          setProfileFormData(MOCK_EMPLOYEES[0]);
       }
   }, []);
+
+  // Update form data if user prop changes (e.g., after a successful save)
+  useEffect(() => {
+    if (user) {
+        setProfileFormData(user);
+    }
+  }, [user]);
+
+  // Handle profile form input changes
+  const handleProfileInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setProfileFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  // Handle saving profile changes
+  const handleSaveProfile = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+
+    // Basic validation
+    if (!profileFormData.email) { // Name and phone are now read-only
+        setMsg({ type: 'error', text: 'Email is required.' });
+        return;
+    }
+
+    // Determine the correct storage key based on user's corporateId
+    const sessionId = localStorage.getItem('app_session_id');
+    const isSuperAdmin = (user.corporateId === 'admin' || !user.corporateId); // User added by admin
+    const storageKey = isSuperAdmin ? 'staff_data' : `staff_data_${user.corporateId}`;
+
+    let updated = false;
+    try {
+        const existingStaff: Employee[] = JSON.parse(localStorage.getItem(storageKey) || '[]');
+        const updatedStaff = existingStaff.map(emp => {
+            if (emp.id === user.id) {
+                updated = true;
+                return { ...emp, ...profileFormData }; // Update all fields from profileFormData
+            }
+            return emp;
+        });
+
+        localStorage.setItem(storageKey, JSON.stringify(updatedStaff));
+        if (updated) {
+            setUser(prev => ({ ...prev!, ...profileFormData })); // Update local user state
+            setMsg({ type: 'success', text: 'Profile updated successfully!' });
+            setIsEditingProfile(false);
+            setTimeout(() => setMsg({ type: '', text: '' }), 3000);
+        } else {
+            setMsg({ type: 'error', text: 'Could not find user to update. Contact admin.' });
+        }
+    } catch (e) {
+        console.error("Error saving profile:", e);
+        setMsg({ type: 'error', text: 'Failed to save profile. Data might be corrupted.' });
+    }
+  };
 
   const handlePasswordChange = (e: React.FormEvent) => {
       e.preventDefault();
@@ -71,35 +139,22 @@ const UserProfile: React.FC = () => {
       }
 
       // Save Logic
-      // We need to find where this user is stored and update it.
       let updated = false;
       
-      // 1. Try Admin Staff
-      const adminStaffStr = localStorage.getItem('staff_data');
-      if (adminStaffStr) {
-          const staff = JSON.parse(adminStaffStr);
-          const idx = staff.findIndex((e: any) => e.id === user.id);
-          if (idx !== -1) {
-              staff[idx].password = passwords.new;
-              localStorage.setItem('staff_data', JSON.stringify(staff));
-              updated = true;
-          }
-      }
+      const storageKey = user.corporateId ? `staff_data_${user.corporateId}` : 'staff_data';
 
-      // 2. Try Corporate Staff
-      if (!updated) {
-          const corporates = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
-          for (const corp of corporates) {
-              const key = `staff_data_${corp.email}`;
-              const cStaff = JSON.parse(localStorage.getItem(key) || '[]');
-              const idx = cStaff.findIndex((e: any) => e.id === user.id);
-              if (idx !== -1) {
-                  cStaff[idx].password = passwords.new;
-                  localStorage.setItem(key, JSON.stringify(cStaff));
-                  updated = true;
-                  break;
-              }
-          }
+      try {
+        const existingStaff: Employee[] = JSON.parse(localStorage.getItem(storageKey) || '[]');
+        const updatedStaff = existingStaff.map(emp => {
+            if (emp.id === user.id) {
+                updated = true;
+                return { ...emp, password: passwords.new };
+            }
+            return emp;
+        });
+        localStorage.setItem(storageKey, JSON.stringify(updatedStaff));
+      } catch (e) {
+        console.error("Error updating password in local storage:", e);
       }
 
       if (updated) {
@@ -107,11 +162,12 @@ const UserProfile: React.FC = () => {
           setUser({ ...user, password: passwords.new });
           setTimeout(() => {
               setIsEditingPassword(false);
-              setMsg({ type: '', text: '' });
+              setMsg({ type: '', text: '' }); // Clear message
               setPasswords({ current: '', new: '', confirm: '' });
+              setShowPasswords({ current: false, new: false, newConfirm: false });
           }, 1500);
       } else {
-          setMsg({ type: 'error', text: 'Could not update profile. Please contact Admin.' });
+          setMsg({ type: 'error', text: 'Could not update password. Please contact Admin.' });
       }
   };
 
@@ -124,14 +180,39 @@ const UserProfile: React.FC = () => {
            <h2 className="text-2xl font-bold text-gray-800">My Profile</h2>
            <p className="text-gray-500">Manage your personal information</p>
         </div>
-        <button 
-            onClick={() => alert("Edit request sent to HR.")}
-            className="flex items-center gap-2 bg-emerald-50 text-emerald-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-100 transition-colors"
-        >
-          <Edit2 className="w-4 h-4" />
-          Request Edit
-        </button>
+        {!isEditingProfile ? (
+            <button 
+                onClick={() => setIsEditingProfile(true)}
+                className="flex items-center gap-2 bg-emerald-50 text-emerald-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-100 transition-colors"
+            >
+              <Edit2 className="w-4 h-4" />
+              Edit Profile
+            </button>
+        ) : (
+            <div className="flex gap-2">
+                <button 
+                    onClick={() => { setIsEditingProfile(false); setMsg({ type: '', text: '' }); setProfileFormData(user); }} // Reset form data to current user on cancel
+                    className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                    Cancel
+                </button>
+                <button 
+                    onClick={handleSaveProfile}
+                    className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors"
+                >
+                    <CheckCircle className="w-4 h-4" />
+                    Save Changes
+                </button>
+            </div>
+        )}
       </div>
+
+      {msg.text && (
+        <div className={`text-sm p-3 rounded-lg flex items-center gap-2 ${msg.type === 'error' ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-green-100 text-green-700 border border-green-200'}`}>
+            {msg.type === 'error' ? <AlertCircle className="w-4 h-4 shrink-0" /> : <CheckCircle className="w-4 h-4 shrink-0" />}
+            <span>{msg.text}</span>
+        </div>
+      )}
 
       {/* Profile Header Card */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden relative">
@@ -179,83 +260,308 @@ const UserProfile: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Personal Details */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-           <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2">
-             <User className="w-5 h-5 text-emerald-500" />
-             Personal Information
-           </h3>
-           <div className="space-y-4">
-              <div className="flex items-start gap-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
-                 <Mail className="w-5 h-5 text-gray-400 mt-0.5" />
-                 <div>
-                    <p className="text-xs text-gray-500 mb-0.5">Email Address</p>
-                    <p className="text-gray-800 font-medium break-all">{user.email || 'Not Provided'}</p>
-                 </div>
-              </div>
-              <div className="flex items-start gap-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
-                 <Phone className="w-5 h-5 text-gray-400 mt-0.5" />
-                 <div>
-                    <p className="text-xs text-gray-500 mb-0.5">Phone Number</p>
-                    <p className="text-gray-800 font-medium">{user.phone || 'Not Provided'}</p>
-                 </div>
-              </div>
-              <div className="flex items-start gap-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
-                 <MapPin className="w-5 h-5 text-gray-400 mt-0.5" />
-                 <div>
-                    <p className="text-xs text-gray-500 mb-0.5">Branch Location</p>
-                    <p className="text-gray-800 font-medium">{user.branch || 'Main Branch'}</p>
-                 </div>
-              </div>
-           </div>
-        </div>
-
-        {/* Banking & KYC */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-           <div className="flex justify-between items-center mb-6">
-              <h3 className="font-bold text-gray-800 flex items-center gap-2">
-                <Shield className="w-5 h-5 text-emerald-500" />
-                KYC & Banking
-              </h3>
-              <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded font-medium flex items-center gap-1">
-                 <Shield className="w-3 h-3" /> Verified
-              </span>
-           </div>
-           
-           <div className="space-y-4">
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100">
-                 <div className="flex items-center gap-3">
-                    <div className="bg-white p-2 rounded-md shadow-sm">
-                      <CreditCard className="w-5 h-5 text-emerald-600" />
+      <form onSubmit={handleSaveProfile}> {/* Wrap profile sections in a form */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Personal Information */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+             <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2">
+               <User className="w-5 h-5 text-emerald-500" />
+               Personal Information
+             </h3>
+             <div className="space-y-4">
+                <div className="flex items-start gap-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
+                   <User className="w-5 h-5 text-gray-400 mt-0.5" />
+                   <div className="flex-1">
+                      <p className="text-xs text-gray-500 mb-0.5">Full Name</p>
+                      {/* Name is now read-only */}
+                      <p className="text-gray-800 font-medium break-all">{user.name}</p>
+                   </div>
+                </div>
+                <div className="flex items-start gap-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
+                   <Mail className="w-5 h-5 text-gray-400 mt-0.5" />
+                   <div className="flex-1">
+                      <p className="text-xs text-gray-500 mb-0.5">Email Address</p>
+                      {isEditingProfile ? (
+                          <input 
+                              type="email" 
+                              name="email"
+                              value={profileFormData.email || ''} 
+                              onChange={handleProfileInputChange}
+                              className="w-full p-1 border-b border-gray-300 focus:outline-none focus:border-emerald-500 bg-transparent text-gray-800 font-medium"
+                          />
+                      ) : (
+                          <p className="text-gray-800 font-medium break-all">{user.email || 'Not Provided'}</p>
+                      )}
+                   </div>
+                </div>
+                <div className="flex items-start gap-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
+                   <Phone className="w-5 h-5 text-gray-400 mt-0.5" />
+                   <div className="flex-1">
+                      <p className="text-xs text-gray-500 mb-0.5">Phone Number</p>
+                      {/* Phone is now read-only */}
+                      <p className="text-gray-800 font-medium">{user.phone || 'Not Provided'}</p>
+                   </div>
+                </div>
+                <div className="flex items-start gap-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
+                   <Calendar className="w-5 h-5 text-gray-400 mt-0.5" />
+                   <div className="flex-1">
+                      <p className="text-xs text-gray-500 mb-0.5">Date of Birth</p>
+                      {isEditingProfile ? (
+                          <input 
+                              type="date" 
+                              name="dob"
+                              value={profileFormData.dob || ''} 
+                              onChange={handleProfileInputChange}
+                              className="w-full p-1 border-b border-gray-300 focus:outline-none focus:border-emerald-500 bg-transparent text-gray-800 font-medium"
+                          />
+                      ) : (
+                          <p className="text-gray-800 font-medium">{user.dob || 'Not Provided'}</p>
+                      )}
+                   </div>
+                </div>
+                <div className="flex items-start gap-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
+                   <BookUser className="w-5 h-5 text-gray-400 mt-0.5" />
+                   <div className="flex-1">
+                      <p className="text-xs text-gray-500 mb-0.5">Gender</p>
+                      {isEditingProfile ? (
+                          <select 
+                              name="gender"
+                              value={profileFormData.gender || ''} 
+                              onChange={handleProfileInputChange}
+                              className="w-full p-1 border-b border-gray-300 focus:outline-none focus:border-emerald-500 bg-transparent text-gray-800 font-medium"
+                          >
+                            <option value="">Select Gender</option>
+                            <option value="Male">Male</option>
+                            <option value="Female">Female</option>
+                            <option value="Other">Other</option>
+                          </select>
+                      ) : (
+                          <p className="text-gray-800 font-medium">{user.gender || 'Not Provided'}</p>
+                      )}
+                   </div>
+                </div>
+                <div className="flex items-start gap-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
+                   <Heart className="w-5 h-5 text-gray-400 mt-0.5" />
+                   <div className="flex-1">
+                      <p className="text-xs text-gray-500 mb-0.5">Blood Group</p>
+                      {isEditingProfile ? (
+                          <input 
+                              type="text" 
+                              name="bloodGroup"
+                              value={profileFormData.bloodGroup || ''} 
+                              onChange={handleProfileInputChange}
+                              className="w-full p-1 border-b border-gray-300 focus:outline-none focus:border-emerald-500 bg-transparent text-gray-800 font-medium"
+                              placeholder="e.g. O+"
+                          />
+                      ) : (
+                          <p className="text-gray-800 font-medium">{user.bloodGroup || 'Not Provided'}</p>
+                      )}
+                   </div>
+                </div>
+                <div className="flex items-start gap-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
+                   <User className="w-5 h-5 text-gray-400 mt-0.5" />
+                   <div className="flex-1">
+                      <p className="text-xs text-gray-500 mb-0.5">Marital Status</p>
+                      {isEditingProfile ? (
+                          <select 
+                              name="maritalStatus"
+                              value={profileFormData.maritalStatus || ''} 
+                              onChange={handleProfileInputChange}
+                              className="w-full p-1 border-b border-gray-300 focus:outline-none focus:border-emerald-500 bg-transparent text-gray-800 font-medium"
+                          >
+                            <option value="">Select Status</option>
+                            <option value="Single">Single</option>
+                            <option value="Married">Married</option>
+                            <option value="Divorced">Divorced</option>
+                            <option value="Widowed">Widowed</option>
+                          </select>
+                      ) : (
+                          <p className="text-gray-800 font-medium">{user.maritalStatus || 'Not Provided'}</p>
+                      )}
+                   </div>
+                </div>
+                {profileFormData.maritalStatus === 'Married' && (
+                    <div className="flex items-start gap-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
+                       <User className="w-5 h-5 text-gray-400 mt-0.5" />
+                       <div className="flex-1">
+                          <p className="text-xs text-gray-500 mb-0.5">Spouse Name</p>
+                          {isEditingProfile ? (
+                              <input 
+                                  type="text" 
+                                  name="spouseName"
+                                  value={profileFormData.spouseName || ''} 
+                                  onChange={handleProfileInputChange}
+                                  className="w-full p-1 border-b border-gray-300 focus:outline-none focus:border-emerald-500 bg-transparent text-gray-800 font-medium"
+                              />
+                          ) : (
+                              <p className="text-gray-800 font-medium">{user.spouseName || 'Not Provided'}</p>
+                          )}
+                       </div>
                     </div>
-                    <div>
-                      <p className="text-xs text-gray-500">Bank Account</p>
-                      <p className="text-sm font-bold text-gray-800 font-mono">
-                         •••• {user.accountNumber?.slice(-4) || 'XXXX'}
-                      </p>
-                    </div>
-                 </div>
-                 <span className="text-xs font-mono text-gray-400">{user.ifsc}</span>
-              </div>
+                )}
+                <div className="flex items-start gap-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
+                   <Baby className="w-5 h-5 text-gray-400 mt-0.5" />
+                   <div className="flex-1">
+                      <p className="text-xs text-gray-500 mb-0.5">Number of Children</p>
+                      {isEditingProfile ? (
+                          <input 
+                              type="number" 
+                              name="children"
+                              value={profileFormData.children?.toString() || ''} 
+                              onChange={handleProfileInputChange}
+                              className="w-full p-1 border-b border-gray-300 focus:outline-none focus:border-emerald-500 bg-transparent text-gray-800 font-medium"
+                          />
+                      ) : (
+                          <p className="text-gray-800 font-medium">{user.children ?? 'Not Provided'}</p>
+                      )}
+                   </div>
+                </div>
+             </div>
+          </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                 <div className="p-3 bg-gray-50 rounded-lg border border-gray-100">
-                    <p className="text-xs text-gray-500 mb-1">PAN Number</p>
-                    <p className="text-sm font-bold text-gray-800 font-mono">{user.pan || 'Not Provided'}</p>
-                 </div>
-                 <div className="p-3 bg-gray-50 rounded-lg border border-gray-100">
-                    <p className="text-xs text-gray-500 mb-1">Aadhar Number</p>
-                    <p className="text-sm font-bold text-gray-800 font-mono">{user.aadhar || 'Not Provided'}</p>
-                 </div>
-              </div>
-              
-              <div className="mt-4 flex items-start gap-2 text-xs text-gray-500 bg-blue-50 p-3 rounded-lg border border-blue-100">
-                 <AlertCircle className="w-4 h-4 text-blue-500 shrink-0" />
-                 <p>To update sensitive banking or tax information, please contact the HR department directly.</p>
-              </div>
-           </div>
+          {/* Contact and Emergency Details */}
+          <div className="space-y-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+               <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2">
+                 <Building className="w-5 h-5 text-emerald-500" />
+                 Work & Home Address
+               </h3>
+               <div className="space-y-4">
+                  <div className="flex items-start gap-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
+                     <MapPin className="w-5 h-5 text-gray-400 mt-0.5" />
+                     <div className="flex-1">
+                        <p className="text-xs text-gray-500 mb-0.5">Work Branch</p>
+                        <p className="text-gray-800 font-medium">{user.branch || 'Main Branch'}</p>
+                     </div>
+                  </div>
+                  <div className="flex items-start gap-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
+                     <Home className="w-5 h-5 text-gray-400 mt-0.5" />
+                     <div className="flex-1">
+                        <p className="text-xs text-gray-500 mb-0.5">Home Address</p>
+                        {isEditingProfile ? (
+                            <textarea
+                                name="homeAddress"
+                                value={profileFormData.homeAddress || ''}
+                                onChange={handleProfileInputChange}
+                                className="w-full p-1 border-b border-gray-300 focus:outline-none focus:border-emerald-500 bg-transparent text-gray-800 font-medium resize-y"
+                                rows={2}
+                            />
+                        ) : (
+                            <p className="text-gray-800 font-medium">{user.homeAddress || 'Not Provided'}</p>
+                        )}
+                     </div>
+                  </div>
+               </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+               <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2">
+                 <Phone className="w-5 h-5 text-emerald-500" />
+                 Emergency Contact
+               </h3>
+               <div className="space-y-4">
+                  <div className="flex items-start gap-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
+                     <User className="w-5 h-5 text-gray-400 mt-0.5" />
+                     <div className="flex-1">
+                        <p className="text-xs text-gray-500 mb-0.5">Contact Person</p>
+                        {isEditingProfile ? (
+                            <input 
+                                type="text" 
+                                name="emergencyContactName"
+                                value={profileFormData.emergencyContactName || ''} 
+                                onChange={handleProfileInputChange}
+                                className="w-full p-1 border-b border-gray-300 focus:outline-none focus:border-emerald-500 bg-transparent text-gray-800 font-medium"
+                            />
+                        ) : (
+                            <p className="text-gray-800 font-medium">{user.emergencyContactName || 'Not Provided'}</p>
+                        )}
+                     </div>
+                  </div>
+                  <div className="flex items-start gap-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
+                     <Phone className="w-5 h-5 text-gray-400 mt-0.5" />
+                     <div className="flex-1">
+                        <p className="text-xs text-gray-500 mb-0.5">Phone Number</p>
+                        {isEditingProfile ? (
+                            <input 
+                                type="tel" 
+                                name="emergencyContactPhone"
+                                value={profileFormData.emergencyContactPhone || ''} 
+                                onChange={handleProfileInputChange}
+                                className="w-full p-1 border-b border-gray-300 focus:outline-none focus:border-emerald-500 bg-transparent text-gray-800 font-medium"
+                            />
+                        ) : (
+                            <p className="text-gray-800 font-medium">{user.emergencyContactPhone || 'Not Provided'}</p>
+                        )}
+                     </div>
+                  </div>
+                  <div className="flex items-start gap-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
+                     <Heart className="w-5 h-5 text-gray-400 mt-0.5" />
+                     <div className="flex-1">
+                        <p className="text-xs text-gray-500 mb-0.5">Relationship</p>
+                        {isEditingProfile ? (
+                            <input 
+                                type="text" 
+                                name="emergencyContactRelationship"
+                                value={profileFormData.emergencyContactRelationship || ''} 
+                                onChange={handleProfileInputChange}
+                                className="w-full p-1 border-b border-gray-300 focus:outline-none focus:border-emerald-500 bg-transparent text-gray-800 font-medium"
+                                placeholder="e.g. Mother, Brother, Friend"
+                            />
+                        ) : (
+                            <p className="text-gray-800 font-medium">{user.emergencyContactRelationship || 'Not Provided'}</p>
+                        )}
+                     </div>
+                  </div>
+               </div>
+            </div>
+          </div>
         </div>
+      </form> {/* End of form wrapper */}
+
+      {/* Banking & KYC */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+         <div className="flex justify-between items-center mb-6">
+            <h3 className="font-bold text-gray-800 flex items-center gap-2">
+              <Shield className="w-5 h-5 text-emerald-500" />
+              KYC & Banking
+            </h3>
+            <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded font-medium flex items-center gap-1">
+               <Shield className="w-3 h-3" /> Verified
+            </span>
+         </div>
+         
+         <div className="space-y-4">
+            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100">
+               <div className="flex items-center gap-3">
+                  <div className="bg-white p-2 rounded-md shadow-sm">
+                    <CreditCard className="w-5 h-5 text-emerald-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">Bank Account</p>
+                    <p className="text-sm font-bold text-gray-800 font-mono">
+                       •••• {user.accountNumber?.slice(-4) || 'XXXX'}
+                    </p>
+                  </div>
+               </div>
+               <span className="text-xs font-mono text-gray-400">{user.ifsc}</span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+               <div className="p-3 bg-gray-50 rounded-lg border border-gray-100">
+                  <p className="text-xs text-gray-500 mb-1">PAN Number</p>
+                  <p className="text-sm font-bold text-gray-800 font-mono">{user.pan || 'Not Provided'}</p>
+               </div>
+               <div className="p-3 bg-gray-50 rounded-lg border border-gray-100">
+                  <p className="text-xs text-gray-500 mb-1">Aadhar Number</p>
+                  <p className="text-sm font-bold text-gray-800 font-mono">{user.aadhar || 'Not Provided'}</p>
+               </div>
+            </div>
+            
+            <div className="mt-4 flex items-start gap-2 text-xs text-gray-500 bg-blue-50 p-3 rounded-lg border border-blue-100">
+               <AlertCircle className="w-4 h-4 text-blue-500 shrink-0" />
+               <p>To update sensitive banking or tax information, please contact the HR department directly.</p>
+            </div>
+         </div>
       </div>
 
       {/* Security Section */}
@@ -319,12 +625,17 @@ const UserProfile: React.FC = () => {
                       </div>
                       <div>
                           <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Confirm Password</label>
-                          <input 
-                              type="password"
-                              className="w-full p-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-                              value={passwords.confirm}
-                              onChange={e => setPasswords({...passwords, confirm: e.target.value})}
-                          />
+                          <div className="relative">
+                              <input 
+                                  type={showPasswords.newConfirm ? "text" : "password"} // Added newConfirm visibility state
+                                  className="w-full p-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                                  value={passwords.confirm}
+                                  onChange={e => setPasswords({...passwords, confirm: e.target.value})}
+                              />
+                              <button type="button" onClick={() => setShowPasswords(p => ({...p, newConfirm: !p.newConfirm}))} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400">
+                                  {showPasswords.newConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                              </button>
+                          </div>
                       </div>
                   </div>
                   
@@ -338,7 +649,7 @@ const UserProfile: React.FC = () => {
                   <div className="flex gap-3">
                       <button 
                           type="button" 
-                          onClick={() => { setIsEditingPassword(false); setMsg({type:'', text:''}); }}
+                          onClick={() => { setIsEditingPassword(false); setMsg({type:'', text:''}); setPasswords({ current: '', new: '', confirm: '' }); setShowPasswords({ current: false, new: false, newConfirm: false });}}
                           className="px-3 py-2 text-sm text-gray-600 hover:bg-gray-200 rounded-md transition-colors"
                       >
                           Cancel

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Plus, Search, Download, X, Save,
@@ -141,6 +140,11 @@ export const TripBooking: React.FC = () => {
               const parsed = JSON.parse(saved);
               loadedBranches = parsed.map((b: any) => ({...b, owner: sessionId}));
           }
+      }
+      
+      // Filter branches by current session ID if not Super Admin
+      if (!isSuperAdmin) {
+          loadedBranches = loadedBranches.filter(b => b.owner === sessionId);
       }
       setAllBranches(loadedBranches);
     } catch (e) {}

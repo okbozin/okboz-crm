@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Plus, Search, Phone, Mail, X, User, Upload, FileText, CreditCard, Briefcase, Building, Calendar, Pencil, Trash2, Building2, Lock, Download, Navigation, Globe, MapPin, Eye, EyeOff, Smartphone, ScanLine, MousePointerClick } from 'lucide-react'; 
+import { Plus, Search, Phone, Mail, X, User, Upload, FileText, CreditCard, Briefcase, Building, Calendar, Pencil, Trash2, Building2, Lock, Download, Navigation, Globe, MapPin, Eye, EyeOff, Smartphone, ScanLine, MousePointerClick, Heart, Baby, BookUser, Home } from 'lucide-react'; 
 import { Employee, Branch } from '../../types';
 
 interface Shift {
@@ -41,8 +41,7 @@ const StaffList: React.FC = () => {
                 allData = [...allData, ...parsed.map((e: any) => ({...e, corporateId: 'admin', franchiseName: 'Head Office', franchiseId: 'admin'}))];
             } catch (e) {}
         } else {
-            // No data found in storage, initialize empty
-             allData = [];
+            allData = [];
         }
 
         // 2. Corporate Data
@@ -229,11 +228,24 @@ const StaffList: React.FC = () => {
     currentLocation: undefined, // NEW: Initialize
     attendanceLocationStatus: 'idle', // NEW: Initialize
     cameraPermissionStatus: 'idle', // NEW: Initialize
+    // NEW: Profile fields
+    dob: '',
+    gender: '',
+    bloodGroup: '',
+    emergencyContactName: '',
+    emergencyContactPhone: '',
+    emergencyContactRelationship: '',
+    homeAddress: '',
+    maritalStatus: '',
+    spouseName: '',
+    children: 0,
+    idProof1Url: '',
+    idProof2Url: '',
   };
 
   const [formData, setFormData] = useState(initialFormState);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
@@ -299,6 +311,19 @@ const StaffList: React.FC = () => {
                   currentLocation: undefined, // NEW: Initialize
                   attendanceLocationStatus: 'idle', // NEW: Initialize
                   cameraPermissionStatus: 'idle', // NEW: Initialize
+                  // NEW Profile fields initialization for imported staff
+                  dob: rowData.dob || '',
+                  gender: rowData.gender || '',
+                  bloodGroup: rowData.bloodgroup || '',
+                  emergencyContactName: rowData.emergencycontactname || '',
+                  emergencyContactPhone: rowData.emergencycontactphone || '',
+                  emergencyContactRelationship: rowData.emergencycontactrelationship || '',
+                  homeAddress: rowData.homeaddress || '',
+                  maritalStatus: rowData.maritalstatus || '',
+                  spouseName: rowData.spousename || '',
+                  children: parseInt(rowData.children) || 0,
+                  idProof1Url: '',
+                  idProof2Url: '',
               });
           }
       }
@@ -361,6 +386,19 @@ const StaffList: React.FC = () => {
       currentLocation: employee.currentLocation, // NEW: Preserve
       attendanceLocationStatus: employee.attendanceLocationStatus || 'idle', // NEW: Preserve
       cameraPermissionStatus: employee.cameraPermissionStatus || 'idle', // NEW: Preserve
+      // NEW: Profile fields
+      dob: employee.dob || '',
+      gender: employee.gender || '',
+      bloodGroup: employee.bloodGroup || '',
+      emergencyContactName: employee.emergencyContactName || '',
+      emergencyContactPhone: employee.emergencyContactPhone || '',
+      emergencyContactRelationship: employee.emergencyContactRelationship || '',
+      homeAddress: employee.homeAddress || '',
+      maritalStatus: employee.maritalStatus || '',
+      spouseName: employee.spouseName || '',
+      children: employee.children || 0,
+      idProof1Url: employee.idProof1Url || '',
+      idProof2Url: employee.idProof2Url || '',
     });
     setEditingId(employee.id);
     setShowPassword(false);
@@ -425,6 +463,19 @@ const StaffList: React.FC = () => {
             currentLocation: formData.currentLocation, // NEW: Preserve
             attendanceLocationStatus: formData.attendanceLocationStatus, // NEW: Preserve
             cameraPermissionStatus: formData.cameraPermissionStatus, // NEW: Preserve
+            // NEW: Profile fields
+            dob: formData.dob,
+            gender: formData.gender,
+            bloodGroup: formData.bloodGroup,
+            emergencyContactName: formData.emergencyContactName,
+            emergencyContactPhone: formData.emergencyContactPhone,
+            emergencyContactRelationship: formData.emergencyContactRelationship,
+            homeAddress: formData.homeAddress,
+            maritalStatus: formData.maritalStatus,
+            spouseName: formData.spouseName,
+            children: formData.children,
+            idProof1Url: formData.idProof1Url,
+            idProof2Url: formData.idProof2Url,
             // corporateId and franchiseId/Name should remain unchanged during edit
           };
         }
@@ -461,6 +512,19 @@ const StaffList: React.FC = () => {
         currentLocation: undefined, // NEW: Initialize
         attendanceLocationStatus: 'idle', // NEW: Initialize
         cameraPermissionStatus: 'idle', // NEW: Initialize
+        // NEW: Profile fields
+        dob: formData.dob,
+        gender: formData.gender,
+        bloodGroup: formData.bloodGroup,
+        emergencyContactName: formData.emergencyContactName,
+        emergencyContactPhone: formData.emergencyContactPhone,
+        emergencyContactRelationship: formData.emergencyContactRelationship,
+        homeAddress: formData.homeAddress,
+        maritalStatus: formData.maritalStatus,
+        spouseName: formData.spouseName,
+        children: formData.children,
+        idProof1Url: formData.idProof1Url,
+        idProof2Url: formData.idProof2Url,
       };
       setEmployees(prev => [...prev, newEmployee]);
     }
@@ -789,10 +853,141 @@ const StaffList: React.FC = () => {
                         </button>
                       </div>
                     </div>
+                    {/* NEW FIELDS */}
+                    <div>
+                       <label className="block text-sm font-medium text-gray-700 mb-1">Date of Birth</label>
+                       <input 
+                         type="date" 
+                         name="dob"
+                         value={formData.dob}
+                         onChange={handleInputChange}
+                         className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                       />
+                    </div>
+                    <div>
+                       <label className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
+                       <select 
+                          name="gender"
+                          value={formData.gender}
+                          onChange={handleInputChange}
+                          className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
+                        >
+                          <option value="">Select Gender</option>
+                          <option value="Male">Male</option>
+                          <option value="Female">Female</option>
+                          <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    <div>
+                       <label className="block text-sm font-medium text-gray-700 mb-1">Blood Group</label>
+                       <input 
+                         type="text" 
+                         name="bloodGroup"
+                         placeholder="e.g. O+"
+                         value={formData.bloodGroup}
+                         onChange={handleInputChange}
+                         className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                       />
+                    </div>
+                    <div>
+                       <label className="block text-sm font-medium text-gray-700 mb-1">Marital Status</label>
+                       <select 
+                          name="maritalStatus"
+                          value={formData.maritalStatus}
+                          onChange={handleInputChange}
+                          className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
+                        >
+                          <option value="">Select Status</option>
+                          <option value="Single">Single</option>
+                          <option value="Married">Married</option>
+                          <option value="Divorced">Divorced</option>
+                          <option value="Widowed">Widowed</option>
+                        </select>
+                    </div>
+                    {formData.maritalStatus === 'Married' && (
+                        <div>
+                           <label className="block text-sm font-medium text-gray-700 mb-1">Spouse Name</label>
+                           <input 
+                             type="text" 
+                             name="spouseName"
+                             value={formData.spouseName}
+                             onChange={handleInputChange}
+                             className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                           />
+                        </div>
+                    )}
+                    <div>
+                       <label className="block text-sm font-medium text-gray-700 mb-1">Number of Children</label>
+                       <input 
+                         type="number" 
+                         name="children"
+                         value={formData.children}
+                         onChange={handleInputChange}
+                         className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                       />
+                    </div>
                   </div>
                 </section>
 
-                {/* 2. Employment Details */}
+                {/* 2. Emergency Contact */}
+                <section className="space-y-4">
+                   <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2 pb-2 border-b border-gray-100">
+                     <Heart className="w-4 h-4 text-emerald-500"/> Emergency Contact
+                   </h4>
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                         <label className="block text-sm font-medium text-gray-700 mb-1">Contact Person Name</label>
+                         <input 
+                           type="text" 
+                           name="emergencyContactName"
+                           value={formData.emergencyContactName}
+                           onChange={handleInputChange}
+                           className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                         />
+                      </div>
+                      <div>
+                         <label className="block text-sm font-medium text-gray-700 mb-1">Contact Person Phone</label>
+                         <input 
+                           type="tel" 
+                           name="emergencyContactPhone"
+                           value={formData.emergencyContactPhone}
+                           onChange={handleInputChange}
+                           className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                         />
+                      </div>
+                      <div className="md:col-span-2">
+                         <label className="block text-sm font-medium text-gray-700 mb-1">Relationship</label>
+                         <input 
+                           type="text" 
+                           name="emergencyContactRelationship"
+                           placeholder="e.g. Mother, Brother, Friend"
+                           value={formData.emergencyContactRelationship}
+                           onChange={handleInputChange}
+                           className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                         />
+                      </div>
+                   </div>
+                </section>
+
+                {/* 3. Home Address */}
+                <section className="space-y-4">
+                   <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2 pb-2 border-b border-gray-100">
+                     <Home className="w-4 h-4 text-emerald-500"/> Home Address
+                   </h4>
+                   <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Full Home Address</label>
+                      <textarea 
+                        name="homeAddress"
+                        rows={3}
+                        value={formData.homeAddress}
+                        onChange={handleInputChange}
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none resize-none"
+                      />
+                   </div>
+                </section>
+
+
+                {/* 4. Employment Details */}
                 <section className="space-y-4">
                   <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2 pb-2 border-b border-gray-100">
                     <Briefcase className="w-4 h-4 text-emerald-500"/> Employment Details
@@ -916,7 +1111,7 @@ const StaffList: React.FC = () => {
                             className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
                           >
                             <option value="">Select Branch</option>
-                            {/* Corrected: Use 'formAvailableBranches' which is the Memoized branch list */}
+                            {/* Corrected: Use 'availableBranches' which is the Memoized branch list */}
                             {availableBranches.length > 0 ? (
                                 availableBranches.map((b: any) => (
                                     <option key={b.id} value={b.name}>{b.name}</option>
@@ -1028,7 +1223,7 @@ const StaffList: React.FC = () => {
                   </div>
                 </section>
 
-                {/* 3. KYC Documents */}
+                {/* 5. KYC Documents */}
                 <section className="space-y-4">
                   <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2 pb-2 border-b border-gray-100">
                     <FileText className="w-4 h-4 text-emerald-500"/> KYC Documents
@@ -1106,7 +1301,7 @@ const StaffList: React.FC = () => {
                   </div>
                 </section>
 
-                {/* 4. Banking Details */}
+                {/* 6. Banking Details */}
                 <section className="space-y-4">
                   <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2 pb-2 border-b border-gray-100">
                     <CreditCard className="w-4 h-4 text-emerald-500"/> Banking Details

@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
@@ -17,8 +16,8 @@ import VendorAttachment from './pages/admin/VendorAttachment';
 import Corporate from './pages/admin/Corporate';
 import Documents from './pages/Documents';
 import Leads from './pages/admin/Leads';
-import Reception from './pages/admin/Reception';
-import Reports from './pages/admin/Reports'; 
+// @ts-ignore - Module '"./pages/admin/Reception"' has no default export.
+import { Reception } from '@/pages/admin/Reception'; // Changed to named import and using alias
 // @ts-ignore - EmailMarketing component
 import EmailMarketing from './pages/admin/EmailMarketing'; // Added missing import
 import { TripBooking } from './pages/admin/TripBooking'; // Changed to named import
@@ -37,6 +36,7 @@ import { NotificationProvider } from './context/NotificationContext'; // NEW: Im
 import { Loader2, Cloud } from 'lucide-react'; 
 import { autoLoadFromCloud, syncToCloud, HARDCODED_FIREBASE_CONFIG } from './services/cloudService'; // Import Sync
 import { sendSystemNotification } from './services/cloudService'; // NEW: Import sendSystemNotification
+import Reports from './pages/admin/Reports';
 
 
 const App: React.FC = () => {
