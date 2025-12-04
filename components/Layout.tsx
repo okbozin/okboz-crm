@@ -6,7 +6,7 @@ import { UserRole, Enquiry, CorporateAccount, Employee } from '../types';
 import { useBranding } from '../context/BrandingContext';
 import { useTheme } from '../context/ThemeContext';
 // import { useNotification } from '../context/NotificationContext'; // Removed: Import useNotification
-// import { sendSystemNotification } from '../services/cloudService'; // Removed: Import sendSystemNotification
+// import { sendSystemNotification } = '../services/cloudService'; // Removed: Import sendSystemNotification
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -288,10 +288,13 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
     // 6. "Settings" is hidden for Corporate users (Franchise Panel)
     if (link.id === 'settings' && role === UserRole.CORPORATE) return false;
 
-    // 7. "Admin Finance" and "Finance & Expenses" are hidden for EMPLOYEES
-    if ((link.id === 'admin-finance' || link.id === 'finance-and-expenses') && role === UserRole.EMPLOYEE) return false; 
+    // 7. "Admin Finance" is ONLY for Super Admin
+    if (link.id === 'admin-finance' && role !== UserRole.ADMIN) return false;
     
-    // 8. "Vehicle Enquiries" is hidden for ALL Admin roles (previously removed)
+    // 8. "Finance & Expenses" is hidden for EMPLOYEES
+    if (link.id === 'finance-and-expenses' && role === UserRole.EMPLOYEE) return false;
+    
+    // 9. "Vehicle Enquiries" is hidden for ALL Admin roles (previously removed)
     if (link.id === 'vehicle-enquiries') return false;
 
     return true;

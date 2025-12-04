@@ -256,7 +256,7 @@ export const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
             if (window.google && window.google.maps && window.google.maps.places) {
               setIsMapReady(true);
             } else {
-              setMapError("Google Maps 'places' library failed to load.");
+              setTimeout(() => setMapError("Google Maps 'places' library failed to load."), 0);
             }
         };
         script.onerror = () => setTimeout(() => setMapError("Network error: Failed to load Google Maps script."), 0);
@@ -594,7 +594,12 @@ Book now with OK BOZ Transport!`;
       }
 
       setEnquiries(newEnquiriesList); // Update React state
-      localStorage.setItem('global_enquiries_data', JSON.stringify(newEnquiriesList)); // Persist to local storage
+      try {
+        localStorage.setItem('global_enquiries_data', JSON.stringify(newEnquiriesList)); // Persist to local storage
+      } catch (error) {
+        console.error("Error saving enquiries to local storage:", error);
+        setTimeout(() => alert("Error saving data. Local storage might be full or corrupted."), 0);
+      }
 
       // Use setTimeout for alert to prevent UI blocking issues in certain environments
       setTimeout(() => {
@@ -669,6 +674,7 @@ Book now with OK BOZ Transport!`;
   };
 
   const handleStatusUpdate = (id: string, newStatus: OrderStatus) => {
+    try {
       const updatedList = enquiries.map(e => {
           if (e.id === id) {
               // Add history log for status change
@@ -684,75 +690,87 @@ Book now with OK BOZ Transport!`;
           return e;
       });
       setEnquiries(updatedList);
-      localStorage.setItem('global_enquiries_data', JSON.stringify(updatedList));
+      try {
+        localStorage.setItem('global_enquiries_data', JSON.stringify(updatedList));
+      } catch (error) {
+        console.error("Error saving enquiries to local storage on status update:", error);
+        setTimeout(() => alert("Error saving data. Local storage might be full or corrupted."), 0);
+      }
+    } catch (error) {
+      console.error("Error in handleStatusUpdate:", error);
+      setTimeout(() => alert("An error occurred while updating status. See console for details."), 0);
+    }
   };
 
   const handleEditOrder = (order: Enquiry) => {
-    setEditingOrderId(order.id);
+    try {
+      setEditingOrderId(order.id);
 
-    // Populate Customer Details
-    setCustomerDetails({
-      name: order.name,
-      phone: order.phone,
-      email: order.email || '',
-      // Extract pickup from details string using regex if transportData is not present
-      pickup: (order.enquiryCategory === 'Transport' && order.transportData) 
-      ? (order.transportData.pickup || (order.details.match(/Pickup: (.*?)(?: ->|\.|$)/)?.[1] || '')).trim()
-      : (order.details.match(/Pickup: (.*?)(?: ->|\.|$)/)?.[1] || '').trim(), // Fallback for other cases or general details
-      requirements: order.enquiryCategory === 'General' ? order.details : (order.details.includes('\nReq: ') ? order.details.split('\nReq: ')[1] : '')
-    });
-
-    // Populate Enquiry Category
-    setEnquiryCategory(order.enquiryCategory || 'General');
-
-    // Populate Transport Details if it's a Transport enquiry
-    if (order.enquiryCategory === 'Transport' && order.transportData) {
-      setTripType(order.tripType || 'Local');
-      setVehicleType(order.vehicleType || 'Sedan');
-      setOutstationSubType(order.outstationSubType || 'RoundTrip');
-      setTransportDetails({
-        drop: order.transportData.drop || '',
-        estKm: order.transportData.estKm || '',
-        waitingMins: order.transportData.waitingMins || '',
-        packageId: order.transportData.packageId || '',
-        destination: order.transportData.destination || '',
-        days: order.transportData.days || '1',
-        estTotalKm: order.transportData.estTotalKm || '',
-        nights: order.transportData.nights || '0',
+      // Populate Customer Details
+      setCustomerDetails({
+        name: order.name,
+        phone: order.phone,
+        email: order.email || '',
+        // Refined extraction of pickup from details string
+        pickup: (order.details.match(/Pickup:\s*(.*?)(?=(?:\s*->|\s*\.|\s*$))/i)?.[1] || '').trim(),
+        requirements: order.enquiryCategory === 'General' ? order.details : (order.details.includes('\nReq: ') ? order.details.split('\nReq: ')[1] : '')
       });
-      setEstimatedCost(order.estimatedPrice || 0);
-    } else {
-        // Reset transport specific states for General enquiries
-        setTripType('Local');
-        setVehicleType('Sedan');
-        setOutstationSubType('RoundTrip');
-        setTransportDetails({ drop: '', estKm: '', waitingMins: '', packageId: '', destination: '', days: '1', estTotalKm: '', nights: '0' });
-        setEstimatedCost(0);
+
+      // Populate Enquiry Category
+      setEnquiryCategory(order.enquiryCategory || 'General');
+
+      // Populate Transport Details if it's a Transport enquiry
+      if (order.enquiryCategory === 'Transport' && order.transportData) {
+        setTripType(order.tripType || 'Local');
+        setVehicleType(order.vehicleType || 'Sedan');
+        setOutstationSubType(order.outstationSubType || 'RoundTrip');
+        setTransportDetails({
+          drop: order.transportData.drop || '',
+          estKm: order.transportData.estKm || '',
+          waitingMins: order.transportData.waitingMins || '',
+          packageId: order.transportData.packageId || '',
+          destination: order.transportData.destination || '',
+          days: order.transportData.days || '1',
+          estTotalKm: order.transportData.estTotalKm || '',
+          nights: order.transportData.nights || '0',
+        });
+        setEstimatedCost(order.estimatedPrice || 0);
+      } else {
+          // Reset transport specific states for General enquiries
+          setTripType('Local');
+          setVehicleType('Sedan');
+          setOutstationSubType('RoundTrip');
+          setTransportDetails({ drop: '', estKm: '', waitingMins: '', packageId: '', destination: '', days: '1', estTotalKm: '', nights: '0' });
+          setEstimatedCost(0);
+      }
+
+      // Populate Assignment (simple example, can be more complex)
+      setAssignment(prev => ({
+          ...prev,
+          staffId: order.assignedTo || ''
+      }));
+
+      // Populate General Enquiry Follow-up (if applicable)
+      if (order.enquiryCategory === 'General' && order.nextFollowUp) {
+          setGeneralFollowUpDate(order.nextFollowUp.split('T')[0]);
+          setGeneralFollowUpTime(order.nextFollowUp.split('T')[1]);
+          setGeneralFollowUpPriority(order.priority || 'Warm');
+      }
+
+
+      // Perform phone check to load history
+      const cleanNumber = order.phone.replace(/\D/g, '');
+      const previousEnquiries = enquiries.filter(e => e.phone.replace(/\D/g, '') === cleanNumber && e.id !== order.id);
+      setExistingEnquiriesForPhone(previousEnquiries);
+      setPhoneLookupResult(previousEnquiries.length > 0 ? 'Existing' : 'New');
+      setIsPhoneChecked(true);
+
+      // Scroll to the top of the page/form
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (error) {
+      console.error("Error in handleEditOrder:", error);
+      setTimeout(() => alert("An error occurred while preparing the form for edit. See console for details."), 0);
     }
-
-    // Populate Assignment (simple example, can be more complex)
-    setAssignment(prev => ({
-        ...prev,
-        staffId: order.assignedTo || ''
-    }));
-
-    // Populate General Enquiry Follow-up (if applicable)
-    if (order.enquiryCategory === 'General' && order.nextFollowUp) {
-        setGeneralFollowUpDate(order.nextFollowUp.split('T')[0]);
-        setGeneralFollowUpTime(order.nextFollowUp.split('T')[1]);
-        setGeneralFollowUpPriority(order.priority || 'Warm');
-    }
-
-
-    // Perform phone check to load history
-    const cleanNumber = order.phone.replace(/\D/g, '');
-    const previousEnquiries = enquiries.filter(e => e.phone.replace(/\D/g, '') === cleanNumber && e.id !== order.id);
-    setExistingEnquiriesForPhone(previousEnquiries);
-    setPhoneLookupResult(previousEnquiries.length > 0 ? 'Existing' : 'New');
-    setIsPhoneChecked(true);
-
-    // Scroll to the top of the page/form
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
 
@@ -1254,7 +1272,7 @@ Book now with OK BOZ Transport!`;
                               <div>
                                   <button 
                                       onClick={handleCancelForm}
-                                      className="w-full py-2 text-gray-400 hover:text-red-500 text-xs font-medium hover:bg-gray-50 transition-colors flex items-center justify-center gap-1 rounded-lg border border-transparent hover:border-gray-200"
+                                      className="w-full py-2 text-gray-400 hover:text-red-500 rounded-lg font-medium text-sm hover:bg-gray-50 transition-colors flex items-center justify-center gap-1 rounded-lg border border-transparent hover:border-gray-200"
                                   >
                                       <X className="w-3 h-3" /> Clear Form
                                   </button>
