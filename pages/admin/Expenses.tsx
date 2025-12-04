@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Plus, Search, DollarSign, 
@@ -549,190 +548,193 @@ const Expenses: React.FC = () => {
       {/* Add/Edit Transaction Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
-            <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md flex flex-col max-h-[90vh] overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50 shrink-0">
               <h3 className="font-bold text-gray-800">{editingExpenseId ? 'Edit Transaction' : 'Add Transaction'}</h3>
               <button onClick={resetForm} className="text-gray-400 hover:text-gray-600">
                 <X className="w-5 h-5" />
               </button>
             </div>
             
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              {/* Type Toggle */}
-              <div className="flex bg-gray-100 p-1 rounded-lg">
-                 <button 
-                    type="button"
-                    onClick={() => setFormData(prev => ({ ...prev, type: 'Income', category: INCOME_CATEGORIES[0] }))}
-                    className={`flex-1 py-2 text-sm font-medium rounded-md transition-all flex items-center justify-center gap-2 ${formData.type === 'Income' ? 'bg-white text-emerald-600 shadow-sm' : 'text-gray-500'}`}
-                 >
-                    <ArrowUpCircle className="w-4 h-4" /> Income
-                 </button>
-                 <button 
-                    type="button"
-                    onClick={() => setFormData(prev => ({ ...prev, type: 'Expense', category: EXPENSE_CATEGORIES[0] }))}
-                    className={`flex-1 py-2 text-sm font-medium rounded-md transition-all flex items-center justify-center gap-2 ${formData.type === 'Expense' ? 'bg-white text-red-600 shadow-sm' : 'text-gray-500'}`}
-                 >
-                    <ArrowDownCircle className="w-4 h-4" /> Expense
-                 </button>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Transaction Number</label>
-                <input 
-                  type="text" 
-                  name="transactionNumber"
-                  required
-                  placeholder="e.g. TXN-2025-001"
-                  value={formData.transactionNumber}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
-                <input 
-                  type="text" 
-                  name="title"
-                  required
-                  placeholder={formData.type === 'Income' ? "e.g. Client Payment" : "e.g. Office Rent"}
-                  value={formData.title}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                 <div>
-                   <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                   <select 
-                     name="category"
-                     value={formData.category}
-                     onChange={handleInputChange}
-                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-6"> {/* Scrollable content */}
+              <form onSubmit={handleSubmit} className="space-y-4"> {/* Removed direct padding */}
+                {/* Type Toggle */}
+                <div className="flex bg-gray-100 p-1 rounded-lg">
+                   <button 
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, type: 'Income', category: INCOME_CATEGORIES[0] }))}
+                      className={`flex-1 py-2 text-sm font-medium rounded-md transition-all flex items-center justify-center gap-2 ${formData.type === 'Income' ? 'bg-white text-emerald-600 shadow-sm' : 'text-gray-500'}`}
                    >
-                     {(formData.type === 'Income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES).map(c => (
-                        <option key={c} value={c}>{c}</option>
-                     ))}
-                   </select>
-                 </div>
-                 <div>
-                   <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
-                   <input 
-                     type="date"
-                     name="date" 
-                     value={formData.date}
+                      <ArrowUpCircle className="w-4 h-4" /> Income
+                   </button>
+                   <button 
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, type: 'Expense', category: EXPENSE_CATEGORIES[0] }))}
+                      className={`flex-1 py-2 text-sm font-medium rounded-md transition-all flex items-center justify-center gap-2 ${formData.type === 'Expense' ? 'bg-white text-red-600 shadow-sm' : 'text-gray-500'}`}
+                   >
+                      <ArrowDownCircle className="w-4 h-4" /> Expense
+                   </button>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Transaction Number</label>
+                  <input 
+                    type="text" 
+                    name="transactionNumber"
+                    required
+                    placeholder="e.g. TXN-2025-001"
+                    value={formData.transactionNumber}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+                  <input 
+                    type="text" 
+                    name="title"
+                    required
+                    placeholder={formData.type === 'Income' ? "e.g. Client Payment" : "e.g. Office Rent"}
+                    value={formData.title}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                   <div>
+                     <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                     <select 
+                       name="category"
+                       value={formData.category}
+                       onChange={handleInputChange}
+                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
+                     >
+                       {(formData.type === 'Income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES).map(c => (
+                          <option key={c} value={c}>{c}</option>
+                       ))}
+                     </select>
+                   </div>
+                   <div>
+                     <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                     <input 
+                       type="date"
+                       name="date" 
+                       value={formData.date}
+                       onChange={handleInputChange}
+                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                     />
+                   </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Amount (₹)</label>
+                  <input 
+                    type="number" 
+                    name="amount"
+                    required
+                    min="0"
+                    value={formData.amount || ''}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                   <div>
+                     <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
+                     <select 
+                       name="paymentMethod"
+                       value={formData.paymentMethod}
+                       onChange={handleInputChange}
+                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
+                     >
+                       <option>Cash</option>
+                       <option>Bank Transfer</option>
+                       <option>UPI</option>
+                       <option>Credit Card</option>
+                       <option>Cheque</option>
+                     </select>
+                   </div>
+                   <div>
+                     <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                     <select 
+                       name="status"
+                       value={formData.status}
+                       onChange={handleInputChange}
+                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
+                     >
+                       <option>Paid</option>
+                       <option>Pending</option>
+                     </select>
+                   </div>
+                </div>
+                
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Upload Receipt / File</label>
+                    <div className="flex gap-2 items-center">
+                        <input 
+                            type="file" 
+                            className="hidden" 
+                            ref={fileInputRef}
+                            onChange={handleFileChange}
+                        />
+                        <button 
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            className="flex-1 border border-dashed border-gray-300 rounded-lg py-2 px-4 text-sm text-gray-500 hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
+                        >
+                            {selectedFile ? (
+                                <span className="text-emerald-600 font-medium truncate max-w-[200px]">{selectedFile.name}</span>
+                            ) : (
+                                <>
+                                    <Upload className="w-4 h-4" /> Select File
+                                </>
+                            )}
+                        </button>
+                        {selectedFile && (
+                            <button onClick={() => setSelectedFile(null)} type="button" className="text-red-500 hover:bg-red-50 p-2 rounded"><X className="w-4 h-4"/></button>
+                        )}
+                        {!selectedFile && formData.receiptUrl && (
+                            <a href={formData.receiptUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline text-xs flex items-center gap-1">
+                                <Paperclip className="w-3 h-3" /> View Existing
+                            </a>
+                        )}
+                    </div>
+                </div>
+
+                <div>
+                   <label className="block text-sm font-medium text-gray-700 mb-1">Description (Optional)</label>
+                   <textarea 
+                     name="description"
+                     rows={2}
+                     value={formData.description}
                      onChange={handleInputChange}
-                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none resize-none"
                    />
-                 </div>
-              </div>
+                </div>
+              </form>
+            </div> {/* End of scrollable content div */}
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Amount (₹)</label>
-                <input 
-                  type="number" 
-                  name="amount"
-                  required
-                  min="0"
-                  value={formData.amount || ''}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                 <div>
-                   <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
-                   <select 
-                     name="paymentMethod"
-                     value={formData.paymentMethod}
-                     onChange={handleInputChange}
-                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
-                   >
-                     <option>Cash</option>
-                     <option>Bank Transfer</option>
-                     <option>UPI</option>
-                     <option>Credit Card</option>
-                     <option>Cheque</option>
-                   </select>
-                 </div>
-                 <div>
-                   <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                   <select 
-                     name="status"
-                     value={formData.status}
-                     onChange={handleInputChange}
-                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
-                   >
-                     <option>Paid</option>
-                     <option>Pending</option>
-                   </select>
-                 </div>
-              </div>
-              
-              <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Upload Receipt / File</label>
-                  <div className="flex gap-2 items-center">
-                      <input 
-                          type="file" 
-                          className="hidden" 
-                          ref={fileInputRef}
-                          onChange={handleFileChange}
-                      />
-                      <button 
-                          type="button"
-                          onClick={() => fileInputRef.current?.click()}
-                          className="flex-1 border border-dashed border-gray-300 rounded-lg py-2 px-4 text-sm text-gray-500 hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
-                      >
-                          {selectedFile ? (
-                              <span className="text-emerald-600 font-medium truncate max-w-[200px]">{selectedFile.name}</span>
-                          ) : (
-                              <>
-                                  <Upload className="w-4 h-4" /> Select File
-                              </>
-                          )}
-                      </button>
-                      {selectedFile && (
-                          <button onClick={() => setSelectedFile(null)} type="button" className="text-red-500 hover:bg-red-50 p-2 rounded"><X className="w-4 h-4"/></button>
-                      )}
-                      {!selectedFile && formData.receiptUrl && (
-                          <a href={formData.receiptUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline text-xs flex items-center gap-1">
-                              <Paperclip className="w-3 h-3" /> View Existing
-                          </a>
-                      )}
-                  </div>
-              </div>
-
-              <div>
-                 <label className="block text-sm font-medium text-gray-700 mb-1">Description (Optional)</label>
-                 <textarea 
-                   name="description"
-                   rows={2}
-                   value={formData.description}
-                   onChange={handleInputChange}
-                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none resize-none"
-                 />
-              </div>
-
-              <div className="pt-2 flex gap-3">
-                 <button 
-                    type="button" 
-                    onClick={resetForm}
-                    className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-white transition-colors"
-                 >
-                   Cancel
-                 </button>
-                 <button 
-                    type="submit"
-                    disabled={isUploading}
-                    className={`flex-1 text-white font-bold py-3 rounded-lg shadow-md transition-colors flex items-center justify-center gap-2 ${formData.type === 'Income' ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-red-500 hover:bg-red-600'}`}
-                 >
-                    {isUploading && <Loader2 className="w-4 h-4 animate-spin" />}
-                    {editingExpenseId ? 'Update Transaction' : (formData.type === 'Income' ? 'Record Income' : 'Record Expense')}
-                 </button>
-              </div>
-            </form>
+            <div className="p-5 border-t border-gray-100 bg-gray-50 flex justify-end gap-3 rounded-b-2xl shrink-0"> {/* Sticky footer */}
+               <button 
+                  type="button" 
+                  onClick={resetForm}
+                  className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-white transition-colors"
+               >
+                 Cancel
+               </button>
+               <button 
+                  type="submit"
+                  disabled={isUploading}
+                  onClick={handleSubmit} // Call handleSubmit from here as form is no longer parent
+                  className={`flex-1 text-white font-bold py-3 rounded-lg shadow-md transition-colors flex items-center justify-center gap-2 ${formData.type === 'Income' ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-red-500 hover:bg-red-600'}`}
+               >
+                  {isUploading && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {editingExpenseId ? 'Update Transaction' : (formData.type === 'Income' ? 'Record Income' : 'Record Expense')}
+               </button>
+            </div>
           </div>
         </div>
       )}
@@ -847,7 +849,7 @@ const Expenses: React.FC = () => {
       {rawReceiptPreviewUrl && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
            <div className="bg-white rounded-xl w-full max-w-4xl h-[85vh] flex flex-col animate-in fade-in zoom-in duration-200">
-              <div className="flex justify-between items-center p-4 border-b border-gray-200">
+              <div className="flex justify-between items-center p-4 border-b border-gray-200 shrink-0">
                  <h3 className="font-bold text-gray-800">Receipt Preview</h3>
                  <button onClick={closeRawReceiptPreview} className="p-2 hover:bg-red-50 rounded-lg text-gray-500 hover:text-red-500 transition-colors">
                     <X className="w-5 h-5" />
@@ -863,7 +865,7 @@ const Expenses: React.FC = () => {
                     <iframe src={rawReceiptPreviewUrl} className="w-full h-full rounded-lg border border-gray-200 shadow-lg bg-white" title="Receipt Preview"></iframe>
                  )}
               </div>
-              <div className="p-4 border-t border-gray-200 flex justify-end">
+              <div className="p-4 border-t border-gray-200 flex justify-end shrink-0">
                  <a 
                     href={rawReceiptPreviewUrl}
                     download="receipt"
