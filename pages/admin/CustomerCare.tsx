@@ -1,9 +1,10 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Settings, Loader2, ArrowRight, ArrowRightLeft, 
   MessageCircle, Copy, Mail, Car, User, Edit2,
   CheckCircle, Building2, Save, X, Phone, Truck, AlertTriangle, DollarSign,
-  Calendar, MapPin, Briefcase
+  Calendar, MapPin, Briefcase, Clock, PhoneMissed
 } from 'lucide-react';
 import Autocomplete from '../../components/Autocomplete';
 import { Enquiry, HistoryLog, UserRole } from '../../types';
@@ -161,6 +162,13 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
         (assignment.branchName === '' || s.branch === assignment.branchName)
       );
   }, [allStaff, assignment.corporateId, assignment.branchName]);
+
+  // Customer History Lookup
+  const customerHistory = useMemo(() => {
+      if (!customerDetails.phone || customerDetails.phone.length < 5) return [];
+      const cleanPhone = customerDetails.phone.replace(/\D/g, '');
+      return enquiries.filter(e => e.phone.replace(/\D/g, '').includes(cleanPhone)).slice(0, 3);
+  }, [customerDetails.phone, enquiries]);
 
 
   // --- Google Maps Script Loader ---
@@ -416,19 +424,73 @@ Book now with OK BOZ Transport!`;
       alert(`Enquiry ${status} Successfully!`);
       
       // 6. Reset
-      setCustomerDetails({ name: '', phone: '', email: '', pickup: '', requirements: '' });
-      setTransportDetails({ drop: '', estKm: '', waitingMins: '', packageId: '', destination: '', days: '1', estTotalKm: '', nights: '0' });
-      setGeneratedMessage('');
-      setEstimatedCost(0);
-      setGeneralFollowUpDate('');
-      setGeneralFollowUpTime('');
-      setGeneralFollowUpPriority('Warm');
+      handleCancel();
+  };
+
+  const handleGeneralAction = (action: 'NoAnswer' | 'FollowUp' | 'Complete') => {
+      if (!customerDetails.name || !customerDetails.phone) {
+          alert("Please enter Customer Name and Phone.");
+          return;
+      }
+
+      let status: Enquiry['status'] = 'New';
+      let logMessage = '';
+
+      if (action === 'NoAnswer') {
+          status = 'New';
+          logMessage = 'Call Attempted - No Answer';
+      } else if (action === 'FollowUp') {
+          status = 'In Progress';
+          logMessage = `Follow-up Scheduled. Priority: ${generalFollowUpPriority}`;
+      } else if (action === 'Complete') {
+          status = 'Closed';
+          logMessage = 'Task Completed / Resolved.';
+      }
+
+      const detailsText = `General Enquiry: ${customerDetails.requirements || 'No details provided'}`;
+
+      const historyLog: HistoryLog = {
+          id: Date.now(),
+          type: action === 'NoAnswer' ? 'Call' : 'Note',
+          message: logMessage,
+          date: new Date().toLocaleString(),
+          outcome: action === 'NoAnswer' ? 'Missed' : 'Completed'
+      };
+
+      const newEnquiry: Enquiry = {
+          id: `ENQ-${Date.now()}`,
+          type: 'Customer',
+          initialInteraction: 'Incoming',
+          name: customerDetails.name,
+          phone: customerDetails.phone,
+          email: customerDetails.email,
+          city: 'Coimbatore', 
+          details: detailsText,
+          status: status,
+          assignedTo: assignment.staffId,
+          createdAt: new Date().toLocaleString(),
+          history: [historyLog],
+          date: new Date().toISOString().split('T')[0],
+          nextFollowUp: generalFollowUpDate && generalFollowUpTime ? `${generalFollowUpDate}T${generalFollowUpTime}` : undefined,
+          priority: generalFollowUpPriority
+      };
+
+      const updatedList = [newEnquiry, ...enquiries];
+      setEnquiries(updatedList);
+      localStorage.setItem('global_enquiries_data', JSON.stringify(updatedList));
+
+      alert(`Action Recorded: ${logMessage}`);
+      handleCancel();
   };
 
   const handleCancel = () => {
       setCustomerDetails({ name: '', phone: '', email: '', pickup: '', requirements: '' });
       setTransportDetails({ drop: '', estKm: '', waitingMins: '', packageId: '', destination: '', days: '1', estTotalKm: '', nights: '0' });
-      alert("Form cleared.");
+      setGeneralFollowUpDate('');
+      setGeneralFollowUpTime('');
+      setGeneralFollowUpPriority('Warm');
+      setEstimatedCost(0);
+      setGeneratedMessage('');
   };
 
   return (
@@ -537,6 +599,7 @@ Book now with OK BOZ Transport!`;
                       </div>
                   ) : (
                       <div className="space-y-4">
+                          
                           {/* Trip Details Header */}
                           <div className="flex justify-between items-center border-b border-gray-100 pb-2">
                               <h4 className="text-sm font-bold text-gray-700">Trip Details</h4>
@@ -567,7 +630,7 @@ Book now with OK BOZ Transport!`;
                               ))}
                           </div>
 
-                          {/* Pickup Location - Moved below Trip Details Header & Tabs */}
+                          {/* Pickup Location - Moved here for Transport */}
                           <div>
                               <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Pickup Location</label>
                               {!isMapReady ? (
@@ -776,54 +839,102 @@ Book now with OK BOZ Transport!`;
 
                       {/* 3. Action Buttons */}
                       <div className="grid grid-cols-2 gap-3 pt-2">
-                          <button 
-                              onClick={() => handleEnquiryAction('Schedule')}
-                              className="py-2.5 border border-blue-200 text-blue-600 rounded-lg font-bold text-sm hover:bg-blue-50 transition-colors flex items-center justify-center gap-2"
-                          >
-                              <Calendar className="w-4 h-4" /> Schedule
-                          </button>
-                          <button 
-                              onClick={() => handleEnquiryAction('Book')}
-                              className="py-2.5 bg-emerald-600 text-white rounded-lg font-bold text-sm hover:bg-emerald-700 transition-colors shadow-md flex items-center justify-center gap-2"
-                          >
-                              <ArrowRight className="w-4 h-4" /> Book Now
-                          </button>
-                          
-                          <button 
-                              onClick={handleCancel}
-                              className="py-2.5 text-gray-500 hover:text-red-500 rounded-lg font-medium text-sm hover:bg-gray-50 transition-colors flex items-center justify-center gap-1"
-                          >
-                              <X className="w-4 h-4" /> Cancel
-                          </button>
-                          <button 
-                              onClick={() => handleEnquiryAction('Save')}
-                              className="py-2.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg font-bold text-sm hover:bg-emerald-100 transition-colors flex items-center justify-center gap-2"
-                          >
-                              <Save className="w-4 h-4" /> Save Enquiry
-                          </button>
+                          {enquiryCategory === 'Transport' ? (
+                              <>
+                                  <button 
+                                      onClick={() => handleEnquiryAction('Schedule')}
+                                      className="py-2.5 border border-blue-200 text-blue-600 rounded-lg font-bold text-sm hover:bg-blue-50 transition-colors flex items-center justify-center gap-2"
+                                  >
+                                      <Calendar className="w-4 h-4" /> Schedule
+                                  </button>
+                                  <button 
+                                      onClick={() => handleEnquiryAction('Book')}
+                                      className="py-2.5 bg-emerald-600 text-white rounded-lg font-bold text-sm hover:bg-emerald-700 transition-colors shadow-md flex items-center justify-center gap-2"
+                                  >
+                                      <ArrowRight className="w-4 h-4" /> Book Now
+                                  </button>
+                                  
+                                  <button 
+                                      onClick={handleCancel}
+                                      className="py-2.5 text-gray-500 hover:text-red-500 rounded-lg font-medium text-sm hover:bg-gray-50 transition-colors flex items-center justify-center gap-1"
+                                  >
+                                      <X className="w-4 h-4" /> Cancel
+                                  </button>
+                                  <button 
+                                      onClick={() => handleEnquiryAction('Save')}
+                                      className="py-2.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg font-bold text-sm hover:bg-emerald-100 transition-colors flex items-center justify-center gap-2"
+                                  >
+                                      <Save className="w-4 h-4" /> Save Enquiry
+                                  </button>
+                              </>
+                          ) : (
+                              <>
+                                  {/* General Enquiry Actions */}
+                                  <button 
+                                      onClick={() => handleGeneralAction('NoAnswer')}
+                                      className="py-2.5 border border-red-200 text-red-600 rounded-lg font-bold text-sm hover:bg-red-50 transition-colors flex items-center justify-center gap-2"
+                                  >
+                                      <PhoneMissed className="w-4 h-4" /> No Answer
+                                  </button>
+                                  <button 
+                                      onClick={() => handleGeneralAction('FollowUp')}
+                                      className="py-2.5 border border-blue-200 text-blue-600 rounded-lg font-bold text-sm hover:bg-blue-50 transition-colors flex items-center justify-center gap-2"
+                                  >
+                                      <Clock className="w-4 h-4" /> Follow-up
+                                  </button>
+                                  <button 
+                                      onClick={() => handleGeneralAction('Complete')}
+                                      className="col-span-2 py-2.5 bg-green-600 text-white rounded-lg font-bold text-sm hover:bg-green-700 transition-colors shadow-md flex items-center justify-center gap-2"
+                                  >
+                                      <CheckCircle className="w-4 h-4" /> Complete Task
+                                  </button>
+                              </>
+                          )}
                       </div>
                   </div>
               </div>
           </div>
 
-          {/* Right Column: Output */}
+          {/* Right Column: Output & History */}
           <div className="space-y-6">
-              <div className="bg-slate-900 text-white p-6 rounded-xl shadow-lg relative overflow-hidden">
-                  <div className="relative z-10">
-                      <p className="text-slate-400 text-xs uppercase font-bold mb-1">Estimated Cost</p>
-                      <h3 className="text-4xl font-bold mb-4">₹{estimatedCost.toLocaleString()}</h3>
-                      <div className="text-sm text-slate-300 border-t border-slate-700 pt-3">
-                          {enquiryCategory === 'Transport' ? (
+              {enquiryCategory === 'Transport' && (
+                  <div className="bg-slate-900 text-white p-6 rounded-xl shadow-lg relative overflow-hidden">
+                      <div className="relative z-10">
+                          <p className="text-slate-400 text-xs uppercase font-bold mb-1">Estimated Cost</p>
+                          <h3 className="text-4xl font-bold mb-4">₹{estimatedCost.toLocaleString()}</h3>
+                          <div className="text-sm text-slate-300 border-t border-slate-700 pt-3">
                               <p>Includes basic fare calculations. Tolls & Parking extra.</p>
+                          </div>
+                      </div>
+                      <div className="absolute right-0 bottom-0 opacity-10">
+                          <DollarSign className="w-32 h-32 text-white" />
+                      </div>
+                  </div>
+              )}
+
+              {/* Customer History (Only visible if phone number is present) */}
+              {customerDetails.phone.length > 5 && (
+                  <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                      <h4 className="font-bold text-gray-800 flex items-center gap-2 mb-3">
+                          <Clock className="w-4 h-4 text-orange-500" /> Recent History
+                      </h4>
+                      <div className="space-y-3 max-h-40 overflow-y-auto custom-scrollbar">
+                          {customerHistory.length === 0 ? (
+                              <p className="text-xs text-gray-400 italic">No previous enquiries found.</p>
                           ) : (
-                              <p>Standard Enquiry. No cost calculated.</p>
+                              customerHistory.map(h => (
+                                  <div key={h.id} className="text-xs p-2 bg-gray-50 rounded border border-gray-100">
+                                      <div className="flex justify-between mb-1">
+                                          <span className="font-bold text-gray-700">{h.status}</span>
+                                          <span className="text-gray-400">{h.createdAt.split(',')[0]}</span>
+                                      </div>
+                                      <p className="text-gray-600 line-clamp-2">{h.details}</p>
+                                  </div>
+                              ))
                           )}
                       </div>
                   </div>
-                  <div className="absolute right-0 bottom-0 opacity-10">
-                      <DollarSign className="w-32 h-32 text-white" />
-                  </div>
-              </div>
+              )}
 
               <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
                   <div className="flex justify-between items-center mb-2">

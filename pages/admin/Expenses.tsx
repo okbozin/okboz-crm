@@ -311,7 +311,7 @@ const Expenses: React.FC = () => {
         <div>
           <h2 className="text-2xl font-bold text-gray-800">Finance & Expenses</h2>
           <p className="text-gray-500">
-             {isSuperAdmin ? "Consolidated financial report across all franchises" : "Track income, office expenses, and net balance"}
+             {isSuperAdmin ? "Consolidated financial report across all franchises" : "Track income, expenses, and net balance"}
           </p>
         </div>
         <button 

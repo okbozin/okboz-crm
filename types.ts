@@ -45,6 +45,7 @@ export interface Employee {
     manualPunch: boolean;
   };
   corporateId?: string; // NEW: To link employee to a specific corporate account
+  corporateName?: string; // NEW: To link employee to a specific corporate name
   currentLocation?: { lat: number; lng: number; accuracy: number; }; // NEW: Last known accurate location
   attendanceLocationStatus?: 'idle' | 'fetching' | 'granted' | 'denied' | 'outside_geofence' | 'within_geofence'; // NEW: Status of location access for attendance
   cameraPermissionStatus?: 'idle' | 'granted' | 'denied'; // NEW: Status of camera access
@@ -80,6 +81,8 @@ export interface Branch {
   radius: number;
   lat: number;
   lng: number;
+  owner?: string; // NEW: Owner ID (admin or corporate email)
+  ownerName?: string; // NEW: Owner Display Name
 }
 
 export interface CalendarStats {

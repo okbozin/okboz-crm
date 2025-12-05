@@ -61,7 +61,7 @@ const Settings: React.FC = () => {
         { key: 'leads_data', label: 'Active Leads', icon: Target, color: 'text-gray-600' },
         { key: 'corporate_accounts', label: 'Corporate Accounts', icon: Building2, color: 'text-gray-600' },
         { key: 'vendor_data', label: 'Vehicle Vendors', icon: Layers, color: 'text-gray-600' },
-        { key: 'office_expenses', label: 'Office Expenses', icon: Wallet, color: 'text-gray-600' },
+        { key: 'office_expenses', label: 'Finance & Expenses', icon: Wallet, color: 'text-gray-600' },
         { key: 'branches_data', label: 'Branches', icon: MapPin, color: 'text-gray-600' },
         { key: 'trips_data', label: 'Trips', icon: Truck, color: 'text-gray-600' },
         { key: 'global_enquiries_data', label: 'Customer Enquiries', icon: Globe, color: 'text-gray-600' },

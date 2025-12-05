@@ -15,8 +15,8 @@ const NotificationContext = createContext<NotificationContextType | undefined>(u
 
 const NOTIFICATION_STORAGE_KEY = 'app_notifications_cache';
 const LAST_PLAYED_COUNT_KEY = 'app_last_played_notification_count';
-// Use a reliable hosted sound file for notifications
-const NOTIFICATION_SOUND_URL = 'https://assets.mixkit.co/sfx/preview/mixkit-positive-notification-951.mp3';
+// Use a reliable hosted sound file for notifications (Google CDN)
+const NOTIFICATION_SOUND_URL = 'https://codeskulptor-demos.commondatastorage.googleapis.com/pang/pop.mp3';
 
 export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [notifications, setNotifications] = useState<Notification[]>(() => {
@@ -39,17 +39,19 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
 
   // Play alarm sound if new notifications appear
   const playAlarmSound = useCallback(() => {
+    console.log("🔊 Attempting to play notification sound...");
     try {
       // Create a new Audio object to ensure it plays even if one is already playing/paused
-      // This allows overlapping sounds if multiple notifications come in quick succession
       const audio = new Audio(NOTIFICATION_SOUND_URL);
-      audio.volume = 0.6; // Moderate volume
+      audio.volume = 1.0; // Max volume
       const playPromise = audio.play();
       
       if (playPromise !== undefined) {
-        playPromise.catch(e => {
+        playPromise.then(() => {
+            console.log("🔊 Notification sound played successfully.");
+        }).catch(e => {
             // Auto-play might be blocked if user hasn't interacted with document yet
-            console.warn("Notification sound playback failed (interaction required):", e);
+            console.warn("🔇 Notification sound playback failed (interaction required):", e);
         });
       }
     } catch (e) {

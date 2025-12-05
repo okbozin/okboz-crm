@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { 
   Building2, Users, FileText, UserX, Clock, 
@@ -477,7 +478,7 @@ const CustomPaidLeaves = () => {
   const handleAddOrUpdateLeave = () => {
     if (newLeave.name.trim() && newLeave.quota) {
       if (editingLeaveId) {
-        setLeaveTypes(prev => prev.map(lt => lt.id === editingLeaveId ? { ...lt, name: newLeave.name, quota: parseFloat(newLeave.quota), period: newLeave.period } : lt).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
+        setLeaveTypes(prev => prev.map(lt => lt.id === editingLeaveId ? { ...lt, name: newLeave.name, quota: parseFloat(newLeave.quota), period: newLeave.period } : lt));
         setEditingLeaveId(null);
       } else {
         setLeaveTypes([...leaveTypes, { id: `lt-${Date.now()}`, name: newLeave.name, quota: parseFloat(newLeave.quota), period: newLeave.period }]);

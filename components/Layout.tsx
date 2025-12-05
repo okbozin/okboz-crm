@@ -31,8 +31,7 @@ const MASTER_ADMIN_LINKS = [
   { id: 'documents', path: '/admin/documents', label: 'Documents', icon: FileText },
   { id: 'vendors', path: '/admin/vendors', label: 'Vendor Attachment', icon: CarFront },
   { id: 'payroll', path: '/admin/payroll', label: 'Payroll', icon: DollarSign },
-  { id: 'admin-finance', path: '/admin/admin-finance', label: 'Admin Finance', icon: ReceiptIndianRupee }, // Existing Admin Finance tab
-  { id: 'finance-and-expenses', path: '/admin/finance-and-expenses', label: 'Finance & Expenses', icon: CreditCard }, // NEW: Duplicate Finance Tab
+  { id: 'finance-and-expenses', path: '/admin/finance-and-expenses', label: 'Finance & Expenses', icon: CreditCard }, // Single unified Finance tab
   { id: 'corporate', path: '/admin/corporate', label: 'Corporate', icon: Building2 },
   { id: 'settings', path: '/admin/settings', label: 'Settings', icon: Settings },
   { id: 'cms', path: '/admin/cms', label: 'CMS', icon: Pencil }, // NEW: CMS link
@@ -272,35 +271,25 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
     // 5. "Settings" is hidden for Corporate users (Franchise Panel)
     if (link.id === 'settings' && role === UserRole.CORPORATE) return false;
 
-    // 6. "Admin Finance" is ONLY for Super Admin
-    if (link.id === 'admin-finance' && role !== UserRole.ADMIN) return false;
-    
-    // 7. "Finance & Expenses" is hidden for EMPLOYEES
+    // 6. "Finance & Expenses" is hidden for EMPLOYEES
     if (link.id === 'finance-and-expenses' && role === UserRole.EMPLOYEE) return false;
     
-    // 8. "Vehicle Enquiries" is hidden for ALL Admin roles (previously removed)
-    if (link.id === 'vehicle-enquiries') return false;
-
-    // 9. "Driver Monitoring" is ONLY for Super Admin - REMOVED
-    if (link.id === 'driver-monitoring') return false;
-
-    // 10. "CMS" is ONLY for Super Admin
+    // 7. "CMS" is ONLY for Super Admin
     if (link.id === 'cms' && role !== UserRole.ADMIN) return false;
-
 
     return true;
   });
 
   const userLinks = [
-    { path: '/user', label: 'My Attendance', icon: Calendar },
-    { path: '/user/tasks', label: 'My Tasks', icon: ClipboardList },
-    { path: '/user/customer-care', label: 'Customer Care', icon: Headset }, // Added: Customer Care for Employee
-    { path: '/user/vendors', label: 'Vendor Attachment', icon: Car },
-    { path: '/user/salary', label: 'My Salary', icon: DollarSign },
-    { path: '/user/documents', label: 'Documents', icon: FileText },
-    { path: '/user/apply-leave', label: 'Apply Leave', icon: Briefcase },
-    { path: '/user/profile', label: 'My Profile', icon: UserCircle }, // Existing profile link
-    { path: '/user/security-account', label: 'Security & Account', icon: Lock }, // NEW: Security & Account link
+    { id: 'attendance', path: '/user', label: 'My Attendance', icon: Calendar },
+    { id: 'tasks', path: '/user/tasks', label: 'My Tasks', icon: ClipboardList },
+    { id: 'customer-care', path: '/user/customer-care', label: 'Customer Care', icon: Headset }, 
+    { id: 'vendors', path: '/user/vendors', label: 'Vendor Attachment', icon: Car },
+    { id: 'salary', path: '/user/salary', label: 'My Salary', icon: DollarSign },
+    { id: 'documents', path: '/user/documents', label: 'Documents', icon: FileText },
+    { id: 'leave', path: '/user/apply-leave', label: 'Apply Leave', icon: Briefcase },
+    { id: 'profile', path: '/user/profile', label: 'My Profile', icon: UserCircle }, 
+    { id: 'security', path: '/user/security-account', label: 'Security & Account', icon: Lock }, 
   ];
 
   // Decide which set of links to render

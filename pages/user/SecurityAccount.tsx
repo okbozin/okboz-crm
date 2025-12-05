@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Lock, Eye, EyeOff, AlertCircle, CheckCircle, UserRole } from 'lucide-react';
+import { Lock, Eye, EyeOff, AlertCircle, CheckCircle } from 'lucide-react';
 import { MOCK_EMPLOYEES } from '../../constants';
 import { Employee } from '../../types';
 

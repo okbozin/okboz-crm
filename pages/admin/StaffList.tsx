@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Plus, Search, Phone, Mail, X, User, Upload, FileText, CreditCard, Briefcase, Building, Calendar, Pencil, Trash2, Building2, Lock, Download, Navigation, Globe, MapPin, Eye, EyeOff, Smartphone, ScanLine, MousePointerClick, Heart, Baby, BookUser, Home, Truck, Files, Car, RefreshCcw, Edit2, Save, AlertCircle, CheckCircle, Loader2, ExternalLink } from 'lucide-react';
 import { Employee, Branch } from '../../types';
@@ -269,7 +270,10 @@ const StaffList: React.FC = () => {
 
 
   const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value, type, checked } = e.target;
+    const { name, value, type } = e.target;
+    // Access checked safely by casting
+    const checked = (e.target as HTMLInputElement).checked; 
+    
     if (type === 'checkbox') {
         setFormData(prev => ({ ...prev, [name]: checked }));
     } else if (name.startsWith('attendanceConfig.')) {

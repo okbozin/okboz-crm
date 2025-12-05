@@ -1,5 +1,4 @@
 
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import AttendanceCalendar from '../../components/AttendanceCalendar';
 // Added COLORS import from constants.ts
@@ -9,7 +8,7 @@ import {
   ChevronLeft, ChevronRight, Calendar, List, CheckCircle, XCircle, 
   User, MapPin, Clock, Fingerprint, Download, X, 
   PieChart as PieChartIcon, Activity, ScanLine, Loader2, Navigation,
-  Phone, DollarSign, Plane, Briefcase, Camera, AlertCircle, Building2, RefreshCcw
+  Phone, DollarSign, Plane, Briefcase, Camera, AlertCircle, Building2, RefreshCcw, Users
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useBranding } from '../../context/BrandingContext';
@@ -603,6 +602,42 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
     });
   }, [attendanceData]);
 
+  // Admin Dashboard Stats (Calculated dynamically for selected date)
+  const dailyStats = useMemo(() => {
+    if (!isAdmin) return null;
+
+    let stats = { total: 0, present: 0, absent: 0, halfDay: 0, leave: 0 };
+    const targetDate = new Date(filterDate); // Use filterDate state
+    const year = targetDate.getFullYear();
+    const month = targetDate.getMonth();
+    const dateStr = targetDate.toISOString().split('T')[0];
+
+    stats.total = filteredEmployeesForDisplay.length;
+
+    filteredEmployeesForDisplay.forEach(emp => {
+      // Logic to get stored data for THIS employee and THIS month
+      const key = `attendance_data_${emp.id}_${year}_${month}`;
+      let data: DailyAttendance[] = [];
+      try { 
+        const stored = localStorage.getItem(key);
+        if (stored) data = JSON.parse(stored);
+      } catch {}
+      
+      // Fallback to generated if not stored (view consistency)
+      if (!data || data.length === 0) data = getEmployeeAttendance(emp, year, month);
+
+      const record = data.find(d => d.date === dateStr);
+      if (record) {
+        if (record.status === AttendanceStatus.PRESENT) stats.present++;
+        else if (record.status === AttendanceStatus.ABSENT) stats.absent++;
+        else if (record.status === AttendanceStatus.HALF_DAY) stats.halfDay++;
+        else if (record.status === AttendanceStatus.PAID_LEAVE) stats.leave++;
+      }
+    });
+    return stats;
+  }, [filteredEmployeesForDisplay, filterDate, isAdmin]);
+
+
   // Generate Report Data
   const reportData = useMemo(() => {
     const employeesToRender = isAdmin 
@@ -1187,6 +1222,47 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
         </div>
       )}
 
+      {/* DASHBOARD WIDGET (Admin Summary) */}
+      {isAdmin && dailyStats && (
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 animate-in fade-in slide-in-from-top-4">
+            <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                <div className="flex justify-between items-start mb-1">
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Total Staff</p>
+                    <Users className="w-4 h-4 text-blue-500" />
+                </div>
+                <h3 className="text-2xl font-bold text-gray-800">{dailyStats.total}</h3>
+            </div>
+            <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                <div className="flex justify-between items-start mb-1">
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Present</p>
+                    <CheckCircle className="w-4 h-4 text-emerald-500" />
+                </div>
+                <h3 className="text-2xl font-bold text-emerald-600">{dailyStats.present}</h3>
+            </div>
+            <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                <div className="flex justify-between items-start mb-1">
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Absent</p>
+                    <XCircle className="w-4 h-4 text-red-500" />
+                </div>
+                <h3 className="text-2xl font-bold text-red-600">{dailyStats.absent}</h3>
+            </div>
+            <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                <div className="flex justify-between items-start mb-1">
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Half Day</p>
+                    <Activity className="w-4 h-4 text-amber-500" />
+                </div>
+                <h3 className="text-2xl font-bold text-amber-600">{dailyStats.halfDay}</h3>
+            </div>
+            <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                <div className="flex justify-between items-start mb-1">
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">On Leave</p>
+                    <Plane className="w-4 h-4 text-indigo-500" />
+                </div>
+                <h3 className="text-2xl font-bold text-indigo-600">{dailyStats.leave}</h3>
+            </div>
+        </div>
+      )}
+
       {/* ADMIN: INDIVIDUAL VIEW (With Dashboard Analytics) */}
       {activeTab === 'history' && (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -1227,73 +1303,6 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
                     </button>
                 </div>
              </div>
-
-             {/* Analysis Row (Same as Employee View) */}
-             {selectedEmployee && (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div className="lg:col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-4">
-                        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                            <div className="flex justify-between items-start mb-2">
-                                <span className="text-xs font-bold text-gray-500 uppercase">Present</span>
-                                <span className="bg-emerald-100 text-emerald-600 p-1 rounded-md"><CheckCircle className="w-3.5 h-3.5" /></span>
-                            </div>
-                            <span className="text-2xl font-bold text-gray-800">{stats.present}</span>
-                        </div>
-                        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                            <div className="flex justify-between items-start mb-2">
-                                <span className="text-xs font-bold text-gray-500 uppercase">Absent</span>
-                                <span className="bg-red-100 text-red-600 p-1 rounded-md"><XCircle className="w-3.5 h-3.5" /></span>
-                            </div>
-                            <span className="text-2xl font-bold text-gray-800">{stats.absent}</span>
-                        </div>
-                        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                            <div className="flex justify-between items-start mb-2">
-                                <span className="text-xs font-bold text-gray-500 uppercase">Late</span>
-                                <span className="bg-orange-100 text-orange-600 p-1 rounded-md"><Clock className="w-3.5 h-3.5" /></span>
-                            </div>
-                            <span className="text-2xl font-bold text-gray-800">{attendanceData.filter(d => d.isLate).length}</span>
-                        </div>
-                        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                            <div className="flex justify-between items-start mb-2">
-                                <span className="text-xs font-bold text-gray-500 uppercase">Half Day</span>
-                                <span className="bg-yellow-100 text-yellow-600 p-1 rounded-md"><Activity className="w-3.5 h-3.5" /></span>
-                            </div>
-                            <span className="text-2xl font-bold text-gray-800">{stats.halfDay}</span>
-                        </div>
-                    </div>
-
-                    {/* Donut Chart */}
-                    <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col h-40 lg:h-auto">
-                        <h4 className="text-xs font-bold text-gray-500 uppercase mb-2">Monthly Distribution</h4>
-                        <div className="flex-1 min-h-0">
-                            {pieData.length > 0 ? (
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <PieChart>
-                                        <Pie
-                                            data={pieData}
-                                            cx="50%"
-                                            cy="50%"
-                                            innerRadius={30}
-                                            outerRadius={50}
-                                            paddingAngle={5}
-                                            dataKey="value"
-                                        >
-                                            {/* Used COLORS from constants.ts */}
-                                            {pieData.map((entry, index) => (
-                                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                            ))}
-                                        </Pie>
-                                        <ReTooltip />
-                                        <Legend iconSize={8} layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{fontSize: '10px'}} />
-                                    </PieChart>
-                                </ResponsiveContainer>
-                            ) : (
-                                <div className="h-full flex items-center justify-center text-gray-400 text-xs">No data yet</div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-             )}
 
              {/* Calendar / List View Toggle */}
              <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
