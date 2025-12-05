@@ -304,7 +304,7 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
 
               },
               (err) => {
-                console.error("Geolocation Error:", err);
+                console.error("Geolocation Error:", err.message);
                 if (err.code === err.PERMISSION_DENIED) {
                   setLocationStatus('denied');
                   alert("Location access denied. Please enable it in your browser settings to use GPS attendance.");
@@ -408,62 +408,73 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
 
     const now = new Date();
     const timeStr = now.toLocaleTimeString('en-US', { 
-      hour: '2-digit', 
-      minute: '2-digit',
-      hour12: true
+      hour: '2-digit', minute: '2-digit', hour12: true
     });
     const todayDateStr = now.toISOString().split('T')[0];
 
-    const year = now.getFullYear();
-    const month = now.getMonth();
-    const attendanceStorageKey = `attendance_data_${selectedEmployee.id}_${year}_${month}`;
+    // 1. Determine Storage Key for TODAY's punch
+    const punchYear = now.getFullYear();
+    const punchMonth = now.getMonth();
+    const punchStorageKey = `attendance_data_${selectedEmployee.id}_${punchYear}_${punchMonth}`;
     
-    let currentMonthAttendance: DailyAttendance[] = [];
+    // 2. Load data for that month
+    let currentMonthData: DailyAttendance[] = [];
     try {
-        currentMonthAttendance = JSON.parse(localStorage.getItem(attendanceStorageKey) || '[]');
+        const stored = localStorage.getItem(punchStorageKey);
+        currentMonthData = stored ? JSON.parse(stored) : [];
     } catch (e) {}
+
+    // 3. Update the record
+    const recordIndex = currentMonthData.findIndex(d => d.date === todayDateStr);
     
-    let todayRecordIndex = currentMonthAttendance.findIndex(d => d.date === todayDateStr);
-    let todayRecord = todayRecordIndex !== -1 ? currentMonthAttendance[todayRecordIndex] : null;
-
-    if (!isCheckedIn) {
-      // PUNCH IN
-      setIsCheckedIn(true);
-      setCheckInTime(timeStr);
-      setCheckOutTime('--:--');
-      
-      localStorage.setItem(`active_punch_session_${selectedEmployee.id}`, JSON.stringify({
-        startTime: now.toISOString(),
-        employeeId: selectedEmployee.id
-      }));
-
-      if (todayRecord) {
-        todayRecord.status = AttendanceStatus.PRESENT;
-        todayRecord.checkIn = timeStr;
-        todayRecord.isLate = now.getHours() > 9 || (now.getHours() === 9 && now.getMinutes() > 30); 
-      } else {
-        todayRecord = {
-          date: todayDateStr,
-          status: AttendanceStatus.PRESENT,
-          checkIn: timeStr,
-          isLate: now.getHours() > 9 || (now.getHours() === 9 && now.getMinutes() > 30),
-        };
-        currentMonthAttendance.push(todayRecord);
-      }
+    if (recordIndex >= 0) {
+        // Update existing
+        const record = currentMonthData[recordIndex];
+        if (!isCheckedIn) {
+            // Punching In
+            record.status = AttendanceStatus.PRESENT;
+            record.checkIn = timeStr;
+            record.isLate = now.getHours() > 9 || (now.getHours() === 9 && now.getMinutes() > 30);
+        } else {
+            // Punching Out
+            record.checkOut = timeStr;
+        }
+        currentMonthData[recordIndex] = record;
     } else {
-      // PUNCH OUT
-      setIsCheckedIn(false);
-      setCheckOutTime(timeStr);
-      
-      localStorage.removeItem(`active_punch_session_${selectedEmployee.id}`);
-
-      if (todayRecord) {
-        todayRecord.checkOut = timeStr;
-      }
+        // Create new record (if somehow missing or new month generated empty)
+        if (!isCheckedIn) {
+            currentMonthData.push({
+                date: todayDateStr,
+                status: AttendanceStatus.PRESENT,
+                checkIn: timeStr,
+                isLate: now.getHours() > 9 || (now.getHours() === 9 && now.getMinutes() > 30),
+            });
+        }
     }
 
-    localStorage.setItem(attendanceStorageKey, JSON.stringify(currentMonthAttendance));
-    setAttendanceData(currentMonthAttendance);
+    // 4. Save to Storage
+    localStorage.setItem(punchStorageKey, JSON.stringify(currentMonthData));
+
+    // 5. Update UI State *only if* we are viewing the current month
+    // This check prevents overwriting the calendar view if user is looking at a different month
+    if (currentDate.getFullYear() === punchYear && currentDate.getMonth() === punchMonth) {
+        setAttendanceData([...currentMonthData]); // Force new reference
+    }
+
+    // 6. Toggle Check-in State
+    if (!isCheckedIn) {
+        setIsCheckedIn(true);
+        setCheckInTime(timeStr);
+        setCheckOutTime('--:--');
+        localStorage.setItem(`active_punch_session_${selectedEmployee.id}`, JSON.stringify({
+            startTime: now.toISOString(),
+            employeeId: selectedEmployee.id
+        }));
+    } else {
+        setIsCheckedIn(false);
+        setCheckOutTime(timeStr);
+        localStorage.removeItem(`active_punch_session_${selectedEmployee.id}`);
+    }
   };
 
   const handleManualPunch = () => {
