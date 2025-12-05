@@ -1,5 +1,4 @@
 
-
 export enum UserRole {
   ADMIN = 'ADMIN',
   EMPLOYEE = 'EMPLOYEE',
@@ -44,6 +43,7 @@ export interface Employee {
     qrScan: boolean;
     manualPunch: boolean;
   };
+  allowedModules?: string[]; // NEW: List of extra modules accessible to this employee (e.g., 'expenses', 'documents')
   corporateId?: string; // NEW: To link employee to a specific corporate account
   corporateName?: string; // NEW: To link employee to a specific corporate name
   currentLocation?: { lat: number; lng: number; accuracy: number; }; // NEW: Last known accurate location

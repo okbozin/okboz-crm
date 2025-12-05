@@ -1,11 +1,11 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, Users, MapPin, Calendar, DollarSign, Briefcase, Menu, X, LogOut, UserCircle, Building, Settings, Target, CreditCard, ClipboardList, ReceiptIndianRupee, Navigation, Car, Building2, PhoneIncoming, GripVertical, Edit2, Check, FileText, Layers, PhoneCall, Bus, Bell, Sun, Moon, Monitor, Mail, UserCog, CarFront, BellRing, BarChart3, Map, Headset, BellDot, Pencil, Lock } from 'lucide-react';
 import { UserRole, Enquiry, CorporateAccount, Employee } from '../types';
 import { useBranding } from '../context/BrandingContext';
 import { useTheme } from '../context/ThemeContext';
-import { useNotification } from '../context/NotificationContext'; // NEW: Import useNotification
+import { useNotification } from '../context/NotificationContext';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -31,17 +31,17 @@ const MASTER_ADMIN_LINKS = [
   { id: 'documents', path: '/admin/documents', label: 'Documents', icon: FileText },
   { id: 'vendors', path: '/admin/vendors', label: 'Vendor Attachment', icon: CarFront },
   { id: 'payroll', path: '/admin/payroll', label: 'Payroll', icon: DollarSign },
-  { id: 'finance-and-expenses', path: '/admin/finance-and-expenses', label: 'Finance & Expenses', icon: CreditCard }, // Single unified Finance tab
+  { id: 'finance-and-expenses', path: '/admin/finance-and-expenses', label: 'Finance & Expenses', icon: CreditCard }, 
   { id: 'corporate', path: '/admin/corporate', label: 'Corporate', icon: Building2 },
   { id: 'settings', path: '/admin/settings', label: 'Settings', icon: Settings },
-  { id: 'cms', path: '/admin/cms', label: 'CMS', icon: Pencil }, // NEW: CMS link
+  { id: 'cms', path: '/admin/cms', label: 'CMS', icon: Pencil }, 
 ];
 
 const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isEditingSidebar, setIsEditingSidebar] = useState(false);
   const location = useLocation();
-  const navigate = useNavigate(); // Use useNavigate for redirection
+  const navigate = useNavigate(); 
   const { companyName, logoUrl, primaryColor } = useBranding();
   const { theme, setTheme } = useTheme();
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
@@ -49,9 +49,9 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
   // NEW: Notification Context
   const { notifications, unreadCount, markNotificationAsRead, markAllNotificationsAsRead } = useNotification();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const notificationRef = useRef<HTMLDivElement>(null); // Ref for notification dropdown
+  const notificationRef = useRef<HTMLDivElement>(null); 
   
-  const themeRef = useRef<HTMLDivElement>(null); // Still needed for theme toggle
+  const themeRef = useRef<HTMLDivElement>(null); 
 
   // Calculate new task count for Tasks tab (can be enhanced to include notifications for tasks)
   const [newTaskCount, setNewTaskCount] = useState(0);
@@ -59,6 +59,7 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
   // Load user details based on role and session
   const [userName, setUserName] = useState('');
   const [userSubtitle, setUserSubtitle] = useState('');
+  const [currentEmployee, setCurrentEmployee] = useState<Employee | null>(null);
 
   const calculateNewTaskCount = () => {
     try {
@@ -108,7 +109,6 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
       setUserSubtitle('CEO & Founder');
     } 
     else if (role === UserRole.CORPORATE) {
-      // Lookup Corporate Account details using the session ID (email)
       try {
         const accounts: CorporateAccount[] = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
         const account = accounts.find((acc: CorporateAccount) => acc.email === sessionId);
@@ -128,11 +128,12 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
        // Lookup Employee details using session ID (Employee ID)
        let foundName = 'Team Member';
        let foundRole = 'Employee';
+       let emp: Employee | undefined;
        
        try {
          // 1. Check Admin Staff
          const adminStaff: Employee[] = JSON.parse(localStorage.getItem('staff_data') || '[]');
-         let emp = adminStaff.find((e: Employee) => e.id === sessionId);
+         emp = adminStaff.find((e: Employee) => e.id === sessionId);
          
          if (!emp) {
             // 2. Check All Corporate Staff Lists
@@ -148,6 +149,7 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
          if (emp) {
              foundName = emp.name;
              foundRole = emp.role;
+             setCurrentEmployee(emp);
          }
        } catch(e) {
          console.error("Error fetching employee details", e);
@@ -159,45 +161,35 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
   }, [role]);
 
   // Load order from local storage on mount
-  const [orderedLinks, setOrderedLinks] = useState(MASTER_ADMIN_LINKS); // Initialize with master
+  const [orderedLinks, setOrderedLinks] = useState(MASTER_ADMIN_LINKS); 
   useEffect(() => {
     if (role === UserRole.ADMIN || role === UserRole.CORPORATE) {
       const savedOrder = localStorage.getItem('admin_sidebar_order');
       if (savedOrder) {
         try {
           const orderIds: string[] = JSON.parse(savedOrder);
-          
-          // Sort MASTER_ADMIN_LINKS based on saved order
           const sorted = [...MASTER_ADMIN_LINKS].sort((a, b) => {
             const indexA = orderIds.indexOf(a.id);
             const indexB = orderIds.indexOf(b.id);
-            
-            // If both exist in saved order, sort by index
             if (indexA !== -1 && indexB !== -1) return indexA - indexB;
-            // If only A exists, it comes first
             if (indexA !== -1) return -1;
-            // If only B exists, it comes first
             if (indexB !== -1) return 1;
-            // If neither exists (new features), keep original order (or append to end)
             return 0;
           });
-          
           setOrderedLinks(sorted);
-        } catch (e) {
-          console.error("Failed to load sidebar order", e);
-        }
+        } catch (e) {}
       }
     }
   }, [role]);
 
   // Effect to calculate new task count and listen for storage changes
   useEffect(() => {
-      calculateNewTaskCount(); // Initial calculation on mount
+      calculateNewTaskCount(); 
       window.addEventListener('storage', calculateNewTaskCount);
       return () => window.removeEventListener('storage', calculateNewTaskCount);
-  }, [role]); // Re-run if role changes
+  }, [role]); 
 
-  // Click outside to close notifications and theme menu
+  // Click outside listeners
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
@@ -213,7 +205,6 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
     };
   }, []);
 
-  // Handle click on notification: mark read and redirect
   const handleNotificationClick = (notificationId: string, link?: string) => {
     markNotificationAsRead(notificationId);
     setNotificationsOpen(false);
@@ -222,15 +213,13 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
     }
   };
 
-
-  // Drag and Drop Handlers
   const handleDragStart = (e: React.DragEvent<HTMLAnchorElement>, index: number) => {
     e.dataTransfer.setData('dragIndex', index.toString());
     e.dataTransfer.effectAllowed = 'move';
   };
 
   const handleDragOver = (e: React.DragEvent<HTMLAnchorElement>) => {
-    e.preventDefault(); // Necessary to allow dropping
+    e.preventDefault(); 
     e.dataTransfer.dropEffect = 'move';
   };
 
@@ -242,66 +231,73 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
     const dragIndex = parseInt(dragIndexStr, 10);
     if (dragIndex === dropIndex) return;
 
-    // Reorder
     const newLinks = [...orderedLinks];
     const [movedItem] = newLinks.splice(dragIndex, 1);
     newLinks.splice(dropIndex, 0, movedItem);
 
     setOrderedLinks(newLinks);
-
-    // Save new order to local storage (Shared with Corporate)
     const orderIds = newLinks.map(link => link.id);
     localStorage.setItem('admin_sidebar_order', JSON.stringify(orderIds));
   };
 
-  // Filter links based on Role Permissions
+  // Filter Admin/Corporate Links
   const visibleAdminLinks = orderedLinks.filter(link => {
-    // 1. "Corporate" tab is ONLY for Super Admin
     if (link.id === 'corporate' && role !== UserRole.ADMIN) return false;
-    
-    // 2. "Franchisee Leads" is hidden for Corporate users
     if (link.id === 'leads' && role === UserRole.CORPORATE) return false;
-
-    // 3. "Employee Setting" hidden for Corporate users
     if (link.id === 'employee-settings' && role === UserRole.CORPORATE) return false;
-
-    // 4. "Reception Desk" is hidden for Corporate users
     if (link.id === 'reception' && role === UserRole.CORPORATE) return false;
-
-    // 5. "Settings" is hidden for Corporate users (Franchise Panel)
     if (link.id === 'settings' && role === UserRole.CORPORATE) return false;
-
-    // 6. "Finance & Expenses" is hidden for EMPLOYEES
     if (link.id === 'finance-and-expenses' && role === UserRole.EMPLOYEE) return false;
-    
-    // 7. "CMS" is ONLY for Super Admin
     if (link.id === 'cms' && role !== UserRole.ADMIN) return false;
-
     return true;
   });
 
-  const userLinks = [
-    { id: 'attendance', path: '/user', label: 'My Attendance', icon: Calendar },
-    { id: 'tasks', path: '/user/tasks', label: 'My Tasks', icon: ClipboardList },
-    { id: 'customer-care', path: '/user/customer-care', label: 'Customer Care', icon: Headset }, 
-    { id: 'vendors', path: '/user/vendors', label: 'Vendor Attachment', icon: Car },
-    { id: 'salary', path: '/user/salary', label: 'My Salary', icon: DollarSign },
-    { id: 'documents', path: '/user/documents', label: 'Documents', icon: FileText },
-    { id: 'leave', path: '/user/apply-leave', label: 'Apply Leave', icon: Briefcase },
-    { id: 'profile', path: '/user/profile', label: 'My Profile', icon: UserCircle }, 
-    { id: 'security', path: '/user/security-account', label: 'Security & Account', icon: Lock }, 
-  ];
+  // Dynamic Employee Links based on Allowed Modules
+  const employeeLinks = useMemo(() => {
+      const baseLinks = [
+        { id: 'attendance', path: '/user', label: 'My Attendance', icon: Calendar },
+        { id: 'tasks', path: '/user/tasks', label: 'My Tasks', icon: ClipboardList },
+        { id: 'customer-care', path: '/user/customer-care', label: 'Customer Care', icon: Headset }, 
+        { id: 'vendors', path: '/user/vendors', label: 'Vendor Attachment', icon: Car },
+        { id: 'salary', path: '/user/salary', label: 'My Salary', icon: DollarSign },
+        { id: 'leave', path: '/user/apply-leave', label: 'Apply Leave', icon: Briefcase },
+        { id: 'profile', path: '/user/profile', label: 'My Profile', icon: UserCircle }, 
+        { id: 'security', path: '/user/security-account', label: 'Security & Account', icon: Lock }, 
+      ];
 
-  // Decide which set of links to render
-  const displayLinks = (role === UserRole.ADMIN || role === UserRole.CORPORATE) ? visibleAdminLinks : userLinks;
+      // Add extra modules if permitted
+      if (currentEmployee?.allowedModules?.includes('documents')) {
+          baseLinks.splice(5, 0, { id: 'documents', path: '/user/documents', label: 'Documents', icon: FileText });
+      }
+      if (currentEmployee?.allowedModules?.includes('expenses')) {
+          baseLinks.splice(5, 0, { id: 'expenses', path: '/user/expenses', label: 'My Expenses', icon: CreditCard });
+      }
+      if (currentEmployee?.allowedModules?.includes('trip_booking')) {
+          baseLinks.splice(3, 0, { id: 'trip-booking', path: '/user/trip-booking', label: 'Trip Booking', icon: Map });
+      }
+      if (currentEmployee?.allowedModules?.includes('franchisee_leads')) {
+          baseLinks.splice(3, 0, { id: 'leads', path: '/user/leads', label: 'Franchisee Leads', icon: Layers });
+      }
+      if (currentEmployee?.allowedModules?.includes('attendance_manager')) {
+          baseLinks.splice(3, 0, { id: 'attendance-admin', path: '/user/attendance-admin', label: 'Attendance (Admin)', icon: Calendar });
+      }
+      if (currentEmployee?.allowedModules?.includes('payroll')) {
+          baseLinks.splice(5, 0, { id: 'payroll', path: '/user/payroll', label: 'Payroll', icon: DollarSign });
+      }
+      if (currentEmployee?.allowedModules?.includes('live_tracking')) {
+          baseLinks.splice(3, 0, { id: 'tracking', path: '/user/tracking', label: 'Live Tracking', icon: Navigation });
+      }
+
+      return baseLinks;
+  }, [currentEmployee]);
+
+  const displayLinks = (role === UserRole.ADMIN || role === UserRole.CORPORATE) ? visibleAdminLinks : employeeLinks;
   
-  // Only Super Admin can drag, AND only when in edit mode
   const canDrag = role === UserRole.ADMIN && isEditingSidebar;
 
   const handleLogout = async () => {
     onLogout();
   };
-
 
   return (
     <div className="h-screen bg-gray-50 dark:bg-gray-950 flex overflow-hidden transition-colors duration-200">
@@ -346,7 +342,6 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
                const Icon = link.icon;
                const isActive = location.pathname === link.path;
                
-               // Special props for draggable items
                const dragProps = canDrag ? {
                  draggable: true,
                  onDragStart: (e: React.DragEvent<HTMLAnchorElement>) => handleDragStart(e, index),
@@ -357,7 +352,7 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
                return (
                  <Link
                    key={link.path}
-                   to={canDrag ? '#' : link.path} // Disable nav while dragging
+                   to={canDrag ? '#' : link.path}
                    onClick={(e) => {
                      if (canDrag) e.preventDefault();
                      else setSidebarOpen(false);
@@ -375,7 +370,6 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
                    )}
                    <Icon className={`w-5 h-5 shrink-0 ${isActive ? '' : 'text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-200'}`} style={isActive ? { color: primaryColor } : {}} />
                    <span className={`truncate ${isActive ? '' : 'text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white'}`}>{link.label}</span>
-                   {/* New Task Count Badge */}
                    {(link.id === 'tasks' || link.path === '/user/tasks') && newTaskCount > 0 && (
                      <span className="ml-auto px-2 py-0.5 bg-red-500 text-white text-xs font-bold rounded-full min-w-[24px] text-center">
                        {newTaskCount}
@@ -425,7 +419,6 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
           </div>
 
           <div className="flex items-center gap-4">
-            {/* NEW: Notification Button */}
             <div className="relative" ref={notificationRef}>
               <button
                 onClick={() => setNotificationsOpen(!notificationsOpen)}
@@ -470,8 +463,6 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
               )}
             </div>
 
-
-            {/* Theme Toggle */}
             <div className="relative" ref={themeRef}>
               <button
                 onClick={() => setThemeMenuOpen(!themeMenuOpen)}

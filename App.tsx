@@ -170,7 +170,16 @@ const App: React.FC = () => {
                         <Route path="/user/customer-care" element={<CustomerCare role={userRole} />} />
                         <Route path="/user/vendors" element={<VendorAttachment />} />
                         <Route path="/user/salary" element={<UserSalary />} />
+                        
+                        {/* Conditional routes - checked by Layout links but routes must exist */}
                         <Route path="/user/documents" element={<Documents role={userRole} />} />
+                        <Route path="/user/expenses" element={<Expenses />} />
+                        <Route path="/user/trip-booking" element={<TripBooking />} />
+                        <Route path="/user/leads" element={<Leads />} />
+                        <Route path="/user/attendance-admin" element={<UserAttendance isAdmin={true} />} />
+                        <Route path="/user/payroll" element={<Payroll />} />
+                        <Route path="/user/tracking" element={<LiveTracking />} />
+                        
                         <Route path="/user/apply-leave" element={<ApplyLeave />} />
                         <Route path="/user/profile" element={<UserProfile />} />
                         <Route path="/user/security-account" element={<SecurityAccount />} />

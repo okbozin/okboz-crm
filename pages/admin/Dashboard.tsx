@@ -615,7 +615,7 @@ const Dashboard = () => {
                               }`}>
                                   {trip.bookingStatus}
                               </span>
-                              <p className="text-[10px] text-gray-400 mt-1">{trip.date}</p>
+                              <p className="text--[10px] text-gray-400 mt-1">{trip.date}</p>
                           </div>
                       </div>
                   ))}
