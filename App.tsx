@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
@@ -17,27 +15,28 @@ import VendorAttachment from './pages/admin/VendorAttachment';
 import Corporate from './pages/admin/Corporate';
 import Documents from './pages/Documents';
 import Leads from './pages/admin/Leads';
-import { Reception } from '@/pages/admin/Reception'; // Changed to named import and using alias
-// @ts-ignore - EmailMarketing component
+// Fix: Change named import to default import for Reception
+import Reception from '@/pages/admin/Reception'; 
+// Fix: Change named import to default import for TripBooking
+import TripBooking from './pages/admin/TripBooking'; 
+// Fix: Change named import to default import for CustomerCare
+import CustomerCare from './pages/admin/CustomerCare';
 import EmailMarketing from './pages/admin/EmailMarketing'; // Added missing import
-import { TripBooking } from './pages/admin/TripBooking'; // Changed to named import
-// import { VehicleEnquiries } from './pages/admin/VehicleEnquiries'; // Removed
-import { CustomerCare } from './pages/admin/CustomerCare';
 import UserAttendance from './pages/user/UserAttendance';
 import UserSalary from './pages/user/UserSalary';
 import ApplyLeave from './pages/user/ApplyLeave';
 import UserProfile from './pages/user/UserProfile'; 
+import SecurityAccount from './pages/user/SecurityAccount'; 
 import TaskManagement from './pages/TaskManagement';
-// import AiAssistant from './components/AiAssistant'; // Removed: Ask HR AI button
 import { UserRole } from './types';
 import { BrandingProvider } from './context/BrandingContext';
 import { ThemeProvider } from './context/ThemeContext';
-import { NotificationProvider } from './context/NotificationContext'; // NEW: Import NotificationProvider
+import { NotificationProvider } from './context/NotificationContext'; 
 import { Loader2, Cloud } from 'lucide-react'; 
-import { autoLoadFromCloud, syncToCloud, HARDCODED_FIREBASE_CONFIG } from './services/cloudService'; // Import Sync
-import { sendSystemNotification } from './services/cloudService'; // NEW: Import sendSystemNotification
+import { autoLoadFromCloud, syncToCloud, HARDCODED_FIREBASE_CONFIG } from './services/cloudService'; 
+import { sendSystemNotification } from './services/cloudService'; 
 import Reports from './pages/admin/Reports';
-import CMS from './pages/admin/CMS'; // NEW: Import CMS
+import CMS from './pages/admin/CMS'; 
 
 const App: React.FC = () => {
   // Initialize state from localStorage
@@ -125,7 +124,7 @@ const App: React.FC = () => {
   return (
     <ThemeProvider>
       <BrandingProvider>
-        <NotificationProvider> {/* NEW: Wrap with NotificationProvider */}
+        <NotificationProvider> 
           <HashRouter>
             {!isAuthenticated ? (
               <Routes>
@@ -173,49 +172,32 @@ const App: React.FC = () => {
                           <>
                             <Route path="/admin/corporate" element={<Corporate />} />
                             <Route path="/admin/settings" element={<Settings />} />
-                            <Route path="/admin/admin-finance" element={<Expenses />} /> {/* Existing Admin Finance tab */}
-                            {/* NEW: Driver Monitoring */}
-                            
-                            {/* NEW: CMS */}
                             <Route path="/admin/cms" element={<CMS />} />
                           </>
                         )}
-                        
-                        <Route path="/admin/*" element={<div className="p-8 text-center text-gray-500">Page under construction</div>} />
                       </>
                     )}
 
-                    {/* User Routes */}
+                    {/* Employee Routes */}
                     {userRole === UserRole.EMPLOYEE && (
                       <>
-                        <Route path="/user" element={<UserAttendance />} />
-                        <Route path="/user/tasks" element={<TaskManagement role={UserRole.EMPLOYEE} />} />
-                        {/* Vehicle Enquiries route removed */}
-                        {/* <Route path="/user/vehicle-enquiries" element={<VehicleEnquiries />} /> */}
-                        <Route path="/user/customer-care" element={<CustomerCare role={UserRole.EMPLOYEE} />} />
+                        <Route path="/user" element={<UserAttendance isAdmin={false} />} /> {/* Employee's default landing */}
+                        <Route path="/user/tasks" element={<TaskManagement role={userRole} />} />
+                        <Route path="/user/customer-care" element={<CustomerCare role={userRole} />} />
                         <Route path="/user/vendors" element={<VendorAttachment />} />
                         <Route path="/user/salary" element={<UserSalary />} />
-                        <Route path="/user/documents" element={<Documents role={UserRole.EMPLOYEE} />} />
+                        <Route path="/user/documents" element={<Documents role={userRole} />} />
                         <Route path="/user/apply-leave" element={<ApplyLeave />} />
                         <Route path="/user/profile" element={<UserProfile />} />
-                        <Route path="/user/*" element={<div className="p-8 text-center text-gray-500">Page under construction</div>} />
+                        <Route path="/user/security-account" element={<SecurityAccount />} />
                       </>
                     )}
 
-                    {/* Catch all redirect */}
+                    {/* Fallback for unmatched routes */}
                     <Route path="*" element={<Navigate to={homePath} replace />} />
                   </Routes>
                 </Layout>
             )}
-            
-            {/* AI Assistant is available for both roles when authenticated (Commented out as per request) */}
-            {/* {isAuthenticated && 
-              <AiAssistant 
-                systemInstruction={hrAssistantSystemInstruction} 
-                initialMessage={hrAssistantInitialMessage} 
-                triggerButtonLabel="Ask HR AI" 
-              />
-            } */}
           </HashRouter>
         </NotificationProvider>
       </BrandingProvider>

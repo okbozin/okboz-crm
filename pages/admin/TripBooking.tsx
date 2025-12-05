@@ -37,7 +37,7 @@ interface Trip {
 
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'];
 
-export const TripBooking: React.FC = () => {
+const TripBooking: React.FC = () => {
   const sessionId = localStorage.getItem('app_session_id') || 'admin';
   const isSuperAdmin = sessionId === 'admin';
   
@@ -676,7 +676,7 @@ export const TripBooking: React.FC = () => {
                             dataKey="value"
                         >
                             {transportTypeDistribution.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={entry.color} />
+                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                             ))}
                         </Pie>
                         <Tooltip />
@@ -704,7 +704,7 @@ export const TripBooking: React.FC = () => {
                             dataKey="value"
                         >
                             {tripCategoryDistribution.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={entry.color} />
+                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                             ))}
                         </Pie>
                         <Tooltip />
@@ -1044,3 +1044,5 @@ export const TripBooking: React.FC = () => {
     </div>
   );
 };
+
+export default TripBooking;

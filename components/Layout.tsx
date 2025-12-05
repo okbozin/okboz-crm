@@ -1,9 +1,7 @@
 
-
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, MapPin, Calendar, DollarSign, Briefcase, Menu, X, LogOut, UserCircle, Building, Settings, Target, CreditCard, ClipboardList, ReceiptIndianRupee, Navigation, Car, Building2, PhoneIncoming, GripVertical, Edit2, Check, FileText, Layers, PhoneCall, Bus, Bell, Sun, Moon, Monitor, Mail, UserCog, CarFront, BellRing, BarChart3, Map, Headset, BellDot, Pencil } from 'lucide-react';
+import { LayoutDashboard, Users, MapPin, Calendar, DollarSign, Briefcase, Menu, X, LogOut, UserCircle, Building, Settings, Target, CreditCard, ClipboardList, ReceiptIndianRupee, Navigation, Car, Building2, PhoneIncoming, GripVertical, Edit2, Check, FileText, Layers, PhoneCall, Bus, Bell, Sun, Moon, Monitor, Mail, UserCog, CarFront, BellRing, BarChart3, Map, Headset, BellDot, Pencil, Lock } from 'lucide-react';
 import { UserRole, Enquiry, CorporateAccount, Employee } from '../types';
 import { useBranding } from '../context/BrandingContext';
 import { useTheme } from '../context/ThemeContext';
@@ -305,6 +303,8 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
     { path: '/user/salary', label: 'My Salary', icon: DollarSign },
     { path: '/user/documents', label: 'Documents', icon: FileText },
     { path: '/user/apply-leave', label: 'Apply Leave', icon: Briefcase },
+    { path: '/user/profile', label: 'My Profile', icon: UserCircle }, // Existing profile link
+    { path: '/user/security-account', label: 'Security & Account', icon: Lock }, // NEW: Security & Account link
   ];
 
   // Decide which set of links to render

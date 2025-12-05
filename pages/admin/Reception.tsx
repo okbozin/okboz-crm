@@ -74,7 +74,7 @@ const getExistingVendors = () => {
   return globalData ? JSON.parse(globalData) : [];
 };
 
-export const Reception: React.FC = () => {
+const Reception: React.FC = () => {
   const sessionId = localStorage.getItem('app_session_id') || 'admin';
   const isSuperAdmin = sessionId === 'admin';
 
@@ -175,9 +175,10 @@ export const Reception: React.FC = () => {
       if (rentalPackages.length > 0 && !consoleCalcDetails.packageId) {
           setConsoleCalcDetails(prev => ({...prev, packageId: rentalPackages[0].id}));
       }
-      if (rentalPackages.length > 0 && !calcDetails.packageId) {
-          setCalcDetails(prev => ({...prev, packageId: rentalPackages[0].id}));
-      }
+      // Keep calcDetails for the edit modal separate for now
+      // if (rentalPackages.length > 0 && !calcDetails.packageId) {
+      //     setCalcDetails(prev => ({...prev, packageId: rentalPackages[0].id}));
+      // }
   }, [rentalPackages]);
 
   // Maps Coords State
@@ -557,10 +558,40 @@ export const Reception: React.FC = () => {
 
   const handleCopyToDetails = () => {
       if (!editingItem) return;
-      setEditingItem({
-          ...editingItem,
-          details: `${editingItem.details}\n\n[Estimate]: ${editEstimateMsg}`
-      });
+      setEditingItem(prev => prev ? {
+          ...prev,
+          details: `${prev.details}\n\n[Estimate]: ${editEstimateMsg}`
+      } : null);
+  };
+
+  // Fix: Define handleSaveEdit function
+  const handleSaveEdit = () => {
+      if (!editingItem) return;
+
+      const updatedRecentTransfers = recentTransfers.map(item =>
+          item.id === editingItem.id ? { ...item, ...editFormData } : item
+      );
+      setRecentTransfers(updatedRecentTransfers);
+
+      // Optionally, update the main enquiries list if this history item corresponds to one
+      const enquiryToUpdateIndex = enquiries.findIndex(e => e.phone === editingItem.phone);
+      if (enquiryToUpdateIndex !== -1) {
+          const updatedEnquiries = [...enquiries];
+          const existingEnquiry = updatedEnquiries[enquiryToUpdateIndex];
+          updatedEnquiries[enquiryToUpdateIndex] = {
+              ...existingEnquiry,
+              details: editFormData.details || existingEnquiry.details,
+              status: editFormData.status as Enquiry['status'] || existingEnquiry.status,
+              name: editFormData.name || existingEnquiry.name,
+              city: editFormData.city || existingEnquiry.city,
+              assignedTo: editFormData.assignedTo || existingEnquiry.assignedTo,
+              // Update transportData if applicable (more complex, for now keep basic update)
+          };
+          setEnquiries(updatedEnquiries);
+          localStorage.setItem('global_enquiries_data', JSON.stringify(updatedEnquiries));
+      }
+
+      setEditingItem(null); // Close the modal
   };
 
   // --- Filtered History for Feed ---
@@ -1146,7 +1177,7 @@ export const Reception: React.FC = () => {
                           rows={6}
                           className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none resize-none"
                           value={editingItem.details}
-                          onChange={(e) => setEditingItem({...editingItem, details: e.target.value})}
+                          onChange={(e) => setEditingItem(prev => prev ? {...prev, details: e.target.value} : null)}
                        />
                     </div>
                  ) : (
@@ -1241,7 +1272,7 @@ export const Reception: React.FC = () => {
                           rows={4}
                           className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none resize-none"
                           value={editingItem.details}
-                          onChange={(e) => setEditingItem({...editingItem, details: e.target.value})}
+                          onChange={(e) => setEditingItem(prev => prev ? {...prev, details: e.target.value} : null)}
                           placeholder="Final details..."
                        />
                     </div>
@@ -1250,7 +1281,7 @@ export const Reception: React.FC = () => {
               
               <div className="p-5 border-t border-gray-100 bg-gray-50 flex justify-end gap-3 rounded-b-2xl">
                  <button onClick={() => setEditingItem(null)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-white">Cancel</button>
-                 <button className="px-6 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-700 shadow-sm">Save Update</button>
+                 <button className="px-6 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-700 shadow-sm" onClick={handleSaveEdit}>Save Update</button>
               </div>
            </div>
         </div>
@@ -1259,3 +1290,5 @@ export const Reception: React.FC = () => {
     </div>
   );
 };
+
+export default Reception;

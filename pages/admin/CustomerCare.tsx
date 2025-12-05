@@ -1,11 +1,12 @@
 
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Settings, Loader2, ArrowRight, ArrowRightLeft, 
   MessageCircle, Copy, Mail, Car, User, Edit2,
   Building2, X, Phone, Truck, DollarSign,
   Calendar, MapPin, Plus, Trash2, Headset,
-  Clock, CheckCircle, Filter, Search, ChevronDown, UserCheck, XCircle, AlertCircle, Save, History, PhoneOutgoing, PhoneIncoming
+  Clock, CheckCircle, Filter, Search, ChevronDown, UserCheck, XCircle, AlertCircle, Save, History, PhoneOutgoing, PhoneIncoming, UserPlus
 } from 'lucide-react';
 import Autocomplete from '../../components/Autocomplete';
 import { Enquiry, HistoryLog, UserRole } from '../../types';
@@ -16,7 +17,7 @@ type TripType = 'Local' | 'Rental' | 'Outstation';
 type OutstationSubType = 'RoundTrip' | 'OneWay';
 type VehicleType = 'Sedan' | 'SUV';
 type EnquiryCategory = 'Transport' | 'General';
-type OrderStatus = 'Scheduled' | 'Order Accepted' | 'Driver Assigned' | 'Completed' | 'Cancelled' | 'New' | 'In Progress' | 'Converted' | 'Closed';
+type OrderStatus = 'Scheduled' | 'Order Accepted' | 'Driver Assigned' | 'Completed' | 'Cancelled' | 'New' | 'In Progress' | 'Converted' | 'Closed' | 'Booked';
 
 interface RentalPackage {
   id: string;
@@ -79,7 +80,7 @@ interface CustomerCareProps {
   role: UserRole;
 }
 
-export const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
+const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
   const [showSettings, setShowSettings] = useState(false);
   const [settingsVehicleType, setSettingsVehicleType] = useState<VehicleType>('Sedan');
   
@@ -472,20 +473,56 @@ Book now with OK BOZ Transport!`;
       setGeneratedMessage(msg);
   }, [estimatedCost, customerDetails, transportDetails, tripType, vehicleType, pricing, rentalPackages, enquiryCategory, outstationSubType]);
 
-  useEffect(() => {
-    if (messageTextareaRef.current) {
-      messageTextareaRef.current.style.height = 'auto';
-      messageTextareaRef.current.style.height = messageTextareaRef.current.scrollHeight + 'px';
+  const handlePhoneCheck = () => {
+    if (!customerDetails.phone) {
+      alert("Please enter a phone number to check.");
+      return;
     }
-  }, [generatedMessage]);
 
+    setIsPhoneChecked(false); // Reset check state
+    setPhoneLookupResult(null);
+    setExistingEnquiriesForPhone([]);
 
-  const saveOrder = async (status: OrderStatus, scheduleInfo?: { date: string, time: string, priority?: 'Hot' | 'Warm' | 'Cold' }) => {
+    const cleanPhoneNumber = customerDetails.phone.replace(/\D/g, '');
+
+    // Check existing vendors
+    const foundVendor = vendorsData.find(v => v.phone && v.phone.replace(/\D/g, '') === cleanPhoneNumber);
+    if (foundVendor) {
+        setPhoneLookupResult('Existing');
+        setCustomerDetails(prev => ({
+            ...prev,
+            name: foundVendor.ownerName,
+            email: foundVendor.email || '',
+        }));
+        setIsPhoneChecked(true);
+        return;
+    }
+
+    // Check existing enquiries
+    const existingEnqs = enquiries.filter(e => e.phone && e.phone.replace(/\D/g, '') === cleanPhoneNumber);
+    if (existingEnqs.length > 0) {
+        setPhoneLookupResult('Existing');
+        setExistingEnquiriesForPhone(existingEnqs);
+        setCustomerDetails(prev => ({
+            ...prev,
+            name: existingEnqs[0].name || prev.name,
+            email: existingEnqs[0].email || prev.email,
+            // Assuming the latest city and pickup from one of the enquiries
+            pickup: existingEnqs[0].transportData?.pickup || existingEnqs[0].pickup || prev.pickup,
+        }));
+    } else {
+        setPhoneLookupResult('New');
+    }
+    setIsPhoneChecked(true);
+  };
+
+  const handleEnquiryAction = (action: 'Schedule' | 'Book' | 'Save') => {
       if (!customerDetails.name || !customerDetails.phone) {
-          setTimeout(() => alert("Please enter Customer Name and Phone."), 0);
+          alert("Please enter Customer Name and Phone.");
           return;
       }
 
+      // 1. Construct Details String
       let detailsText = '';
       if (enquiryCategory === 'Transport') {
           detailsText = `[${vehicleType} - ${tripType}] `;
@@ -497,739 +534,444 @@ Book now with OK BOZ Transport!`;
           if (tripType === 'Outstation') detailsText += `Dest: ${transportDetails.destination}. ${transportDetails.days} Days. Pickup: ${customerDetails.pickup}.`;
           detailsText += ` Estimate: ₹${estimatedCost}`;
       } else {
-          detailsText = customerDetails.requirements;
+          detailsText = "General Enquiry. ";
       }
       
-      if (!detailsText.trim()) {
-        setTimeout(() => alert("Please enter requirements/details for the enquiry."), 0);
-        return;
-      }
+      if (customerDetails.requirements) detailsText += `\nReq: ${customerDetails.requirements}`;
 
+      // 2. Determine Status
+      let status: Enquiry['status'] = 'New';
+      if (action === 'Book') status = 'Booked';
+      if (action === 'Schedule') status = 'Scheduled';
+      if (action === 'Save') status = 'In Progress'; // Default for saved but not booked/scheduled
+
+      // 3. Create History Log
       const historyLog: HistoryLog = {
           id: Date.now(),
-          type: 'Note',
-          message: `Order Created as ${status}. ${estimatedCost > 0 ? `Est: ₹${estimatedCost}` : ''}`,
+          type: enquiryCategory === 'Transport' ? 'Meeting' : 'Note', // Use Meeting for transport for demo
+          message: `Enquiry ${action === 'Book' ? 'Booked' : action === 'Schedule' ? 'Scheduled' : 'Saved'} via CustomerCare Console. ${estimatedCost > 0 ? `Est: ₹${estimatedCost.toLocaleString()}` : ''}`,
           date: new Date().toLocaleString(),
           outcome: 'Completed'
       };
 
-      let updatedEnquiry: Enquiry;
-      let newEnquiriesList = [...enquiries];
+      // Get current corporate ID for this session
+      const currentCorporateId = isSuperAdmin ? 'admin' : sessionId;
+      const assignedStaff = allStaff.find(s => s.id === assignment.staffId);
+      const assignedStaffName = assignedStaff ? assignedStaff.name : 'Unassigned';
 
-      if (editingOrderId) {
-        updatedEnquiry = {
-          ...enquiries.find(e => e.id === editingOrderId)!,
-          type: 'Customer',
-          initialInteraction: 'Incoming',
-          name: customerDetails.name,
-          phone: customerDetails.phone,
-          email: customerDetails.email || '',
-          city: 'Coimbatore', 
-          details: detailsText,
-          status: status,
-          assignedTo: assignment.staffId,
-          history: [historyLog, ...(enquiries.find(e => e.id === editingOrderId)?.history || [])],
-          date: scheduleInfo ? scheduleInfo.date : new Date().toISOString().split('T')[0],
-          nextFollowUp: scheduleInfo ? `${scheduleData.date}T${scheduleData.time}` : undefined,
-          priority: scheduleInfo?.priority, 
-          enquiryCategory: enquiryCategory,
-          tripType: tripType,
-          vehicleType: vehicleType,
-          outstationSubType: tripType === 'Outstation' ? outstationSubType : undefined,
-          transportData: enquiryCategory === 'Transport' ? transportDetails : undefined,
-          estimatedPrice: enquiryCategory === 'Transport' ? estimatedCost : undefined,
-          corporateId: assignment.corporateId === 'admin' ? undefined : assignment.corporateId, // NEW: corporateId for enquiries
-        };
-        newEnquiriesList = newEnquiriesList.map(e => e.id === editingOrderId ? updatedEnquiry : e);
-        setEditingOrderId(null);
-      } else {
-        updatedEnquiry = {
-          id: `ORD-${Date.now()}`,
-          type: 'Customer',
-          initialInteraction: 'Incoming',
+      // 4. Create or Update Enquiry Object
+      const newEnquiry: Enquiry = {
+          id: `ENQ-${Date.now()}`,
+          type: 'Customer', // Always customer in this module
+          initialInteraction: 'Incoming', // Default for new, can be changed
           name: customerDetails.name,
           phone: customerDetails.phone,
           email: customerDetails.email,
-          city: 'Coimbatore',
+          city: allBranches.find(b => b.id === assignment.branchName)?.city || 'Coimbatore', // Get city from assigned branch or default
           details: detailsText,
           status: status,
           assignedTo: assignment.staffId,
           createdAt: new Date().toLocaleString(),
+          nextFollowUp: enquiryCategory === 'General' ? `${generalFollowUpDate}T${generalFollowUpTime}:00.000Z` : undefined,
           history: [historyLog],
-          date: scheduleInfo ? scheduleInfo.date : new Date().toISOString().split('T')[0],
-          nextFollowUp: scheduleInfo ? `${scheduleData.date}T${scheduleData.time}` : undefined,
-          priority: scheduleInfo?.priority, 
+          date: new Date().toISOString().split('T')[0],
           enquiryCategory: enquiryCategory,
-          tripType: tripType,
-          vehicleType: vehicleType,
-          outstationSubType: tripType === 'Outstation' ? outstationSubType : undefined,
-          transportData: enquiryCategory === 'Transport' ? transportDetails : undefined,
-          estimatedPrice: enquiryCategory === 'Transport' ? estimatedCost : undefined,
-          corporateId: assignment.corporateId === 'admin' ? undefined : assignment.corporateId, // NEW: corporateId for enquiries
-        };
-        newEnquiriesList = [updatedEnquiry, ...newEnquiriesList];
+          tripType: enquiryCategory === 'Transport' ? tripType : undefined,
+          vehicleType: enquiryCategory === 'Transport' ? vehicleType : undefined,
+          outstationSubType: enquiryCategory === 'Transport' && tripType === 'Outstation' ? outstationSubType : undefined,
+          transportData: enquiryCategory === 'Transport' ? {
+              pickup: customerDetails.pickup,
+              drop: transportDetails.drop,
+              estKm: transportDetails.estKm,
+              waitingMins: transportDetails.waitingMins,
+              packageId: transportDetails.packageId,
+              destination: transportDetails.destination,
+              days: transportDetails.days,
+              estTotalKm: transportDetails.estTotalKm,
+              nights: transportDetails.nights,
+          } : undefined,
+          estimatedPrice: estimatedCost,
+          priority: enquiryCategory === 'General' ? generalFollowUpPriority : undefined,
+          corporateId: currentCorporateId, // Link to the corporate account or admin
+      };
 
-        sendSystemNotification({
-            type: 'new_enquiry',
-            title: `New Customer Enquiry: ${updatedEnquiry.name}`,
-            message: `A new enquiry (ID: ${updatedEnquiry.id}) has been created with status: ${updatedEnquiry.status}.`,
-            targetRoles: [UserRole.ADMIN, UserRole.CORPORATE],
-            corporateId: assignment.corporateId === 'admin' ? undefined : assignment.corporateId, // Pass corporateId
-            link: `/admin/customer-care`
-        });
-
-        if (assignment.staffId) {
-            const assignedStaffMember = allStaff.find(s => s.id === assignment.staffId);
-            if (assignedStaffMember) {
-                sendSystemNotification({
-                    type: 'task_assigned',
-                    title: `New Enquiry Assigned: ${updatedEnquiry.id}`,
-                    message: `You have been assigned a new customer enquiry for ${updatedEnquiry.name}.`,
-                    targetRoles: [UserRole.EMPLOYEE],
-                    employeeId: assignedStaffMember.id,
-                    link: `/user/customer-care`
-                });
-            }
-        }
-      }
-
-      // Update global enquiries storage, then update local state with filtered enquiries
-      const allGlobalEnquiries = JSON.parse(localStorage.getItem('global_enquiries_data') || '[]');
-      let updatedGlobalEnquiries = [...allGlobalEnquiries.filter((e: Enquiry) => 
-        e.id !== updatedEnquiry.id && (!isSuperAdmin && e.corporateId !== sessionId ? true : false) // Keep other corp's enquiries
-      )];
-      if (updatedEnquiry) {
-          updatedGlobalEnquiries = [...updatedGlobalEnquiries, updatedEnquiry];
-      }
-      try {
-        localStorage.setItem('global_enquiries_data', JSON.stringify(updatedGlobalEnquiries));
-      } catch (error) {
-        console.error("Error saving enquiries to local storage:", error);
-        setTimeout(() => alert("Error saving data. Local storage might be full or corrupted."), 0);
-      }
-
-      setEnquiries(getInitialEnquiries(role, sessionId)); // Re-fetch/filter after global update
-
-      setTimeout(() => {
-          alert(`${enquiryCategory === 'Transport' ? 'Order' : 'Enquiry'} ${status} Successfully!`);
-      }, 0);
-      
-      setCustomerDetails({ name: '', phone: '', email: '', pickup: '', requirements: '' });
-      setTransportDetails({ drop: '', estKm: '', waitingMins: '', packageId: '', destination: '', days: '1', estTotalKm: '', nights: '0' });
-      setGeneratedMessage('');
-      setEstimatedCost(0);
-      setIsScheduleModalOpen(false);
-      setIsPhoneChecked(false);
-      setPhoneLookupResult(null);
-      setExistingEnquiriesForPhone([]);
-      setGeneralFollowUpDate(new Date().toISOString().split('T')[0]);
-      setGeneralFollowUpTime('10:00');
-      setGeneralFollowUpPriority('Warm');
-  };
-
-  const handleBookNow = () => {
-      if (!customerDetails.name || !customerDetails.phone) {
-          setTimeout(() => alert("Please enter Customer Name and Phone."), 0);
-          return;
-      }
-      saveOrder('Order Accepted');
-  };
-
-  const handleOpenSchedule = () => {
-      if (!customerDetails.name || !customerDetails.phone) {
-          setTimeout(() => alert("Please enter Customer Name and Phone."), 0);
-          return;
-      }
-      setIsScheduleModalOpen(true);
-  };
-
-  const confirmSchedule = () => {
-      if (!scheduleData.date || !scheduleData.time) {
-          setTimeout(() => alert("Please select both Date and Time."), 0);
-          return;
-      }
-      saveOrder('Scheduled', { ...scheduleData, priority: generalFollowUpPriority });
-  };
-
-  const handleSaveGeneralFollowUp = () => {
-    if (!customerDetails.name || !customerDetails.phone) {
-        setTimeout(() => alert("Please enter Customer Name and Phone."), 0);
-        return;
-    }
-    saveOrder('Scheduled', { 
-      date: generalFollowUpDate, 
-      time: generalFollowUpTime, 
-      priority: generalFollowUpPriority 
-    });
-  };
-
-  const handleCancelForm = () => {
-      setCustomerDetails({ name: '', phone: '', email: '', pickup: '', requirements: '' });
-      setTransportDetails({ drop: '', estKm: '', waitingMins: '', packageId: '', destination: '', days: '1', estTotalKm: '', nights: '0' });
-      setGeneratedMessage('');
-      setEstimatedCost(0);
-      setEditingOrderId(null);
-      setIsPhoneChecked(false);
-      setPhoneLookupResult(null);
-      setExistingEnquiriesForPhone([]);
-      setGeneralFollowUpDate(new Date().toISOString().split('T')[0]);
-      setGeneralFollowUpTime('10:00');
-      setGeneralFollowUpPriority('Warm');
-
-      setTimeout(() => alert("Form cleared."), 0);
-  };
-
-  const handleStatusUpdate = async (id: string, newStatus: OrderStatus) => {
-    try {
-      let updatedEnquiryItem: Enquiry | undefined;
-
-      const updatedList = enquiries.map(e => {
-          if (e.id === id) {
-              const historyLog: HistoryLog = {
-                  id: Date.now(),
-                  type: 'Note',
-                  message: `Status changed to ${newStatus}`,
-                  date: new Date().toLocaleString(),
-                  outcome: 'Completed'
-              };
-              updatedEnquiryItem = { ...e, status: newStatus, history: [historyLog, ...e.history] };
-              return updatedEnquiryItem;
-          }
-          return e;
-      });
-      
-      // Update global enquiries storage, then re-filter for current view
-      const allGlobalEnquiries = JSON.parse(localStorage.getItem('global_enquiries_data') || '[]');
-      let updatedGlobalEnquiries = [...allGlobalEnquiries.filter((e: Enquiry) => 
-        e.id !== id && (!isSuperAdmin && e.corporateId !== sessionId ? true : false) // Keep other corp's enquiries
-      )];
-      if (updatedEnquiryItem) {
-          updatedGlobalEnquiries = [...updatedGlobalEnquiries, updatedEnquiryItem];
-      }
-      localStorage.setItem('global_enquiries_data', JSON.stringify(updatedGlobalEnquiries));
-
-      setEnquiries(getInitialEnquiries(role, sessionId)); // Re-fetch/filter after global update
-
-      if (updatedEnquiryItem) {
-          sendSystemNotification({
-              type: 'system',
-              title: `Order Status Update: ${updatedEnquiryItem.id}`,
-              message: `The status of order ${updatedEnquiryItem.id} for ${updatedEnquiryItem.name} has been updated to ${newStatus}.`,
-              targetRoles: [UserRole.ADMIN, UserRole.CORPORATE],
-              corporateId: updatedEnquiryItem.corporateId, // Use the enquiry's corporateId
-              link: `/admin/customer-care`
-          });
-      }
-
-    } catch (error) {
-      console.error("Error in handleStatusUpdate:", error);
-      setTimeout(() => alert("An error occurred while updating status. See console for details."), 0);
-    }
-  };
-
-  const handleEditOrder = (order: Enquiry) => {
-    try {
-      setEditingOrderId(order.id);
-
-      setCustomerDetails({
-        name: order.name,
-        phone: order.phone,
-        email: order.email || '',
-        pickup: (order.details.match(/Pickup:\s*(.*?)(?=(?:\s*->|\s*\.|\s*$))/i)?.[1] || '').trim(),
-        requirements: order.enquiryCategory === 'General' ? order.details : (order.details.includes('\nReq: ') ? order.details.split('\nReq: ')[1] : '')
-      });
-
-      setEnquiryCategory(order.enquiryCategory || 'General');
-
-      if (order.enquiryCategory === 'Transport' && order.transportData) {
-        setTripType(order.tripType || 'Local');
-        setVehicleType(order.vehicleType || 'Sedan');
-        setOutstationSubType(order.outstationSubType || 'RoundTrip');
-        setTransportDetails({
-          drop: order.transportData.drop || '',
-          estKm: order.transportData.estKm || '',
-          waitingMins: order.transportData.waitingMins || '',
-          packageId: order.transportData.packageId || '',
-          destination: order.transportData.destination || '',
-          days: order.transportData.days || '1',
-          estTotalKm: order.transportData.estTotalKm || '',
-          nights: order.transportData.nights || '0',
-        });
-        setEstimatedCost(order.estimatedPrice || 0);
+      // 5. Save/Update Enquiries List
+      let updatedList = [...enquiries];
+      if (editingOrderId) {
+        updatedList = updatedList.map(e => e.id === editingOrderId ? { ...newEnquiry, id: editingOrderId } : e);
+        setEditingOrderId(null); // Clear editing state
       } else {
-          setTripType('Local');
-          setVehicleType('Sedan');
-          setOutstationSubType('RoundTrip');
-          setTransportDetails({ drop: '', estKm: '', waitingMins: '', packageId: '', destination: '', days: '1', estTotalKm: '', nights: '0' });
-          setEstimatedCost(0);
+        updatedList = [newEnquiry, ...updatedList];
       }
 
-      setAssignment(prev => ({
-          ...prev,
-          staffId: order.assignedTo || '',
-          corporateId: order.corporateId || (isSuperAdmin ? 'admin' : sessionId), // NEW: set corporateId correctly on edit
-      }));
+      setEnquiries(updatedList);
+      localStorage.setItem('global_enquiries_data', JSON.stringify(updatedList));
 
-      if (order.enquiryCategory === 'General' && order.nextFollowUp) {
-          setGeneralFollowUpDate(order.nextFollowUp.split('T')[0]);
-          setGeneralFollowUpTime(order.nextFollowUp.split('T')[1]);
-          setGeneralFollowUpPriority(order.priority || 'Warm');
+      setTimeout(() => alert(`Enquiry ${status} Successfully!`), 0);
+      
+      // Send notification to assigned staff
+      if (assignment.staffId && assignedStaff) {
+        sendSystemNotification({
+            type: 'task_assigned',
+            title: 'New Enquiry Assigned!',
+            message: `You have a new enquiry from ${customerDetails.name} (Phone: ${customerDetails.phone}). Status: ${status}.`,
+            targetRoles: [UserRole.EMPLOYEE],
+            employeeId: assignment.staffId,
+            corporateId: currentCorporateId, // So corporate admin can also see
+            link: `/user/tasks` // Link to employee's task list (or a specific enquiry view)
+        });
       }
 
-      const cleanNumber = customerDetails.phone.replace(/\D/g, '');
-      const previousEnquiries = enquiries.filter(e => e.phone.replace(/\D/g, '') === cleanNumber && e.id !== order.id);
-      setExistingEnquiriesForPhone(previousEnquiries);
-      setPhoneLookupResult(previousEnquiries.length > 0 ? 'Existing' : 'New');
-      setIsPhoneChecked(true);
 
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    } catch (error) {
-      console.error("Error in handleEditOrder:", error);
-      setTimeout(() => alert("An error occurred while preparing the form for edit. See console for details."), 0);
+      // 6. Reset Form
+      setCustomerDetails({ name: '', phone: '', email: '', pickup: '', requirements: '' });
+      setTransportDetails({ drop: '', estKm: '', waitingMins: '', packageId: '', destination: '', days: '1', estTotalKm: '', nights: '0' });
+      setGeneratedMessage('');
+      setEstimatedCost(0);
+      setIsPhoneChecked(false);
+      setPhoneLookupResult(null);
+      setExistingEnquiriesForPhone([]);
+      setEnquiryCategory('Transport');
+      setAssignment(prev => ({ ...prev, staffId: '' })); // Reset assigned staff
+      setGeneralFollowUpDate(new Date().toISOString().split('T')[0]);
+      setGeneralFollowUpTime('10:00');
+      setGeneralFollowUpPriority('Warm');
+  };
+
+  const handleCancel = () => {
+      setCustomerDetails({ name: '', phone: '', email: '', pickup: '', requirements: '' });
+      setTransportDetails({ drop: '', estKm: '', waitingMins: '', packageId: '', destination: '', days: '1', estTotalKm: '', nights: '0' });
+      setGeneratedMessage('');
+      setEstimatedCost(0);
+      setIsPhoneChecked(false);
+      setPhoneLookupResult(null);
+      setExistingEnquiriesForPhone([]);
+      setEnquiryCategory('Transport');
+      setAssignment(prev => ({ ...prev, staffId: '' }));
+      setGeneralFollowUpDate(new Date().toISOString().split('T')[0]);
+      setGeneralFollowUpTime('10:00');
+      setGeneralFollowUpPriority('Warm');
+      setEditingOrderId(null);
+  };
+
+  const handleEditEnquiry = (enquiry: Enquiry) => {
+    setEditingOrderId(enquiry.id);
+    setCustomerDetails({
+        name: enquiry.name,
+        phone: enquiry.phone,
+        email: enquiry.email || '',
+        pickup: enquiry.transportData?.pickup || '',
+        requirements: enquiry.details,
+    });
+    setEnquiryCategory(enquiry.enquiryCategory || 'General');
+    setTripType(enquiry.tripType || 'Local');
+    setVehicleType(enquiry.vehicleType || 'Sedan');
+    setOutstationSubType(enquiry.outstationSubType || 'RoundTrip');
+    setTransportDetails({
+        drop: enquiry.transportData?.drop || '',
+        estKm: enquiry.transportData?.estKm || '',
+        waitingMins: enquiry.transportData?.waitingMins || '',
+        packageId: enquiry.transportData?.packageId || '',
+        destination: enquiry.transportData?.destination || '',
+        days: enquiry.transportData?.days || '1',
+        estTotalKm: enquiry.transportData?.estTotalKm || '',
+        nights: enquiry.transportData?.nights || '0',
+    });
+    setAssignment({
+        corporateId: enquiry.corporateId || (isSuperAdmin ? 'admin' : sessionId),
+        branchName: allBranches.find(b => b.city === enquiry.city)?.name || '', // Find branch name from city
+        staffId: enquiry.assignedTo || '',
+    });
+    setGeneralFollowUpDate(enquiry.nextFollowUp?.split('T')[0] || new Date().toISOString().split('T')[0]);
+    setGeneralFollowUpTime(enquiry.nextFollowUp?.split('T')[1]?.substring(0,5) || '10:00');
+    setGeneralFollowUpPriority(enquiry.priority || 'Warm');
+
+    // Trigger initial calculation/message generation
+    // This will happen automatically due to useEffect dependencies
+    setIsPhoneChecked(true); // Simulate phone check for edit mode
+    setPhoneLookupResult('Existing');
+  };
+  
+  const getStatusColor = (status: OrderStatus) => {
+    switch (status) {
+        case 'New':
+           return 'bg-yellow-100 text-yellow-700';
+        case 'In Progress':
+        case 'Scheduled':
+        case 'Booked':
+        case 'Order Accepted':
+        case 'Driver Assigned': return 'bg-blue-100 text-blue-700';
+        case 'Converted':
+        case 'Completed': return 'bg-green-100 text-green-700';
+        case 'Cancelled':
+        case 'Closed': return 'bg-red-100 text-red-700';
+        default: return 'bg-gray-100 text-gray-700';
     }
   };
 
-  const dashboardStats = useMemo(() => {
-      const total = enquiries.length;
-      const accepted = enquiries.filter(e => e.status === 'Order Accepted' || e.status === 'Booked').length;
-      const assigned = enquiries.filter(e => e.status === 'Driver Assigned').length;
-      const completed = enquiries.filter(e => e.status === 'Completed').length;
-      const cancelled = enquiries.filter(e => e.status === 'Cancelled').length;
-      const scheduled = enquiries.filter(e => e.status === 'Scheduled').length;
-      
-      return { total, accepted, assigned, completed, cancelled, scheduled };
+  const filteredEnquiriesForList = useMemo(() => {
+    return enquiries.filter(enq => {
+      // Role-based filtering
+      if (role === UserRole.EMPLOYEE && enq.assignedTo !== sessionId) return false;
+      if (role === UserRole.CORPORATE && enq.corporateId !== sessionId) return false;
+
+      const matchesSearch = enq.name.toLowerCase().includes(filterSearch.toLowerCase()) ||
+                            enq.phone.includes(filterSearch);
+      const matchesStatus = filterStatus === 'All' || enq.status === filterStatus;
+      const matchesDate = !filterDate || (enq.date || enq.createdAt.split('T')[0]) === filterDate;
+      return matchesSearch && matchesStatus && matchesDate;
+    }).sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [enquiries, filterSearch, filterStatus, filterDate, role, sessionId]);
+
+  const totalRevenue = useMemo(() => {
+    return enquiries.filter(e => e.status === 'Booked' || e.status === 'Completed' || e.status === 'Converted')
+                    .reduce((sum, e) => sum + (e.estimatedPrice || 0), 0);
   }, [enquiries]);
 
-  const filteredOrders = useMemo(() => {
-      return enquiries.filter(e => {
-          const matchesSearch = e.name.toLowerCase().includes(filterSearch.toLowerCase()) || 
-                                e.phone.includes(filterSearch) || 
-                                e.id.toLowerCase().includes(filterSearch.toLowerCase()) ||
-                                e.details.toLowerCase().includes(filterSearch.toLowerCase());
-          
-          const matchesStatus = filterStatus === 'All' || e.status === filterStatus;
-          
-          const matchesDate = !filterDate || (e.date === filterDate || e.createdAt.startsWith(filterDate));
-
-          return matchesSearch && matchesStatus && matchesDate;
-      });
-  }, [enquiries, filterSearch, filterStatus, filterDate]);
-
-  const isEmployee = role === UserRole.EMPLOYEE;
-
-  const handlePhoneInputCheck = () => {
-    const cleanNumber = customerDetails.phone.replace(/\D/g, '');
-    if (cleanNumber.length < 5) {
-        setIsPhoneChecked(false);
-        setPhoneLookupResult(null);
-        setExistingEnquiriesForPhone([]);
-        return;
-    }
-
-    let foundEnquiry: Enquiry | undefined;
-    let foundVendor: any;
-
-    const previousEnquiries = enquiries.filter(e => e.phone.replace(/\D/g, '') === cleanNumber);
-    if (previousEnquiries.length > 0) {
-        foundEnquiry = previousEnquiries[0];
-        setExistingEnquiriesForPhone(previousEnquiries);
-    }
-
-    foundVendor = vendorsData.find(v => v.phone && v.phone.replace(/\D/g, '') === cleanNumber);
-
-    if (foundEnquiry || foundVendor) {
-        setPhoneLookupResult('Existing');
-        const source = foundEnquiry || foundVendor;
-        setCustomerDetails(prev => ({
-            ...prev,
-            name: source.name || source.ownerName || '',
-            email: source.email || '',
-        }));
-    } else {
-        setPhoneLookupResult('New');
-        setCustomerDetails(prev => ({
-            ...prev,
-            name: '',
-            email: '',
-        }));
-        setExistingEnquiriesForPhone([]);
-    }
-    setIsPhoneChecked(true);
-  };
+  const pendingFollowUps = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
+    return enquiries.filter(e => 
+      (e.status === 'New' || e.status === 'In Progress') && 
+      e.nextFollowUp && 
+      e.nextFollowUp.split('T')[0] <= today
+    ).length;
+  }, [enquiries]);
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-             <Headset className="w-8 h-8 text-emerald-600" /> Customer Care (Bookings)
+             <Headset className="w-8 h-8 text-emerald-600" /> Customer Care
           </h2>
-          <p className="text-gray-500">Create bookings and manage order lifecycle</p>
+          <p className="text-gray-500">Manage customer enquiries, generate quotes, and track follow-ups</p>
         </div>
-        {!isEmployee && ( 
-          <div className="flex gap-2">
-              <button 
-                  onClick={() => setShowSettings(!showSettings)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${showSettings ? 'bg-slate-800 text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}`}
-              >
-                  <Settings className="w-4 h-4" /> {showSettings ? 'Hide Rates' : 'Edit Rates'}
-              </button>
-          </div>
-        )}
+        <div className="flex gap-2">
+            <button 
+                onClick={() => setShowSettings(!showSettings)}
+                className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50"
+            >
+                <Settings className="w-4 h-4" /> Rates
+            </button>
+        </div>
       </div>
 
-      <div className="space-y-6">
-          <div className="flex justify-between items-center">
-              <h2 className="text-xl font-bold text-gray-800">Orders Dashboard</h2>
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                  <p className="text-xs font-bold text-gray-500 uppercase">Total Orders</p>
-                  <h3 className="text-2xl font-bold text-gray-800">{dashboardStats.total}</h3>
-              </div>
-              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                  <p className="text-xs font-bold text-gray-500 uppercase">Accepted</p>
-                  <h3 className="text-2xl font-bold text-emerald-600">{dashboardStats.accepted}</h3>
-              </div>
-              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                  <p className="text-xs font-bold text-gray-500 uppercase">Driver Assigned</p>
-                  <h3 className="text-2xl font-bold text-blue-600">{dashboardStats.assigned}</h3>
-              </div>
-              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                  <p className="text-xs font-bold text-gray-500 uppercase">Completed</p>
-                  <h3 className="text-2xl font-bold text-purple-600">{dashboardStats.completed}</h3>
-              </div>
-              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                  <p className="text-xs font-bold text-gray-500 uppercase">Scheduled</p>
-                  <h3 className="text-2xl font-bold text-orange-600">{dashboardStats.scheduled}</h3>
-              </div>
-          </div>
-
-          <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex flex-col md:flex-row gap-3">
-              <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-                  <input 
-                      placeholder="Search Orders..." 
-                      className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                      value={filterSearch}
-                      onChange={(e) => setFilterSearch(e.target.value)}
-                  />
-              </div>
-              <select 
-                  className="px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none bg-white cursor-pointer"
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
-              >
-                  <option value="All">All Status</option>
-                  <option value="Scheduled">Scheduled</option>
-                  <option value="Order Accepted">Order Accepted</option>
-                  <option value="Driver Assigned">Driver Assigned</option>
-                  <option value="Completed">Completed</option>
-                  <option value="Cancelled">Cancelled</option>
-                  <option value="New">New Enquiry</option>
-                  <option value="In Progress">In Progress Enquiry</option>
-                  <option value="Converted">Converted Enquiry</option>
-                  <option value="Closed">Closed Enquiry</option>
-              </select>
-              <input 
-                  type="date"
-                  className="px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none bg-white"
-                  value={filterDate}
-                  onChange={(e) => setFilterDate(e.target.value)}
-              />
-          </div>
-
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-              <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm whitespace-nowrap">
-                      <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-200">
-                          <tr>
-                              <th className="px-6 py-4">Order ID / Date</th>
-                              <th className="px-6 py-4">Customer</th>
-                              <th className="px-6 py-4">Trip/Enquiry Info</th>
-                              <th className="px-6 py-4">Assigned To</th>
-                              <th className="px-6 py-4">Status</th>
-                              <th className="px-6 py-4 text-right">Actions</th>
-                          </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                          {filteredOrders.length > 0 ? filteredOrders.map((order) => (
-                              <tr key={order.id} className="hover:bg-gray-50 transition-colors">
-                                  <td className="px-6 py-4">
-                                      <div className="font-bold text-gray-900">{order.id}</div>
-                                      <div className="text-xs text-gray-500">
-                                        {order.date || order.createdAt.split(',')[0]} 
-                                        {order.nextFollowUp ? ` • ${new Date(order.nextFollowUp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
-                                      </div>
-                                  </td>
-                                  <td className="px-6 py-4">
-                                      <div className="font-medium text-gray-900">{order.name}</div>
-                                      <div className="text-xs text-gray-500">{order.phone}</div>
-                                  </td>
-                                  <td className="px-6 py-4 max-w-xs " title={order.details}>
-                                      <p className="truncate">{order.details}</p>
-                                      {order.enquiryCategory === 'General' && (
-                                          <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-full mt-1 inline-block">
-                                              General Enquiry
-                                          </span>
-                                      )}
-                                      {order.priority && order.enquiryCategory === 'General' && (
-                                          <span className={`px-1.5 py-0.5 rounded-full mt-1 ml-1 inline-block text-[10px] font-bold ${
-                                              order.priority === 'Hot' ? 'bg-red-50 text-red-700' :
-                                              order.priority === 'Warm' ? 'bg-yellow-50 text-yellow-700' :
-                                              'bg-green-50 text-green-700'
-                                          }`}>
-                                              {order.priority}
-                                          </span>
-                                      )}
-                                  </td>
-                                  <td className="px-6 py-4 text-gray-600">
-                                      {order.assignedTo || 'Unassigned'}
-                                  </td>
-                                  <td className="px-6 py-4">
-                                      <span className={`px-2 py-1 rounded-full text-xs font-bold border ${
-                                          order.status === 'Completed' ? 'bg-green-50 text-green-700 border-green-200' :
-                                          order.status === 'Cancelled' ? 'bg-red-50 text-red-700 border-red-200' :
-                                          order.status === 'Scheduled' ? 'bg-orange-50 text-orange-700 border-orange-200' :
-                                          order.status === 'Order Accepted' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                                          order.status === 'Driver Assigned' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' :
-                                          'bg-gray-50 text-gray-700 border-gray-200'
-                                      }`}>
-                                          {order.status}
-                                      </span>
-                                  </td>
-                                  <td className="px-6 py-4 text-right">
-                                      <div className="flex justify-end gap-2">
-                                          <button 
-                                              onClick={() => handleEditOrder(order)}
-                                              className="text-gray-400 hover:text-blue-500 p-1.5 rounded-full hover:bg-blue-50 transition-colors"
-                                              title="Edit Order"
-                                          >
-                                              <Edit2 className="w-4 h-4" />
-                                          </button>
-                                          {order.status !== 'Completed' && order.status !== 'Cancelled' && (
-                                              <>
-                                                  {order.status !== 'Driver Assigned' && order.enquiryCategory === 'Transport' && (
-                                                      <button 
-                                                          onClick={() => handleStatusUpdate(order.id, 'Driver Assigned')}
-                                                          className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200"
-                                                      >
-                                                          Assign Driver
-                                                      </button>
-                                                  )}
-                                                  <button 
-                                                      onClick={() => handleStatusUpdate(order.id, 'Completed')}
-                                                      className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded hover:bg-green-200"
-                                                      >
-                                                      Complete
-                                                  </button>
-                                                  <button 
-                                                      onClick={() => handleStatusUpdate(order.id, 'Cancelled')}
-                                                      className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded hover:bg-red-200"
-                                                  >
-                                                      Cancel
-                                                  </button>
-                                              </>
-                                          )}
-                                      </div>
-                                  </td>
-                              </tr>
-                          )) : (
-                              <tr>
-                                  <td colSpan={6} className="text-center py-10 text-gray-500">
-                                      No orders found.
-                                  </td>
-                              </tr>
-                          )}
-                      </tbody>
-                  </table>
-              </div>
-          </div>
-      </div>
-
+      {/* Settings Panel */}
       {showSettings && (
-        <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 animate-in fade-in slide-in-from-top-2 mb-6">
-           <div className="flex items-center justify-between mb-4">
-             <h3 className="font-bold text-slate-800 flex items-center gap-2"><Edit2 className="w-4 h-4" /> Fare Configuration</h3>
-             <div className="bg-white border border-gray-300 rounded-lg p-1 flex">
-                <button onClick={() => setSettingsVehicleType('Sedan')} className={`px-4 py-1 text-xs font-bold rounded ${settingsVehicleType === 'Sedan' ? 'bg-emerald-500 text-white' : 'text-gray-600 hover:bg-gray-50'}`}>Sedan</button>
-                <button onClick={() => setSettingsVehicleType('SUV')} className={`px-4 py-1 text-xs font-bold rounded ${settingsVehicleType === 'SUV' ? 'bg-emerald-500 text-white' : 'text-gray-600 hover:bg-gray-50'}`}>SUV</button>
-             </div>
+          <div className="bg-gray-50 p-6 rounded-xl border border-gray-200 mb-4 animate-in fade-in slide-in-from-top-2">
+              <div className="flex justify-between items-center mb-4">
+                 <h3 className="font-bold text-gray-800 flex items-center gap-2"><Edit2 className="w-4 h-4" /> Fare & Package Configuration</h3>
+                 
+                 <div className="flex bg-white border border-gray-300 rounded-lg p-1">
+                    <button 
+                       onClick={() => setSettingsVehicleType('Sedan')}
+                       className={`px-4 py-1 text-xs font-bold rounded transition-colors ${settingsVehicleType === 'Sedan' ? 'bg-emerald-500 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+                    >
+                       Sedan
+                    </button>
+                    <button 
+                       onClick={() => setSettingsVehicleType('SUV')}
+                       className={`px-4 py-1 text-xs font-bold rounded transition-colors ${settingsVehicleType === 'SUV' ? 'bg-emerald-500 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+                    >
+                       SUV
+                    </button>
+                 </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Local Settings */}
+                <div className="space-y-3 bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                  <h4 className="text-sm font-bold text-emerald-600 uppercase tracking-wide border-b border-gray-100 pb-2 mb-2">Local Rules ({settingsVehicleType})</h4>
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">Base Fare (₹)</label>
+                    <input type="number" name="localBaseFare" value={pricing[settingsVehicleType].localBaseFare} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">Base Km Included</label>
+                    <input type="number" name="localBaseKm" value={pricing[settingsVehicleType].localBaseKm} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">Extra Km Rate (₹/km)</label>
+                    <input type="number" name="localPerKmRate" value={pricing[settingsVehicleType].localPerKmRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">Waiting Charge (₹/min)</label>
+                    <input type="number" name="localWaitingRate" value={pricing[settingsVehicleType].localWaitingRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
+                  </div>
+                </div>
+
+                {/* Outstation Settings */}
+                <div className="space-y-3 bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                  <h4 className="text-sm font-bold text-orange-600 uppercase tracking-wide border-b border-gray-100 pb-2 mb-2">Outstation Rules ({settingsVehicleType})</h4>
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">Min Km / Day</label>
+                    <input type="number" name="outstationMinKmPerDay" value={pricing[settingsVehicleType].outstationMinKmPerDay} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">Per Km Rate (₹/km)</label>
+                    <input type="number" name="outstationExtraKmRate" value={pricing[settingsVehicleType].outstationExtraKmRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">Base Rate (One Way Only)</label>
+                    <input type="number" name="outstationBaseRate" value={pricing[settingsVehicleType].outstationBaseRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" placeholder="Not used for Round Trip" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">Driver Allowance (₹/day)</label>
+                    <input type="number" name="outstationDriverAllowance" value={pricing[settingsVehicleType].outstationDriverAllowance} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">Driver Night Allowance (₹/night)</label>
+                    <input type="number" name="outstationNightAllowance" value={pricing[settingsVehicleType].outstationNightAllowance} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
+                  </div>
+                </div>
+
+                {/* Rental Settings */}
+                <div className="space-y-3 bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                  <h4 className="text-sm font-bold text-blue-600 uppercase tracking-wide border-b border-gray-100 pb-2 mb-2">Rental Rules ({settingsVehicleType})</h4>
+                  
+                  <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-xs text-gray-500 block mb-1">Extra Hr (₹)</label>
+                        <input type="number" name="rentalExtraHrRate" value={pricing[settingsVehicleType].rentalExtraHrRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500 block mb-1">Extra Km (₹)</label>
+                        <input type="number" name="rentalExtraKmRate" value={pricing[settingsVehicleType].rentalExtraKmRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
+                      </div>
+                  </div>
+
+                  {/* Package List Management */}
+                  <div className="mt-4 border-t border-gray-100 pt-2">
+                      <div className="flex justify-between items-center mb-2">
+                          <label className="text-xs font-bold text-gray-700">Packages</label>
+                          <button 
+                            onClick={() => setShowAddPackage(!showAddPackage)}
+                            className="text-[10px] bg-blue-50 text-blue-600 px-2 py-1 rounded border border-blue-100 hover:bg-blue-100 flex items-center gap-1 font-bold"
+                          >
+                            <Plus className="w-3 h-3" /> {showAddPackage && editingPackageId ? 'Edit' : 'New'}
+                          </button>
+                      </div>
+                      
+                      {showAddPackage && (
+                          <div className="bg-blue-50 p-2 rounded border border-blue-100 mb-2 space-y-2 animate-in fade-in slide-in-from-top-1">
+                              <input placeholder="Pkg Name (e.g. 10hr/100km)" className="w-full p-1.5 text-xs border rounded outline-none focus:ring-1 focus:ring-blue-500" value={newPackage.name} onChange={e => setNewPackage({...newPackage, name: e.target.value})} />
+                              <div className="flex gap-2">
+                                  <input placeholder="Hrs" type="number" className="w-full p-1.5 text-xs border rounded outline-none" value={newPackage.hours} onChange={e => setNewPackage({...newPackage, hours: e.target.value})} />
+                                  <input placeholder="Km" type="number" className="w-full p-1.5 text-xs border rounded outline-none" value={newPackage.km} onChange={e => setNewPackage({...newPackage, km: e.target.value})} />
+                              </div>
+                              <div className="flex gap-2">
+                                  <input placeholder="Sedan ₹" type="number" className="w-full p-1.5 text-xs border rounded outline-none" value={newPackage.priceSedan} onChange={e => setNewPackage({...newPackage, priceSedan: e.target.value})} />
+                                  <input placeholder="SUV ₹" type="number" className="w-full p-1.5 text-xs border rounded outline-none" value={newPackage.priceSuv} onChange={e => setNewPackage({...newPackage, priceSuv: e.target.value})} />
+                              </div>
+                              <div className="flex justify-end gap-2">
+                                <button onClick={handleCancelEditPackage} className="text-xs text-gray-500">Cancel</button>
+                                <button onClick={handleAddPackage} className="bg-blue-600 text-white text-xs font-bold py-1.5 rounded hover:bg-blue-700 transition-colors">
+                                  {editingPackageId ? 'Update Package' : 'Save Package'}
+                                </button>
+                              </div>
+                          </div>
+                      )}
+
+                      <div className="space-y-1 max-h-40 overflow-y-auto custom-scrollbar">
+                          {rentalPackages.map(pkg => (
+                              <div key={pkg.id} className="flex justify-between items-center p-2 hover:bg-gray-50 rounded border border-transparent hover:border-gray-200 group transition-colors">
+                                  <div>
+                                      <div className="text-xs font-bold text-gray-800">{pkg.name}</div>
+                                      <div className="text-[10px] text-gray-500">{pkg.hours}hr / {pkg.km}km</div>
+                                  </div>
+                                  <div className="text-right flex items-center gap-2">
+                                      <div className="text-[10px] text-gray-600 font-mono text-right">
+                                          <div>S: {pkg.priceSedan}</div>
+                                          <div>X: {pkg.priceSuv}</div>
+                                      </div>
+                                      <button onClick={(e) => handleEditPackage(pkg)} className="text-gray-300 hover:text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity p-1">
+                                         <Edit2 className="w-3 h-3" />
+                                      </button>
+                                      <button onClick={(e) => removePackage(pkg.id, e)} className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-1">
+                                          <Trash2 className="w-3 h-3" />
+                                      </button>
+                                  </div>
+                              </div>
+                          ))}
+                      </div>
+                  </div>
+
+                  <div className="pt-4 mt-auto">
+                     <button onClick={() => setShowSettings(false)} className="w-full bg-slate-800 text-white py-2 rounded text-sm font-medium hover:bg-slate-900 transition-colors">Close</button>
+                  </div>
+                </div>
+              </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-             <div className="space-y-3 bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-                <h4 className="text-sm font-bold text-emerald-600 uppercase tracking-wide border-b border-gray-100 pb-2 mb-2">Local Rules ({settingsVehicleType})</h4>
-                <div>
-                  <label className="text-xs text-gray-500 block mb-1">Base Fare (₹)</label>
-                  <input type="number" name="localBaseFare" value={pricing[settingsVehicleType].localBaseFare} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500 block mb-1">Base Km Included</label>
-                  <input type="number" name="localBaseKm" value={pricing[settingsVehicleType].localBaseKm} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500 block mb-1">Extra Km Rate (₹/km)</label>
-                  <input type="number" name="localPerKmRate" value={pricing[settingsVehicleType].localPerKmRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500 block mb-1">Waiting Charge (₹/min)</label>
-                  <input type="number" name="localWaitingRate" value={pricing[settingsVehicleType].localWaitingRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
-                </div>
-            </div>
+      )}
 
-            <div className="space-y-3 bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-              <h4 className="text-sm font-bold text-orange-600 uppercase tracking-wide border-b border-gray-100 pb-2 mb-2">Outstation Rules ({settingsVehicleType})</h4>
-              <div>
-                <label className="text-xs text-gray-500 block mb-1">Min Km / Day</label>
-                <input type="number" name="outstationMinKmPerDay" value={pricing[settingsVehicleType].outstationMinKmPerDay} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 block mb-1">Per Km Rate (₹/km)</label>
-                <input type="number" name="outstationExtraKmRate" value={pricing[settingsVehicleType].outstationExtraKmRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 block mb-1">Base Rate (One Way Only)</label>
-                <input type="number" name="outstationBaseRate" value={pricing[settingsVehicleType].outstationBaseRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" placeholder="Not used for Round Trip" />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 block mb-1">Driver Allowance (₹/day)</label>
-                <input type="number" name="outstationDriverAllowance" value={pricing[settingsVehicleType].outstationDriverAllowance} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
-                </div>
-              <div>
-                <label className="text-xs text-gray-500 block mb-1">Driver Night Allowance (₹/night)</label>
-                <input type="number" name="outstationNightAllowance" value={pricing[settingsVehicleType].outstationNightAllowance} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
-              </div>
-            </div>
-
-            <div className="space-y-3 bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-              <h4 className="text-sm font-bold text-blue-600 uppercase tracking-wide border-b border-gray-100 pb-2 mb-2">Rental Rules ({settingsVehicleType})</h4>
-              
-              <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-xs text-gray-500 block mb-1">Extra Hr (₹)</label>
-                    <input type="number" name="rentalExtraHrRate" value={pricing[settingsVehicleType].rentalExtraHrRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-500 block mb-1">Extra Km (₹)</label>
-                    <input type="number" name="rentalExtraKmRate" value={pricing[settingsVehicleType].rentalExtraKmRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
-                  </div>
-              </div>
-
-              <div className="mt-4 border-t border-gray-100 pt-2">
-                  <div className="flex justify-between items-center mb-2">
-                      <label className="text-xs font-bold text-gray-700">Packages</label>
-                      <button 
-                        onClick={() => { setShowAddPackage(!showAddPackage); setEditingPackageId(null); setNewPackage({ name: '', hours: '', km: '', priceSedan: '', priceSuv: '' }); }}
-                        className="text-[10px] bg-blue-50 text-blue-600 px-2 py-1 rounded border border-blue-100 hover:bg-blue-100 flex items-center gap-1 font-bold"
-                      >
-                        <Plus className="w-3 h-3" /> New
-                      </button>
+      {/* Main Content: Quote Generator & Enquiries List */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[calc(100vh-14rem)]">
+          {/* Left Column: Quote Generator */}
+          <div className="space-y-6 flex flex-col">
+              {/* Customer Info & Quote Builder */}
+              <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex-1 overflow-y-auto custom-scrollbar">
+                  <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                      <User className="w-4 h-4" /> Customer & Enquiry Info
+                  </h3>
+                  
+                  {/* Phone Input with Check */}
+                  <div className="mb-4">
+                      <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Phone Number</label>
+                      <div className="flex gap-2">
+                          <input 
+                              type="tel" 
+                              value={customerDetails.phone}
+                              onChange={e => {setCustomerDetails({...customerDetails, phone: e.target.value}); setIsPhoneChecked(false);}}
+                              className="flex-1 p-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500"
+                              placeholder="+91..."
+                          />
+                          <button onClick={handlePhoneCheck} className="px-3 bg-emerald-50 text-emerald-700 rounded-lg font-bold hover:bg-emerald-100 transition-colors">
+                              Check
+                          </button>
+                      </div>
+                      {isPhoneChecked && phoneLookupResult === 'Existing' && (
+                          <p className="text-xs text-emerald-600 mt-1 flex items-center gap-1">
+                            <CheckCircle className="w-3 h-3"/> Existing Customer/Vendor Found!
+                          </p>
+                      )}
+                       {isPhoneChecked && phoneLookupResult === 'New' && (
+                          <p className="text-xs text-blue-600 mt-1 flex items-center gap-1">
+                            <UserPlus className="w-3 h-3"/> New Customer
+                          </p>
+                      )}
                   </div>
                   
-                  {showAddPackage && (
-                      <div className="bg-blue-50 p-2 rounded border border-blue-100 mb-2 space-y-2 animate-in fade-in slide-in-from-top-1">
-                          <input placeholder="Pkg Name (e.g. 10hr/100km)" className="w-full p-1.5 text-xs border rounded outline-none focus:ring-1 focus:ring-blue-500" value={newPackage.name} onChange={e => setNewPackage({...newPackage, name: e.target.value})} />
-                          <div className="flex gap-2">
-                              <input placeholder="Hrs" type="number" className="w-full p-1.5 text-xs border rounded outline-none" value={newPackage.hours} onChange={e => setNewPackage({...newPackage, hours: e.target.value})} />
-                              <input placeholder="Km" type="number" className="w-full p-1.5 text-xs border rounded outline-none" value={newPackage.km} onChange={e => setNewPackage({...newPackage, km: e.target.value})} />
-                          </div>
-                          <div className="flex gap-2">
-                              <input placeholder="Sedan ₹" type="number" className="w-full p-1.5 text-xs border rounded outline-none" value={newPackage.priceSedan} onChange={e => setNewPackage({...newPackage, priceSedan: e.target.value})} />
-                              <input placeholder="SUV ₹" type="number" className="w-full p-1.5 text-xs border rounded outline-none" value={newPackage.priceSuv} onChange={e => setNewPackage({...newPackage, priceSuv: e.target.value})} />
-                          </div>
-                          <div className="flex gap-2">
-                            {editingPackageId && (
-                                <button onClick={handleCancelEditPackage} className="flex-1 bg-white text-gray-600 text-xs font-bold py-1.5 rounded hover:bg-gray-100 transition-colors">Cancel</button>
-                            )}
-                            <button onClick={handleAddPackage} className={`flex-1 ${editingPackageId ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-blue-600 hover:bg-blue-700'} text-white text-xs font-bold py-1.5 rounded transition-colors`}>
-                                {editingPackageId ? 'Update Package' : 'Save Package'}
-                            </button>
-                          </div>
+                  {/* Existing Enquiries for this phone (if any) */}
+                  {existingEnquiriesForPhone.length > 0 && (
+                      <div className="bg-blue-50 border border-blue-100 p-3 rounded-lg mb-4">
+                        <p className="text-xs text-blue-800 font-bold mb-2">Previous Enquiries for this number:</p>
+                        <div className="max-h-24 overflow-y-auto space-y-1">
+                          {existingEnquiriesForPhone.map(enq => (
+                            <div key={enq.id} className="text-xs text-blue-700 flex justify-between items-center">
+                              <span>{enq.name} - {enq.details.substring(0, 30)}...</span>
+                              <span className="px-1.5 py-0.5 rounded-full text-[9px] bg-white text-blue-600">{enq.status}</span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                   )}
 
-                  <div className="space-y-1 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
-                      {rentalPackages.map(pkg => (
-                          <div key={pkg.id} className="flex justify-between items-center p-2 hover:bg-gray-50 rounded border border-transparent hover:border-gray-200 group transition-colors">
-                              <div>
-                                  <div className="text-xs font-bold text-gray-800">{pkg.name}</div>
-                                  <div className="text-[10px] text-gray-500">{pkg.hours}hr / {pkg.km}km</div>
-                              </div>
-                              <div className="text-right flex items-center gap-2">
-                                  <div className="text-[10px] text-gray-600 font-mono text-right">
-                                      <div>S: {pkg.priceSedan}</div>
-                                      <div>X: {pkg.priceSuv}</div>
-                                  </div>
-                                  <button onClick={(e) => handleEditPackage(pkg)} className="text-gray-300 hover:text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity p-1">
-                                    <Edit2 className="w-3 h-3" />
-                                  </button>
-                                  <button onClick={(e) => removePackage(pkg.id, e)} className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-1">
-                                      <Trash2 className="w-3 h-3" />
-                                  </button>
-                              </div>
-                          </div>
-                      ))}
-                  </div>
-              </div>
-              <div className="pt-4 mt-auto">
-                 <button onClick={() => setShowSettings(false)} className="w-full bg-slate-800 text-white py-2 rounded text-sm font-medium hover:bg-slate-900 transition-colors">Close</button>
-              </div>
-            </div>
-          </div>
-        )}
-
-      {mapError && (
-        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg flex items-center gap-2">
-          <AlertCircle className="w-5 h-5" /> {mapError}
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-6">
-              <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-                  <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-                      <User className="w-4 h-4" /> Customer Details
-                  </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                       <input 
-                          placeholder="Name" 
+                          placeholder="Customer Name" 
                           className="p-2 border rounded-lg w-full outline-none focus:ring-2 focus:ring-emerald-500"
                           value={customerDetails.name}
                           onChange={e => setCustomerDetails({...customerDetails, name: e.target.value})}
                       />
-                      <div>
-                        <input 
-                            placeholder="Phone" 
-                            className="p-2 border rounded-lg w-full outline-none focus:ring-2 focus:ring-emerald-500"
-                            value={customerDetails.phone}
-                            onChange={e => setCustomerDetails({...customerDetails, phone: e.target.value})}
-                            onBlur={handlePhoneInputCheck}
-                        />
-                        {isPhoneChecked && (
-                            <div className={`mt-1 text-xs flex items-center gap-1 ${phoneLookupResult === 'Existing' ? 'text-blue-600' : 'text-emerald-600'}`}>
-                                {phoneLookupResult === 'Existing' ? <CheckCircle className="w-3 h-3" /> : <UserCheck className="w-3 h-3" />}
-                                {phoneLookupResult === 'Existing' ? 'Existing Customer/Vendor' : 'New Customer'}
-                            </div>
-                        )}
-                        {existingEnquiriesForPhone.length > 0 && (
-                            <div className="mt-2 bg-gray-50 p-2 rounded-lg text-xs border border-gray-100 max-h-24 overflow-y-auto">
-                                <p className="font-bold text-gray-700 mb-1">Previous Enquiries:</p>
-                                {existingEnquiriesForPhone.map(e => (
-                                    <p key={e.id} className="text-gray-600 truncate">{e.id}: {e.details}</p>
-                                ))}
-                            </div>
-                        )}
-                      </div>
+                      <input 
+                          placeholder="Email (Optional)" 
+                          className="p-2 border rounded-lg w-full outline-none focus:ring-2 focus:ring-emerald-500"
+                          value={customerDetails.email}
+                          onChange={e => setCustomerDetails({...customerDetails, email: e.target.value})}
+                      />
                   </div>
-                  <input 
-                    placeholder="Email (Optional)" 
-                    type="email"
-                    className="p-2 border rounded-lg w-full outline-none focus:ring-2 focus:ring-emerald-500"
-                    value={customerDetails.email}
-                    onChange={e => setCustomerDetails({...customerDetails, email: e.target.value})}
-                  />
-                  <div className="mt-4">
+                  
+                  <div className="mb-4">
                       <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Pickup Location</label>
                       {!isMapReady ? (
                            <div className="p-2 bg-gray-100 text-gray-500 text-sm rounded flex items-center gap-2">
@@ -1245,34 +987,73 @@ Book now with OK BOZ Transport!`;
                         )}
                   </div>
                   
-                  <div className="flex bg-gray-100 p-1 rounded-lg mt-4">
+                  {/* Enquiry Type Toggle (General vs Transport) */}
+                  <div className="flex bg-gray-100 p-1 rounded-lg mb-4">
                       <button 
                           onClick={() => setEnquiryCategory('Transport')}
                           className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${enquiryCategory === 'Transport' ? 'bg-white shadow text-emerald-600' : 'text-gray-500'}`}
                       >
-                          Transport Quote
+                          <Car className="w-4 h-4 inline mr-2"/>Transport Enquiry
                       </button>
                       <button 
                           onClick={() => setEnquiryCategory('General')}
                           className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${enquiryCategory === 'General' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}
                       >
-                          General Enquiry
+                          <Headset className="w-4 h-4 inline mr-2"/>General Enquiry
                       </button>
                   </div>
 
                   {enquiryCategory === 'General' ? (
-                      <div className="p-4 bg-gray-50 rounded-lg text-sm text-gray-500 italic text-center mt-4">
-                          This is a general enquiry. Use the Requirement Details below for notes or follow-up scheduling.
+                      <div className="space-y-4">
+                          <div>
+                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Requirement Details</label>
+                              <textarea 
+                                  rows={3}
+                                  className="w-full p-3 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 resize-none text-sm"
+                                  placeholder="What is the customer asking for?"
+                                  value={customerDetails.requirements}
+                                  onChange={e => setCustomerDetails({...customerDetails, requirements: e.target.value})}
+                              />
+                          </div>
+                          <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Follow-up Schedule</label>
+                              <div className="grid grid-cols-2 gap-3 mb-3">
+                                  <input 
+                                      type="date" 
+                                      value={generalFollowUpDate} 
+                                      onChange={e => setGeneralFollowUpDate(e.target.value)}
+                                      className="p-2 border rounded-lg w-full text-sm"
+                                  />
+                                  <input 
+                                      type="time" 
+                                      value={generalFollowUpTime} 
+                                      onChange={e => setGeneralFollowUpTime(e.target.value)}
+                                      className="p-2 border rounded-lg w-full text-sm"
+                                  />
+                              </div>
+                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Priority</label>
+                              <select 
+                                  value={generalFollowUpPriority} 
+                                  onChange={e => setGeneralFollowUpPriority(e.target.value as 'Hot' | 'Warm' | 'Cold')}
+                                  className="p-2 border rounded-lg w-full text-sm bg-white"
+                              >
+                                  <option value="Hot">Hot</option>
+                                  <option value="Warm">Warm</option>
+                                  <option value="Cold">Cold</option>
+                              </select>
+                          </div>
                       </div>
                   ) : (
-                      <div className="space-y-4 mt-4">
+                      <div className="space-y-4">
+                          {/* Trip Details Header */}
                           <div className="flex justify-between items-center border-b border-gray-100 pb-2">
                               <h4 className="text-sm font-bold text-gray-700">Trip Details</h4>
+                              {/* Vehicle Selection */}
                               <div className="flex gap-2">
                                   {['Sedan', 'SUV'].map(v => (
                                       <button
                                           key={v}
-                                          onClick={() => setVehicleType(v as any)}
+                                          onClick={() => setVehicleType(v as VehicleType)}
                                           className={`px-3 py-1 text-xs rounded border transition-colors ${vehicleType === v ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-gray-600 border-gray-200'}`}
                                       >
                                           {v}
@@ -1281,6 +1062,7 @@ Book now with OK BOZ Transport!`;
                               </div>
                           </div>
 
+                          {/* Trip Type Tabs */}
                           <div className="flex border-b border-gray-200">
                               {['Local', 'Rental', 'Outstation'].map(t => (
                                   <button
@@ -1293,6 +1075,7 @@ Book now with OK BOZ Transport!`;
                               ))}
                           </div>
 
+                          {/* Dynamic Inputs based on Trip Type */}
                           {tripType === 'Local' && (
                               <div className="space-y-3">
                                   <div>
@@ -1303,7 +1086,7 @@ Book now with OK BOZ Transport!`;
                                          </div>
                                       ) : (
                                           <Autocomplete 
-                                              placeholder="Search Google Maps for Drop"
+                                              placeholder="Search Drop Location"
                                               onAddressSelect={(addr) => setTransportDetails(prev => ({ ...prev, drop: addr }))}
                                               setNewPlace={(place) => setDropCoords(place)}
                                               defaultValue={transportDetails.drop}
@@ -1326,30 +1109,65 @@ Book now with OK BOZ Transport!`;
                                           onChange={e => setTransportDetails({...transportDetails, waitingMins: e.target.value})}
                                       />
                                   </div>
+                                  
+                                  <div className="bg-blue-50 p-3 rounded-lg text-xs text-blue-700 border border-blue-100 flex gap-2 items-start">
+                                      <Settings className="w-4 h-4 mt-0.5 shrink-0" />
+                                      <div>
+                                          <span className="font-bold">Current Rules ({vehicleType}):</span> Min {pricing[vehicleType].localBaseKm}km Base ₹{pricing[vehicleType].localBaseFare}. Extra ₹{pricing[vehicleType].localPerKmRate}/km. Wait ₹{pricing[vehicleType].localWaitingRate}/min.
+                                      </div>
+                                  </div>
                               </div>
                           )}
 
                           {tripType === 'Rental' && (
-                              <div className="grid grid-cols-2 gap-2">
-                                  {rentalPackages.map(pkg => (
-                                      <button 
-                                          key={pkg.id}
-                                          onClick={() => setTransportDetails(prev => ({...prev, packageId: pkg.id}))}
-                                          className={`p-2 border rounded-lg text-left text-sm ${transportDetails.packageId === pkg.id ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 hover:bg-gray-50'}`}
-                                      >
-                                          <div className="font-bold">{pkg.name}</div>
-                                          <div className="text-gray-500">₹{vehicleType === 'Sedan' ? pkg.priceSedan : pkg.priceSuv}</div>
-                                      </button>
-                                  ))}
+                              <div className="space-y-3">
+                                  <div>
+                                      <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Select Package</label>
+                                  </div>
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-40 overflow-y-auto pr-1">
+                                      {rentalPackages.map(pkg => (
+                                          <div 
+                                              key={pkg.id}
+                                              onClick={() => setTransportDetails({...transportDetails, packageId: pkg.id})}
+                                              className={`relative p-3 rounded-xl border-2 cursor-pointer transition-all group ${transportDetails.packageId === pkg.id ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 hover:border-emerald-200'}`}
+                                          >
+                                              <div className="flex justify-between items-center">
+                                                  <div>
+                                                     <span className="font-bold text-gray-800 block">{pkg.name}</span>
+                                                     <span className="text-xs text-gray-500">{pkg.hours} Hr / {pkg.km} Km</span>
+                                                  </div>
+                                                  <div className="text-right">
+                                                      <span className="text-emerald-600 font-bold block">₹{vehicleType === 'Sedan' ? pkg.priceSedan : pkg.priceSuv}</span>
+                                                      <span className="text-[10px] text-gray-400 uppercase">{vehicleType}</span>
+                                                  </div>
+                                              </div>
+                                          </div>
+                                      ))}
+                                  </div>
+                                  <div className="text-xs text-gray-500 italic border-t border-gray-100 pt-2">
+                                    * Extra Charges: Hours (₹{pricing[vehicleType].rentalExtraHrRate}/hr) and Km (₹{pricing[vehicleType].rentalExtraKmRate}/km).
+                                  </div>
                               </div>
                           )}
 
                           {tripType === 'Outstation' && (
                               <div className="space-y-3">
-                                  <div className="flex bg-gray-100 p-1 rounded-lg">
-                                      <button onClick={() => setOutstationSubType('RoundTrip')} className={`flex-1 py-1 text-xs rounded ${outstationSubType === 'RoundTrip' ? 'bg-white shadow text-emerald-600' : 'text-gray-500'}`}>Round Trip</button>
-                                      <button onClick={() => setOutstationSubType('OneWay')} className={`flex-1 py-1 text-xs rounded ${outstationSubType === 'OneWay' ? 'bg-white shadow text-emerald-600' : 'text-gray-500'}`}>One Way</button>
+                                  {/* Trip Sub-Type Toggle */}
+                                  <div className="flex bg-gray-100 p-1 rounded-lg mb-4">
+                                      <button 
+                                          onClick={() => setOutstationSubType('OneWay')}
+                                          className={`flex-1 py-2 text-sm font-medium rounded-md transition-all flex items-center justify-center gap-2 ${outstationSubType === 'OneWay' ? 'bg-white shadow-sm text-emerald-600' : 'text-gray-500'}`}
+                                      >
+                                          <ArrowRight className="w-4 h-4" /> One Way
+                                      </button>
+                                      <button 
+                                          onClick={() => setOutstationSubType('RoundTrip')}
+                                          className={`flex-1 py-2 text-sm font-medium rounded-md transition-all flex items-center justify-center gap-2 ${outstationSubType === 'RoundTrip' ? 'bg-white shadow-sm text-emerald-600' : 'text-gray-500'}`}
+                                      >
+                                          <ArrowRightLeft className="w-4 h-4" /> Round Trip
+                                      </button>
                                   </div>
+
                                   <div>
                                       <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Destination</label>
                                       {!isMapReady ? (
@@ -1390,12 +1208,20 @@ Book now with OK BOZ Transport!`;
                                           />
                                       )}
                                   </div>
+                                  <div className="bg-orange-50 p-3 rounded-lg text-xs text-orange-800 border border-orange-100 flex gap-2 items-start">
+                                      <MapPin className="w-4 h-4 mt-0.5 shrink-0" />
+                                      <div>
+                                          <span className="font-bold">Current Rules ({vehicleType} - {outstationSubType}):</span> Min {pricing[vehicleType].outstationMinKmPerDay}km/day. Rate ₹{pricing[vehicleType].outstationExtraKmRate}/km. Driver ₹{pricing[vehicleType].outstationDriverAllowance}/day. {outstationSubType === 'RoundTrip' ? `Night Allow ₹${pricing[vehicleType].outstationNightAllowance}.` : 'No Night Allowance.'}
+                                      </div>
+                                  </div>
                               </div>
                           )}
                       </div>
                   )}
 
+                  {/* New Sections: Requirement Details & Assignments */}
                   <div className="mt-6 pt-6 border-t border-gray-100 space-y-5">
+                      {/* 1. Requirement Details */}
                       <div>
                           <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Requirement Details</label>
                           <textarea 
@@ -1407,11 +1233,13 @@ Book now with OK BOZ Transport!`;
                           />
                       </div>
 
+                      {/* 2. Assign Enquiry To */}
                       <div>
                           <label className="block text-xs font-bold text-gray-500 uppercase mb-2 flex items-center gap-1">
                               <Building2 className="w-3 h-3" /> Assign Enquiry To
                           </label>
                           <div className="flex gap-2">
+                              {/* Corporate Selection (Super Admin Only) */}
                               {isSuperAdmin && (
                                   <select 
                                       className="flex-1 p-2 border border-gray-300 rounded-lg text-sm outline-none bg-white"
@@ -1430,7 +1258,7 @@ Book now with OK BOZ Transport!`;
                                   value={assignment.branchName}
                                   onChange={(e) => setAssignment({...assignment, branchName: e.target.value, staffId: ''})}
                               >
-                                  <option value="">All Branches</option>
+                                  <option value="">Select Branch</option>
                                   {filteredBranches.map((b: any) => (
                                       <option key={b.id} value={b.name}>{b.name}</option>
                                   ))}
@@ -1449,45 +1277,39 @@ Book now with OK BOZ Transport!`;
                           </div>
                       </div>
 
-                      {enquiryCategory === 'General' && (
-                          <div className="pt-2 border-t border-gray-100 space-y-3">
-                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Schedule Follow-up</label>
-                              <div className="grid grid-cols-3 gap-2">
-                                  <input type="date" value={generalFollowUpDate} onChange={(e) => setGeneralFollowUpDate(e.target.value)} className="p-2 border rounded-lg text-sm col-span-1" />
-                                  <input type="time" value={generalFollowUpTime} onChange={(e) => setGeneralFollowUpTime(e.target.value)} className="p-2 border rounded-lg text-sm col-span-1" />
-                                  <select value={generalFollowUpPriority} onChange={(e) => setGeneralFollowUpPriority(e.target.value as any)} className="p-2 border rounded-lg text-sm col-span-1">
-                                      <option>Low</option>
-                                      <option>Warm</option>
-                                      <option>Hot</option>
-                                  </select>
-                              </div>
-                              <button 
-                                  onClick={handleSaveGeneralFollowUp}
-                                  className="w-full py-2.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg font-bold text-sm hover:bg-blue-100 transition-colors flex items-center justify-center gap-2"
-                              >
-                                  <Calendar className="w-4 h-4" /> Save Follow-up Task
-                              </button>
-                          </div>
-                      )}
-
+                      {/* 3. Action Buttons */}
                       <div className="grid grid-cols-2 gap-3 pt-2">
                           <button 
-                              onClick={handleCancelForm}
-                              className="py-2.5 text-gray-500 hover:text-red-500 rounded-lg font-medium text-sm hover:bg-gray-50 transition-colors flex items-center justify-center gap-1"
+                              onClick={() => handleEnquiryAction('Schedule')}
+                              className="py-2.5 border border-blue-200 text-blue-600 rounded-lg font-bold text-sm hover:bg-blue-50 transition-colors flex items-center justify-center gap-2"
                           >
-                              <X className="w-4 h-4" /> Clear Form
+                              <Calendar className="w-4 h-4" /> Schedule
                           </button>
                           <button 
-                              onClick={handleBookNow}
+                              onClick={() => handleEnquiryAction('Book')}
                               className="py-2.5 bg-emerald-600 text-white rounded-lg font-bold text-sm hover:bg-emerald-700 transition-colors shadow-md flex items-center justify-center gap-2"
                           >
-                              <CheckCircle className="w-4 h-4" /> {enquiryCategory === 'Transport' ? 'Book Order' : 'Save Enquiry'}
+                              <ArrowRight className="w-4 h-4" /> Book Now
+                          </button>
+                          
+                          <button 
+                              onClick={handleCancel}
+                              className="py-2.5 text-gray-500 hover:text-red-500 rounded-lg font-medium text-sm hover:bg-gray-50 transition-colors flex items-center justify-center gap-1"
+                          >
+                              <X className="w-4 h-4" /> Cancel
+                          </button>
+                          <button 
+                              onClick={() => handleEnquiryAction('Save')}
+                              className="py-2.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg font-bold text-sm hover:bg-emerald-100 transition-colors flex items-center justify-center gap-2"
+                          >
+                              <Save className="w-4 h-4" /> Save Enquiry
                           </button>
                       </div>
                   </div>
               </div>
           </div>
 
+          {/* Right Column: Output */}
           <div className="space-y-6">
               <div className="bg-slate-900 text-white p-6 rounded-xl shadow-lg relative overflow-hidden">
                   <div className="relative z-10">
@@ -1512,17 +1334,17 @@ Book now with OK BOZ Transport!`;
                           <MessageCircle className="w-4 h-4 text-emerald-500" /> Generated Message
                       </h4>
                       <button 
-                          onClick={() => {navigator.clipboard.writeText(generatedMessage); setTimeout(() => alert("Copied!"), 0);}}
+                          onClick={() => {navigator.clipboard.writeText(generatedMessage); alert("Copied!")}}
                           className="text-xs text-blue-600 hover:underline flex items-center gap-1"
                       >
                           <Copy className="w-3 h-3" /> Copy
                       </button>
                   </div>
                   <textarea 
-                      ref={messageTextareaRef}
-                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none resize-none mb-3"
+                      className="w-full h-32 p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none resize-none mb-3"
                       value={generatedMessage}
                       readOnly
+                      ref={messageTextareaRef}
                   />
                   <div className="grid grid-cols-2 gap-3">
                       <button 
@@ -1533,54 +1355,151 @@ Book now with OK BOZ Transport!`;
                       </button>
                       <button 
                           onClick={() => {
-                            const subject = enquiryCategory === 'Transport' ? `${tripType} Trip Estimate` : 'Regarding your Enquiry with OK BOZ';
-                            const url = `mailto:${customerDetails.email || ''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(generatedMessage)}`;
-                            window.location.href = url;
+                            const subject = encodeURIComponent(`${enquiryCategory === 'Transport' ? 'Quote' : 'Enquiry'} from OK BOZ`);
+                            window.location.href = `mailto:${customerDetails.email}?subject=${subject}&body=${encodeURIComponent(generatedMessage)}`;
                           }}
-                          className="bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-lg font-medium flex items-center justify-center gap-2"
+                          disabled={!customerDetails.email}
+                          className="bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-lg font-medium flex items-center justify-center gap-2 disabled:opacity-50"
                       >
                           <Mail className="w-4 h-4" /> Email
                       </button>
                   </div>
               </div>
-          </div>
-      </div>
 
-      {isScheduleModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-              <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm animate-in fade-in zoom-in duration-200">
-                  <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                      <h3 className="font-bold text-gray-800">Schedule Order</h3>
-                      <button onClick={() => setIsScheduleModalOpen(false)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5"/></button>
-                  </div>
-                  <div className="p-6 space-y-4">
-                      <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
-                          <input 
-                              type="date" 
-                              value={scheduleData.date}
-                              onChange={(e) => setScheduleData({...scheduleData, date: e.target.value})}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500"
-                          />
-                      </div>
-                      <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Time</label>
-                          <input 
-                              type="time" 
-                              value={scheduleData.time}
-                              onChange={(e) => setScheduleData({...scheduleData, time: e.target.value})}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500"
-                          />
-                      </div>
-                      <div className="flex justify-end pt-2">
-                          <button onClick={confirmSchedule} className="bg-emerald-600 text-white py-2.5 px-6 rounded-lg font-bold hover:bg-emerald-700 transition-colors">
-                              Confirm Schedule
-                          </button>
-                      </div>
-                  </div>
+              {/* Action Buttons */}
+              <div className="grid grid-cols-2 gap-3 pt-2 shrink-0">
+                  <button 
+                      onClick={() => handleEnquiryAction('Schedule')}
+                      className="py-2.5 border border-blue-200 text-blue-600 rounded-lg font-bold text-sm hover:bg-blue-50 transition-colors flex items-center justify-center gap-2"
+                  >
+                      <Calendar className="w-4 h-4" /> Schedule
+                  </button>
+                  <button 
+                      onClick={() => handleEnquiryAction('Book')}
+                      className="py-2.5 bg-emerald-600 text-white rounded-lg font-bold text-sm hover:bg-emerald-700 transition-colors shadow-md flex items-center justify-center gap-2"
+                  >
+                      <ArrowRight className="w-4 h-4" /> Book Now
+                  </button>
+                  
+                  <button 
+                      onClick={handleCancel}
+                      className="py-2.5 text-gray-500 hover:text-red-500 rounded-lg font-medium text-sm hover:bg-gray-50 transition-colors flex items-center justify-center gap-1"
+                  >
+                      <X className="w-4 h-4" /> Cancel
+                  </button>
+                  <button 
+                      onClick={() => handleEnquiryAction('Save')}
+                      className="py-2.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg font-bold text-sm hover:bg-emerald-100 transition-colors flex items-center justify-center gap-2"
+                  >
+                      <Save className="w-4 h-4" /> Save Enquiry
+                  </button>
               </div>
           </div>
-      )}
+
+          {/* Right Column: Existing Enquiries List */}
+          <div className="space-y-6 flex flex-col">
+              <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex-1 flex flex-col overflow-hidden">
+                  <div className="flex justify-between items-center mb-4">
+                      <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                          <History className="w-5 h-5 text-gray-400" /> Recent Enquiries
+                      </h3>
+                      <button className="text-sm text-emerald-600 hover:underline">View All</button>
+                  </div>
+                  
+                  {/* Filters */}
+                  <div className="flex gap-2 mb-4">
+                      <div className="relative flex-1">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                          <input 
+                              type="text" 
+                              placeholder="Search name or phone..." 
+                              value={filterSearch}
+                              onChange={e => setFilterSearch(e.target.value)}
+                              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500"
+                          />
+                      </div>
+                      <select 
+                          value={filterStatus}
+                          onChange={e => setFilterStatus(e.target.value)}
+                          className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
+                      >
+                          <option value="All">All Status</option>
+                          <option value="New">New</option>
+                          <option value="In Progress">In Progress</option>
+                          <option value="Scheduled">Scheduled</option>
+                          <option value="Booked">Booked</option>
+                          <option value="Completed">Completed</option>
+                          <option value="Cancelled">Cancelled</option>
+                      </select>
+                      <input 
+                          type="date" 
+                          value={filterDate} 
+                          onChange={e => setFilterDate(e.target.value)} 
+                          className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white text-gray-500" 
+                      />
+                  </div>
+
+                  {/* Enquiry List */}
+                  <div className="flex-1 overflow-y-auto custom-scrollbar pr-2">
+                      {filteredEnquiriesForList.length === 0 ? (
+                          <div className="py-10 text-center text-gray-500">
+                              <History className="w-12 h-12 mx-auto mb-3 text-gray-300"/>
+                              No matching enquiries found.
+                          </div>
+                      ) : (
+                          <div className="space-y-3">
+                              {filteredEnquiriesForList.map(enq => (
+                                  <div key={enq.id} className="bg-gray-50 p-4 rounded-xl border border-gray-100 hover:bg-gray-100 transition-colors group relative">
+                                      <div className="flex justify-between items-start mb-2">
+                                          <div>
+                                              <p className="font-bold text-gray-800 text-sm">{enq.name} <span className="text-gray-400 font-normal">({enq.city})</span></p>
+                                              <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+                                                <Phone className="w-3 h-3"/> {enq.phone}
+                                              </p>
+                                          </div>
+                                          <div className="text-right">
+                                              <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${getStatusColor(enq.status)}`}>
+                                                  {enq.status}
+                                              </span>
+                                              {enq.priority && (
+                                                  <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold border ${enq.priority === 'Hot' ? 'bg-red-50 text-red-600 border-red-100' : enq.priority === 'Warm' ? 'bg-orange-50 text-orange-600 border-orange-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
+                                                      {enq.priority}
+                                                  </span>
+                                              )}
+                                              <p className="text-[10px] text-gray-400 mt-1">
+                                                  {new Date(enq.createdAt).toLocaleDateString()}
+                                              </p>
+                                          </div>
+                                      </div>
+                                      <p className="text-xs text-gray-600 italic line-clamp-2">"{enq.details}"</p>
+                                      {enq.nextFollowUp && (
+                                          <div className="text-[10px] text-blue-600 mt-2 flex items-center gap-1">
+                                              <Clock className="w-3 h-3" /> Follow-up: {new Date(enq.nextFollowUp).toLocaleDateString()} {new Date(enq.nextFollowUp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                          </div>
+                                      )}
+                                      <button 
+                                          onClick={() => handleEditEnquiry(enq)}
+                                          className="absolute top-3 right-3 p-1.5 text-gray-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors opacity-0 group-hover:opacity-100"
+                                          title="Edit Enquiry"
+                                      >
+                                          <Edit2 className="w-4 h-4" />
+                                      </button>
+                                  </div>
+                              ))}
+                          </div>
+                      )}
+                  </div>
+
+                  {pendingFollowUps > 0 && (
+                      <div className="bg-orange-50 text-orange-700 p-3 rounded-lg border border-orange-100 mt-auto shrink-0">
+                          <AlertCircle className="w-4 h-4 inline-block mr-2" /> <strong>{pendingFollowUps}</strong> pending follow-ups due today.
+                      </div>
+                  )}
+              </div>
+          </div>
+      </div>
     </div>
   );
 };
+
+export default CustomerCare;

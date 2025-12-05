@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { 
   Building2, Users, FileText, UserX, Clock, 
@@ -7,7 +6,7 @@ import {
   MessageSquare, Plus, Trash2, Edit2, CheckCircle, 
   MapPin as MapPinIcon, Briefcase as BriefcaseIcon,
   ToggleLeft, ToggleRight, Save, UploadCloud, Search,
-  AlertCircle, Shield, Smartphone, TrendingUp as TrendingUpIcon, RotateCw, CalendarCheck
+  AlertCircle, Shield, Smartphone, TrendingUp as TrendingUpIcon, RotateCw, CalendarCheck, X
 } from 'lucide-react';
 
 // --- Types ---
@@ -172,7 +171,7 @@ const DepartmentsAndRoles = () => {
               className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
               placeholder="e.g. Logistics"
             />
-            <button onClick={() => {if(newDept) {setDepartments([...departments, newDept]); setNewDept('')}}} className="bg-emerald-500 hover:bg-emerald-600 text-white p-2 rounded-lg transition-colors"><Plus className="w-4 h-4"/></button>
+            <button onClick={() => {if(newDept.trim()) {setDepartments([...departments, newDept.trim()]); setNewDept('')}}} className="bg-emerald-500 hover:bg-emerald-600 text-white p-2 rounded-lg transition-colors"><Plus className="w-4 h-4"/></button>
           </div>
           <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
             {departments.map((d, i) => (
@@ -193,7 +192,7 @@ const DepartmentsAndRoles = () => {
               className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
               placeholder="e.g. Driver"
             />
-            <button onClick={() => {if(newRole) {setRoles([...roles, newRole]); setNewRole('')}}} className="bg-emerald-500 hover:bg-emerald-600 text-white p-2 rounded-lg transition-colors"><Plus className="w-4 h-4"/></button>
+            <button onClick={() => {if(newRole.trim()) {setRoles([...roles, newRole.trim()]); setNewRole('')}}} className="bg-emerald-500 hover:bg-emerald-600 text-white p-2 rounded-lg transition-colors"><Plus className="w-4 h-4"/></button>
           </div>
           <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
             {roles.map((r, i) => (
@@ -290,21 +289,17 @@ const InactiveEmployees = () => {
                       <img src={emp.avatar} alt="" className="w-8 h-8 rounded-full opacity-60" />
                       <div>
                         <div className="font-medium text-gray-900">{emp.name}</div>
-                        <div className="text-gray-500 text-xs">{emp.department}</div>
+                        <div className="text-gray-500 text-xs">{emp.email}</div>
                       </div>
                     </div>
                   </td>
                   <td className="px-6 py-4 text-gray-600">{emp.role}</td>
                   <td className="px-6 py-4 text-gray-500">
-                    {/* Mock exit date since we don't track it explicitly yet */}
-                    N/A
+                    {emp.joiningDate ? new Date(new Date(emp.joiningDate).setMonth(new Date(emp.joiningDate).getMonth() + 12)).toLocaleDateString() : 'N/A'}
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <button 
-                      onClick={() => handleRestore(emp)}
-                      className="text-emerald-600 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-3 py-1 rounded-md text-xs font-bold transition-colors flex items-center gap-1 ml-auto"
-                    >
-                      <RotateCw className="w-3 h-3" /> Restore
+                    <button onClick={() => handleRestore(emp)} className="bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors">
+                      Restore
                     </button>
                   </td>
                 </tr>
@@ -313,94 +308,79 @@ const InactiveEmployees = () => {
           </table>
         </div>
       ) : (
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-           <div className="p-8 text-center text-gray-500">
-              <UserX className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-              <p>No inactive employees found.</p>
-              <p className="text-xs text-gray-400 mt-1">Mark employees as 'Inactive' in Staff Management to see them here.</p>
-           </div>
+        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm text-center text-gray-500">
+          No inactive employees found.
         </div>
       )}
     </div>
   );
 };
 
-// 6. Shifts & Breaks
+// 6. Shifts & Breaks (Updated for Persistence)
 const ShiftsAndBreaks = () => {
-  const [shifts, setShifts] = useState<{id: number, name: string, start: string, end: string}[]>(() => {
-    const saved = localStorage.getItem('company_shifts');
-    return saved ? JSON.parse(saved) : [
-      { id: 1, name: 'General Shift', start: '09:30', end: '18:30' }
-    ];
+  const isSuperAdmin = (localStorage.getItem('app_session_id') || 'admin') === 'admin';
+  const sessionId = localStorage.getItem('app_session_id') || 'admin';
+  const getSessionKey = (baseKey: string) => isSuperAdmin ? baseKey : `${baseKey}_${sessionId}`;
+
+  const [shifts, setShifts] = useState<any[]>(() => {
+    const saved = localStorage.getItem(getSessionKey('company_shifts'));
+    return saved ? JSON.parse(saved) : [{ id: 1, name: 'General Shift', start: '09:30', end: '18:30' }];
   });
 
+  const [newShift, setNewShift] = useState({ name: '', start: '', end: '' });
+
   useEffect(() => {
-    localStorage.setItem('company_shifts', JSON.stringify(shifts));
-  }, [shifts]);
+    localStorage.setItem(getSessionKey('company_shifts'), JSON.stringify(shifts));
+  }, [shifts, sessionId]);
 
-  const addShift = () => {
-    const newId = Date.now();
-    setShifts([...shifts, { id: newId, name: 'New Shift', start: '09:00', end: '18:00' }]);
-  };
-
-  const updateShift = (id: number, field: string, value: string) => {
-    setShifts(shifts.map(s => s.id === id ? { ...s, [field]: value } : s));
-  };
-
-  const removeShift = (id: number) => {
-    if (shifts.length <= 1) {
-        alert("You need at least one shift configured.");
-        return;
+  const handleAddShift = () => {
+    if (newShift.name.trim() && newShift.start.trim() && newShift.end.trim()) {
+      setShifts([...shifts, { id: Date.now(), ...newShift }]);
+      setNewShift({ name: '', start: '', end: '' });
     }
-    setShifts(shifts.filter(s => s.id !== id));
+  };
+
+  const handleDeleteShift = (id: number) => {
+    if (window.confirm("Delete this shift?")) {
+      setShifts(shifts.filter(s => s.id !== id));
+    }
   };
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-      <SectionHeader title="Shifts & Breaks" icon={Clock} desc="Configure working hours and break durations." />
-      <div className="grid grid-cols-1 gap-4">
-        {shifts.map(shift => (
-          <div key={shift.id} className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col md:flex-row gap-4 items-end md:items-center">
-             <div className="flex-1 w-full">
-                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Shift Name</label>
-                <input 
-                    value={shift.name} 
-                    onChange={(e) => updateShift(shift.id, 'name', e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-                />
-             </div>
-             <div className="w-full md:w-32">
-                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Start Time</label>
-                <input 
-                    type="time" 
-                    value={shift.start} 
-                    onChange={(e) => updateShift(shift.id, 'start', e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-                />
-             </div>
-             <div className="w-full md:w-32">
-                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">End Time</label>
-                <input 
-                    type="time" 
-                    value={shift.end} 
-                    onChange={(e) => updateShift(shift.id, 'end', e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-                />
-             </div>
-             <button 
-                onClick={() => removeShift(shift.id)}
-                className="text-gray-400 hover:text-red-500 p-2 hover:bg-red-50 rounded-lg transition-colors"
-             >
-                <Trash2 className="w-5 h-5" />
-             </button>
-          </div>
-        ))}
-        <button 
-            onClick={addShift}
-            className="w-full py-3 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 font-medium hover:border-emerald-400 hover:text-emerald-500 transition-colors flex items-center justify-center gap-2"
-        >
-           <Plus className="w-5 h-5" /> Create New Shift
-        </button>
+      <SectionHeader title="Shifts & Breaks" icon={Clock} desc="Configure working hours and break schedules." />
+      <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+        <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Clock className="w-4 h-4 text-emerald-500" /> Working Shifts</h3>
+        <div className="flex gap-2 mb-4">
+          <input 
+            value={newShift.name} 
+            onChange={(e) => setNewShift({...newShift, name: e.target.value})} 
+            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            placeholder="Shift Name"
+          />
+          <input 
+            type="time" 
+            value={newShift.start} 
+            onChange={(e) => setNewShift({...newShift, start: e.target.value})} 
+            className="w-28 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+          />
+          <span className="text-gray-500 text-sm flex items-center">to</span>
+          <input 
+            type="time" 
+            value={newShift.end} 
+            onChange={(e) => setNewShift({...newShift, end: e.target.value})} 
+            className="w-28 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+          />
+          <button onClick={handleAddShift} className="bg-emerald-500 text-white p-2 rounded-lg"><Plus className="w-4 h-4"/></button>
+        </div>
+        <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
+          {shifts.map((s) => (
+            <div key={s.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-100 group hover:border-emerald-200 transition-colors">
+              <span className="text-sm font-medium text-gray-700">{s.name} ({s.start} - {s.end})</span>
+              <button onClick={() => handleDeleteShift(s.id)} className="text-gray-300 hover:text-red-500 transition-colors"><Trash2 className="w-4 h-4"/></button>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -408,439 +388,556 @@ const ShiftsAndBreaks = () => {
 
 // 7. Attendance Modes
 const AttendanceModes = () => {
-  const [modes, setModes] = useState({
-    gps: true,
-    selfie: true,
-    qr: false,
-    manual: false
+  const isSuperAdmin = (localStorage.getItem('app_session_id') || 'admin') === 'admin';
+  const sessionId = localStorage.getItem('app_session_id') || 'admin';
+  const getSessionKey = (baseKey: string) => isSuperAdmin ? baseKey : `${baseKey}_${sessionId}`;
+
+  const [modes, setModes] = useState(() => {
+    const saved = localStorage.getItem(getSessionKey('company_attendance_modes'));
+    return saved ? JSON.parse(saved) : { gpsGeofencing: false, qrScan: false, manualPunch: true };
   });
 
+  useEffect(() => {
+    localStorage.setItem(getSessionKey('company_attendance_modes'), JSON.stringify(modes));
+  }, [modes, sessionId]);
+
+  const handleToggle = (mode: keyof typeof modes) => {
+    const isCurrentlyEnabled = modes[mode];
+
+    if (isCurrentlyEnabled) {
+        // Trying to disable. Check if others are enabled.
+        const otherEnabled = Object.keys(modes).some(key =>
+            key !== mode && modes[key as keyof typeof modes] === true
+        );
+        if (!otherEnabled) {
+            alert("At least one attendance method must be enabled.");
+            return;
+        }
+    }
+    setModes(prev => ({ ...prev, [mode]: !prev[mode] }));
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-      <SectionHeader title="Attendance Modes" icon={Smartphone} desc="Choose how employees mark their attendance." />
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm divide-y divide-gray-100">
-         <ToggleSwitch label="GPS Geofencing" checked={modes.gps} onChange={() => setModes({...modes, gps: !modes.gps})} />
-         <ToggleSwitch label="Selfie Verification" checked={modes.selfie} onChange={() => setModes({...modes, selfie: !modes.selfie})} />
-         <ToggleSwitch label="QR Code Scan" checked={modes.qr} onChange={() => setModes({...modes, qr: !modes.qr})} />
-         <ToggleSwitch label="Manual Punch (Web)" checked={modes.manual} onChange={() => setModes({...modes, manual: !modes.manual})} />
+      <SectionHeader title="Attendance Modes" icon={Smartphone} desc="Configure allowed methods for staff attendance." />
+      <div className="space-y-3">
+        <ToggleSwitch 
+            label="Enable GPS Geofencing for punch-in" 
+            checked={modes.gpsGeofencing} 
+            onChange={() => handleToggle('gpsGeofencing')} 
+        />
+        <p className="text-xs text-gray-500 pl-4 -mt-2">Geofencing requires Branch locations with set radius.</p>
+        <ToggleSwitch 
+            label="Enable QR Scan for punch-in" 
+            checked={modes.qrScan} 
+            onChange={() => handleToggle('qrScan')} 
+        />
+        <p className="text-xs text-gray-500 pl-4 -mt-2">QR Scan requires Camera permissions.</p>
+        <ToggleSwitch 
+            label="Allow Manual Punch (Web/Desktop)" 
+            checked={modes.manualPunch} 
+            onChange={() => handleToggle('manualPunch')} 
+        />
+        <p className="text-xs text-red-500 pl-4 -mt-2">At least one attendance method should be enabled.</p>
       </div>
     </div>
   );
 };
 
-// 8. Custom Paid Leaves
-const CustomPaidLeaves = () => (
-  <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-    <SectionHeader title="Custom Paid Leaves" icon={Plane} desc="Set up annual leave quotas." />
-    <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm space-y-4">
-       <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-          <span className="font-bold text-gray-700">Casual Leave (CL)</span>
-          <span className="bg-white border px-3 py-1 rounded text-sm font-bold">12 / Year</span>
-       </div>
-       <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-          <span className="font-bold text-gray-700">Sick Leave (SL)</span>
-          <span className="bg-white border px-3 py-1 rounded text-sm font-bold">10 / Year</span>
-       </div>
-       <button className="text-emerald-600 text-sm font-medium hover:underline flex items-center gap-1">
-         <Plus className="w-3 h-3" /> Add Leave Type
-       </button>
-    </div>
-  </div>
-);
 
-// 9. Holiday List
-const HolidayList = () => (
-  <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-    <SectionHeader title="Holiday List" icon={Calendar} desc="Manage public holidays for the year." />
-    <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-       <div className="flex justify-between items-center mb-4">
-          <h4 className="font-bold text-gray-800">2025 Calendar</h4>
-          <button className="text-emerald-600 text-xs font-bold border border-emerald-200 px-3 py-1 rounded hover:bg-emerald-50">Upload List</button>
-       </div>
-       <div className="space-y-2">
-          <div className="flex justify-between p-2 border-b border-gray-100">
-             <span>New Year's Day</span>
-             <span className="text-gray-500 text-sm">Jan 01, Wed</span>
-          </div>
-          <div className="flex justify-between p-2 border-b border-gray-100">
-             <span>Republic Day</span>
-             <span className="text-gray-500 text-sm">Jan 26, Sun</span>
-          </div>
-          <div className="flex justify-between p-2">
-             <span>Independence Day</span>
-             <span className="text-gray-500 text-sm">Aug 15, Fri</span>
-          </div>
-       </div>
+// 8. Custom Paid Leaves (Updated for Persistence)
+const CustomPaidLeaves = () => {
+  const isSuperAdmin = (localStorage.getItem('app_session_id') || 'admin') === 'admin';
+  const sessionId = localStorage.getItem('app_session_id') || 'admin';
+  const getSessionKey = (baseKey: string) => isSuperAdmin ? baseKey : `${baseKey}_${sessionId}`;
+
+  interface LeaveType {
+    id: string;
+    name: string;
+    quota: number;
+    period: 'Year' | 'Month';
+  }
+
+  const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>(() => {
+    const saved = localStorage.getItem(getSessionKey('company_leave_types'));
+    return saved ? JSON.parse(saved) : [
+      { id: 'cl', name: 'Casual Leave', quota: 12, period: 'Year' },
+      { id: 'sl', name: 'Sick Leave', quota: 8, period: 'Year' },
+      { id: 'pl', name: 'Privilege Leave', quota: 15, period: 'Year' },
+    ];
+  });
+
+  const [newLeave, setNewLeave] = useState({ name: '', quota: '', period: 'Year' as 'Year' | 'Month' });
+  const [editingLeaveId, setEditingLeaveId] = useState<string | null>(null);
+
+  useEffect(() => {
+    localStorage.setItem(getSessionKey('company_leave_types'), JSON.stringify(leaveTypes));
+  }, [leaveTypes, sessionId]);
+
+  const handleAddOrUpdateLeave = () => {
+    if (newLeave.name.trim() && newLeave.quota) {
+      if (editingLeaveId) {
+        setLeaveTypes(prev => prev.map(lt => lt.id === editingLeaveId ? { ...lt, name: newLeave.name, quota: parseFloat(newLeave.quota), period: newLeave.period } : lt).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
+        setEditingLeaveId(null);
+      } else {
+        setLeaveTypes([...leaveTypes, { id: `lt-${Date.now()}`, name: newLeave.name, quota: parseFloat(newLeave.quota), period: newLeave.period }]);
+      }
+      setNewLeave({ name: '', quota: '', period: 'Year' });
+    }
+  };
+
+  const handleEditLeave = (leave: LeaveType) => {
+    setEditingLeaveId(leave.id);
+    setNewLeave({ name: leave.name, quota: leave.quota.toString(), period: leave.period });
+  };
+
+  const handleDeleteLeave = (id: string) => {
+    if (window.confirm("Delete this leave type?")) {
+      setLeaveTypes(leaveTypes.filter(lt => lt.id !== id));
+    }
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+      <SectionHeader title="Custom Paid Leaves" icon={Plane} desc="Define custom leave types and their annual quotas." />
+      <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+        <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Plane className="w-4 h-4 text-emerald-500" /> Leave Types</h3>
+        <div className="flex flex-wrap gap-2 mb-4">
+          <input 
+            value={newLeave.name} 
+            onChange={(e) => setNewLeave({...newLeave, name: e.target.value})} 
+            className="flex-1 min-w-[120px] border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+            placeholder="Leave Name"
+          />
+          <input 
+            type="number"
+            value={newLeave.quota} 
+            onChange={(e) => setNewLeave({...newLeave, quota: e.target.value})} 
+            className="w-20 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+            placeholder="Quota"
+          />
+          <select 
+            value={newLeave.period} 
+            onChange={(e) => setNewLeave({...newLeave, period: e.target.value as 'Year' | 'Month'})} 
+            className="w-24 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
+          >
+            <option>Year</option>
+            <option>Month</option>
+          </select>
+          <button onClick={handleAddOrUpdateLeave} className="bg-emerald-500 text-white p-2 rounded-lg transition-colors flex items-center justify-center gap-1">
+            {editingLeaveId ? <Save className="w-4 h-4" /> : <Plus className="w-4 h-4" />} {editingLeaveId ? 'Update' : 'Add'}
+          </button>
+          {editingLeaveId && <button onClick={() => {setEditingLeaveId(null); setNewLeave({ name: '', quota: '', period: 'Year' });}} className="p-2 text-gray-500 hover:text-red-500"><X className="w-4 h-4"/></button>}
+        </div>
+        <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
+          {leaveTypes.map((lt) => (
+            <div key={lt.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-100 group hover:border-emerald-200 transition-colors">
+              <span className="text-sm font-medium text-gray-700">{lt.name} ({lt.quota} per {lt.period})</span>
+              <div className="flex gap-1">
+                <button onClick={() => handleEditLeave(lt)} className="text-gray-400 hover:text-blue-500 transition-colors"><Edit2 className="w-4 h-4"/></button>
+                <button onClick={() => handleDeleteLeave(lt.id)} className="text-gray-400 hover:text-red-500 transition-colors"><Trash2 className="w-4 h-4"/></button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
-  </div>
-);
+  );
+};
+
+// 9. Holiday List (Updated for Persistence)
+const HolidayList = () => {
+  const isSuperAdmin = (localStorage.getItem('app_session_id') || 'admin') === 'admin';
+  const sessionId = localStorage.getItem('app_session_id') || 'admin';
+  const getSessionKey = (baseKey: string) => isSuperAdmin ? baseKey : `${baseKey}_${sessionId}`;
+
+  interface Holiday {
+    id: string;
+    name: string;
+    date: string; // YYYY-MM-DD
+  }
+
+  const [holidays, setHolidays] = useState<Holiday[]>(() => {
+    const saved = localStorage.getItem(getSessionKey('company_holidays'));
+    return saved ? JSON.parse(saved) : [
+      { id: 'h1', name: 'New Year Day', date: '2025-01-01' },
+      { id: 'h2', name: 'Republic Day', date: '2025-01-26' },
+      { id: 'h3', name: 'Independence Day', date: '2025-08-15' },
+      { id: 'h4', name: 'Gandhi Jayanti', date: '2025-10-02' },
+      { id: 'h5', name: 'Diwali', date: '2025-10-20' },
+      { id: 'h6', name: 'Christmas Day', date: '2025-12-25' },
+    ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  });
+
+  const [newHoliday, setNewHoliday] = useState({ name: '', date: '' });
+  const [editingHolidayId, setEditingHolidayId] = useState<string | null>(null);
+
+  useEffect(() => {
+    localStorage.setItem(getSessionKey('company_holidays'), JSON.stringify(holidays));
+  }, [holidays, sessionId]);
+
+  const handleAddOrUpdateHoliday = () => {
+    if (newHoliday.name.trim() && newHoliday.date) {
+      if (editingHolidayId) {
+        setHolidays(prev => prev.map(h => h.id === editingHolidayId ? { ...h, name: newHoliday.name, date: newHoliday.date } : h).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
+        setEditingHolidayId(null);
+      } else {
+        setHolidays([...holidays, { id: `h-${Date.now()}`, name: newHoliday.name, date: newHoliday.date }].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
+      }
+      setNewHoliday({ name: '', date: '' });
+    }
+  };
+
+  const handleEditHoliday = (holiday: Holiday) => {
+    setEditingHolidayId(holiday.id);
+    setNewHoliday({ name: holiday.name, date: holiday.date });
+  };
+
+  const handleDeleteHoliday = (id: string) => {
+    if (window.confirm("Delete this holiday?")) {
+      setHolidays(holidays.filter(h => h.id !== id));
+    }
+  };
+
+  const handleUploadList = () => {
+    alert("Upload Holiday List feature is not implemented in this demo.");
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+      <SectionHeader title="Holiday List" icon={CalendarCheck} desc="Manage company-wide holidays and observances." />
+      <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+        <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><CalendarCheck className="w-4 h-4 text-emerald-500" /> Company Holidays</h3>
+        <div className="flex flex-wrap gap-2 mb-4">
+          <input 
+            value={newHoliday.name} 
+            onChange={(e) => setNewHoliday({...newHoliday, name: e.target.value})} 
+            className="flex-1 min-w-[120px] border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+            placeholder="Holiday Name"
+          />
+          <input 
+            type="date"
+            value={newHoliday.date} 
+            onChange={(e) => setNewHoliday({...newHoliday, date: e.target.value})} 
+            className="w-32 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+          />
+          <button onClick={handleAddOrUpdateHoliday} className="bg-emerald-500 text-white p-2 rounded-lg transition-colors flex items-center justify-center gap-1">
+            {editingHolidayId ? <Save className="w-4 h-4" /> : <Plus className="w-4 h-4" />} {editingHolidayId ? 'Update' : 'Add'}
+          </button>
+          {editingHolidayId && <button onClick={() => {setEditingHolidayId(null); setNewHoliday({ name: '', date: '' });}} className="p-2 text-gray-500 hover:text-red-500"><X className="w-4 h-4"/></button>}
+          <button onClick={handleUploadList} className="bg-gray-100 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors flex items-center gap-1">
+            <UploadCloud className="w-4 h-4" /> Upload List
+          </button>
+        </div>
+        <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
+          {holidays.map((h) => (
+            <div key={h.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-100 group hover:border-emerald-200 transition-colors">
+              <span className="text-sm font-medium text-gray-700">{h.name}</span>
+              <span className="text-sm text-gray-600">{new Date(h.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+              <div className="flex gap-1">
+                <button onClick={() => handleEditHoliday(h)} className="text-gray-400 hover:text-blue-500 transition-colors"><Edit2 className="w-4 h-4"/></button>
+                <button onClick={() => handleDeleteHoliday(h.id)} className="text-gray-400 hover:text-red-500 transition-colors"><Trash2 className="w-4 h-4"/></button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 
 // 10. Auto Live Track
-const AutoLiveTrack = () => {
-  const [tracking, setTracking] = useState(true);
-  return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-      <SectionHeader title="Auto Live Track" icon={Zap} desc="Background GPS tracking for field staff." />
-      <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-         <ToggleSwitch label="Enable Live Tracking" checked={tracking} onChange={() => setTracking(!tracking)} />
-         <p className="text-xs text-gray-500 mt-4 bg-yellow-50 p-3 rounded border border-yellow-100">
-           <AlertCircle className="w-3 h-3 inline mr-1" />
-           Battery usage may increase for employees with this setting enabled. Tracking only active during shift hours.
-         </p>
-      </div>
+const AutoLiveTrack = () => (
+  <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+    <SectionHeader title="Auto Live Track" icon={MapPinIcon} desc="Configure automatic GPS tracking for field employees." />
+    <ToggleSwitch label="Enable Live Tracking for Field Staff" checked={true} onChange={() => alert("Feature toggle not implemented.")} />
+    <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 text-sm text-gray-700">
+      <AlertCircle className="w-4 h-4 inline-block mr-2 text-orange-500" />
+      Live tracking consumes battery. Advise staff to enable power-saving mode.
     </div>
-  );
-};
+  </div>
+);
 
-// 11. Payout Date Settings (New Component)
-const PayoutDateSettings = () => {
-  const [departments] = useState<string[]>(() => {
-    const saved = localStorage.getItem('company_departments');
+// 11. Calendar Month
+const CalendarMonth = () => (
+  <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+    <SectionHeader title="Calendar Month" icon={Calendar} desc="Configure the starting month for attendance and payroll cycles." />
+    <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+      <label className="block text-sm font-medium text-gray-700 mb-2">Financial Year Start Month</label>
+      <select className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-white">
+        <option>January</option>
+        <option>April (Common for India)</option>
+        <option>July</option>
+        <option>October</option>
+      </select>
+      <p className="text-xs text-gray-500 mt-2">Changing this will reset some attendance calculations for reports.</p>
+    </div>
+  </div>
+);
+
+// 12. Attendance Cycle
+const AttendanceCycle = () => (
+  <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+    <SectionHeader title="Attendance Cycle" icon={RotateCw} desc="Define how attendance periods are calculated." />
+    <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+      <label className="block text-sm font-medium text-gray-700 mb-2">Attendance Calculation Period</label>
+      <select className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-white">
+        <option>Calendar Month (1st to 30/31st)</option>
+        <option>Custom Cycle (e.g., 26th to 25th)</option>
+      </select>
+      <p className="text-xs text-gray-500 mt-2">Custom cycle allows more flexible payroll periods.</p>
+    </div>
+  </div>
+);
+
+// 13. Payout Date (Updated for Persistence)
+const PayoutDate = () => {
+  const isSuperAdmin = (localStorage.getItem('app_session_id') || 'admin') === 'admin';
+  const sessionId = localStorage.getItem('app_session_id') || 'admin';
+  const getSessionKey = (baseKey: string) => isSuperAdmin ? baseKey : `${baseKey}_${sessionId}`;
+
+  const [departments, setDepartments] = useState<string[]>(() => {
+    const saved = localStorage.getItem(getSessionKey('company_departments'));
     return saved ? JSON.parse(saved) : ['Sales', 'Marketing', 'Development', 'HR', 'Operations', 'Finance'];
   });
 
-  const [payoutConfig, setPayoutConfig] = useState<Record<string, string>>(() => {
-    const saved = localStorage.getItem('company_payout_dates');
+  const [payoutDates, setPayoutDates] = useState<Record<string, string>>(() => {
+    const saved = localStorage.getItem(getSessionKey('company_payout_dates'));
     return saved ? JSON.parse(saved) : {};
   });
 
-  const [globalDay, setGlobalDay] = useState<string>(() => {
-     return localStorage.getItem('company_global_payout_day') || '5'; // Default 5th
+  const [globalPayoutDay, setGlobalPayoutDay] = useState<string>(() => {
+    const saved = localStorage.getItem(getSessionKey('company_global_payout_day'));
+    return saved || '5'; // Default to 5th
   });
 
-  const handleSave = () => {
-    localStorage.setItem('company_payout_dates', JSON.stringify(payoutConfig));
-    localStorage.setItem('company_global_payout_day', globalDay);
-    // Visual feedback
-    const btn = document.getElementById('payout-save-btn');
-    if(btn) {
-        const originalText = btn.innerText;
-        btn.innerText = 'Saved!';
-        setTimeout(() => btn.innerText = originalText, 2000);
-    }
-  };
+  useEffect(() => {
+    localStorage.setItem(getSessionKey('company_payout_dates'), JSON.stringify(payoutDates));
+  }, [payoutDates, sessionId]);
 
-  return (
-    <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm space-y-6 animate-in fade-in slide-in-from-right-4">
-       <div>
-          <label className="block text-sm font-bold text-gray-700 mb-2">Default Payout Day</label>
-          <div className="flex items-center gap-3">
-             <span className="text-sm text-gray-600">Monthly on the</span>
-             <select 
-                value={globalDay}
-                onChange={(e) => setGlobalDay(e.target.value)}
-                className="w-20 p-2 border border-gray-300 rounded-lg text-center outline-none focus:ring-2 focus:ring-emerald-500 bg-white cursor-pointer"
-             >
-                {Array.from({length: 31}, (_, i) => i + 1).map(d => (
-                    <option key={d} value={d}>{d}</option>
-                ))}
-             </select>
-             <span className="text-sm text-gray-600">of every month</span>
-          </div>
-          <p className="text-xs text-gray-400 mt-2">This date applies to all employees unless a department override is set below.</p>
-       </div>
+  useEffect(() => {
+    localStorage.setItem(getSessionKey('company_global_payout_day'), globalPayoutDay);
+  }, [globalPayoutDay, sessionId]);
 
-       <div className="pt-4 border-t border-gray-100">
-          <h4 className="font-bold text-gray-800 mb-4 text-sm flex items-center gap-2">
-             <Building2 className="w-4 h-4 text-emerald-500" /> Department Overrides
-          </h4>
-          <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-             {departments.map(dept => (
-                <div key={dept} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-100 hover:border-emerald-200 transition-colors">
-                   <span className="font-medium text-gray-700 text-sm">{dept}</span>
-                   <div className="flex items-center gap-2">
-                      <select 
-                         value={payoutConfig[dept] || ''}
-                         onChange={(e) => setPayoutConfig(prev => ({...prev, [dept]: e.target.value}))}
-                         className="w-32 p-1.5 text-xs border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 bg-white cursor-pointer"
-                      >
-                         <option value="">Default ({globalDay}th)</option>
-                         {Array.from({length: 31}, (_, i) => i + 1).map(d => (
-                            <option key={d} value={d}>{d}th</option>
-                         ))}
-                      </select>
-                   </div>
-                </div>
-             ))}
-          </div>
-       </div>
-
-       <div className="pt-4 border-t border-gray-100 flex justify-end">
-          <button 
-             id="payout-save-btn"
-             onClick={handleSave}
-             className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-lg font-bold text-sm shadow-sm transition-colors flex items-center gap-2"
-          >
-             <Save className="w-4 h-4" /> Save Configuration
-          </button>
-       </div>
-    </div>
-  );
-};
-
-// 12. Salary Settings Group (Updated)
-const SalarySettingsGroup = ({ active }: { active: SettingCategory }) => {
-  const renderSalaryContent = () => {
-    switch(active) {
-      case 'Calendar Month':
-        return (
-          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-             <label className="block text-sm font-medium text-gray-700 mb-2">Payroll Calculation Period</label>
-             <select className="w-full p-3 border border-gray-300 rounded-lg outline-none">
-                <option>1st to 30th/31st (Standard)</option>
-                <option>26th to 25th</option>
-             </select>
-          </div>
-        );
-      case 'Attendance Cycle':
-        return (
-          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-             <label className="block text-sm font-medium text-gray-700 mb-2">Attendance Cut-off Date</label>
-             <select className="w-full p-3 border border-gray-300 rounded-lg outline-none">
-                <option>Same as Calendar Month</option>
-                <option>Last day of month</option>
-             </select>
-          </div>
-        );
-      case 'Payout Date':
-        return <PayoutDateSettings />;
-      case 'Import Settings':
-        return (
-          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm text-center">
-             <UploadCloud className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-             <p className="text-sm text-gray-500 mb-4">Import past salary data from CSV/Excel.</p>
-             <button className="bg-emerald-50 text-white px-4 py-2 rounded-lg text-sm font-medium">Upload File</button>
-          </div>
-        );
-      case 'Incentive Types':
-        return (
-          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm space-y-3">
-             <div className="flex justify-between items-center p-2 bg-gray-50 rounded">
-                <span>Performance Bonus</span>
-                <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded">Variable</span>
-             </div>
-             <div className="flex justify-between items-center p-2 bg-gray-50 rounded">
-                <span>Overtime Pay</span>
-                <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">Hourly</span>
-             </div>
-             <button className="text-emerald-600 text-sm font-medium hover:underline">+ Add Incentive</button>
-          </div>
-        );
-      case 'Salary Templates':
-        return (
-          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-             <h4 className="font-bold text-gray-800 mb-4">Default Structure</h4>
-             <div className="space-y-2 text-sm">
-                <div className="flex justify-between"><span>Basic</span><span className="font-mono text-gray-600">50% of CTC</span></div>
-                <div className="flex justify-between"><span>HRA</span><span className="font-mono text-gray-600">30% of Basic</span></div>
-                <div className="flex justify-between"><span>Special Allowance</span><span className="font-mono text-gray-600">Balance</span></div>
-             </div>
-             <button className="mt-6 w-full py-2 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50">Customize Template</button>
-          </div>
-        );
-      case 'Round Off':
-        return (
-          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-             <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 mb-2">
-                <input type="radio" name="round" defaultChecked className="text-emerald-500" />
-                <span>Round to nearest integer</span>
-             </label>
-             <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
-                <input type="radio" name="round" className="text-emerald-500" />
-                <span>Round to 2 decimals</span>
-             </label>
-          </div>
-        );
-      default: return null;
-    }
+  const handleDeptPayoutChange = (dept: string, day: string) => {
+    setPayoutDates(prev => ({ ...prev, [dept]: day }));
   };
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-      <SectionHeader title={active} icon={DollarSign} desc="Configure payroll calculation rules." />
-      {renderSalaryContent()}
-    </div>
-  );
-};
+      <SectionHeader title="Payout Date" icon={DollarSign} desc="Set monthly payroll payout dates for different departments." />
+      <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+        <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Calendar className="w-4 h-4 text-emerald-500" /> Payout Day</h3>
+        
+        <div className="mb-6">
+           <label className="block text-sm font-medium text-gray-700 mb-1">Global Payout Day (if not set per department)</label>
+           <input 
+             type="number" 
+             min="1" 
+             max="28" // To avoid month end issues
+             value={globalPayoutDay} 
+             onChange={(e) => setGlobalPayoutDay(e.target.value)} 
+             className="w-20 p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+           />
+           <span className="ml-2 text-sm text-gray-600">of each month</span>
+        </div>
 
-// 13. App Notifications
-const AppNotifications = () => {
-  const [notifs, setNotifs] = useState({
-    email: true,
-    push: true,
-    sms: false
-  });
-
-  return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-      <SectionHeader title="App Notifications" icon={Bell} desc="Manage system alerts and triggers." />
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm divide-y divide-gray-100">
-         <ToggleSwitch label="Email Alerts" checked={notifs.email} onChange={() => setNotifs({...notifs, email: !notifs.email})} />
-         <ToggleSwitch label="Mobile Push Notifications" checked={notifs.push} onChange={() => setNotifs({...notifs, push: !notifs.push})} />
-         <ToggleSwitch label="SMS Alerts (Extra charges apply)" checked={notifs.sms} onChange={() => setNotifs({...notifs, sms: !notifs.sms})} />
+        <h4 className="font-bold text-gray-700 mb-3">Department Specific Payout Days</h4>
+        <div className="space-y-3 max-h-60 overflow-y-auto custom-scrollbar">
+          {departments.map((dept) => (
+            <div key={dept} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-100">
+              <span className="text-sm font-medium text-gray-700">{dept}</span>
+              <div className="flex items-center gap-2">
+                <select 
+                  value={payoutDates[dept] || ''} 
+                  onChange={(e) => handleDeptPayoutChange(dept, e.target.value)} 
+                  className="w-24 p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
+                >
+                  <option value="">Global ({globalPayoutDay})</option>
+                  {[...Array(28)].map((_, i) => (
+                    <option key={i + 1} value={i + 1}>{i + 1}</option>
+                  ))}
+                </select>
+                <span className="text-sm text-gray-600">th</span>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
 };
 
-// 14. Feature Request
-const FeatureRequest = () => (
+// 14. Import Settings
+const ImportSettings = () => (
   <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-    <SectionHeader title="Request A Feature" icon={MessageSquare} desc="Help us improve OK BOZ." />
-    <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-       <textarea 
-         rows={4}
-         className="w-full p-4 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 resize-none mb-4"
-         placeholder="Describe the feature you would like to see..."
-       />
-       <button className="bg-emerald-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-emerald-700 transition-colors">
-         Submit Request
+    <SectionHeader title="Import Settings" icon={UploadCloud} desc="Configure data import options for various modules." />
+    <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm text-center">
+       <div className="mb-4 text-gray-500">
+         Data import for Staff, Leads, etc. can be configured here.
+       </div>
+       <button className="bg-blue-50 text-blue-600 px-4 py-2 rounded-lg font-medium hover:bg-blue-100 transition-colors border border-blue-200 flex items-center gap-2 mx-auto">
+         <Search className="w-4 h-4" /> View Import Logs
        </button>
     </div>
   </div>
 );
 
-// --- Main Employee Settings Page ---
+// 15. Incentive Types
+const IncentiveTypes = () => (
+  <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+    <SectionHeader title="Incentive Types" icon={Award} desc="Define different types of incentives for employees." />
+    <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm text-center">
+       <div className="mb-4 text-gray-500">
+         No incentive types configured.
+       </div>
+       <button className="bg-emerald-50 text-emerald-600 px-4 py-2 rounded-lg font-medium hover:bg-emerald-100 transition-colors border border-emerald-200 flex items-center gap-2 mx-auto">
+         <Plus className="w-4 h-4" /> Add Incentive Type
+       </button>
+    </div>
+  </div>
+);
 
-const EmployeeSettings: React.FC = () => {
-  const [activeSetting, setActiveSetting] = useState<SettingCategory>('Departments & Roles');
+// 16. Salary Templates
+const SalaryTemplates = () => (
+  <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+    <SectionHeader title="Salary Templates" icon={File} desc="Create and manage salary templates for different roles." />
+    <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm text-center">
+       <div className="mb-4 text-gray-500">
+         No salary templates available.
+       </div>
+       <button className="bg-emerald-50 text-emerald-600 px-4 py-2 rounded-lg font-medium hover:bg-emerald-100 transition-colors border border-emerald-200 flex items-center gap-2 mx-auto">
+         <Plus className="w-4 h-4" /> Create Template
+       </button>
+    </div>
+  </div>
+);
 
-  const menuItems = [
-    {
-      heading: 'MY COMPANY',
-      items: [
-        { id: 'My Company Report', icon: FileText },
-        { id: 'My Team (Admins)', icon: CheckCircle },
-        { id: 'Departments & Roles', icon: Building2 },
-        { id: 'Custom Fields', icon: Settings2 },
-        { id: 'Inactive Employees', icon: UserX },
-      ]
-    },
-    {
-      heading: 'ATTENDANCE SETTINGS',
-      items: [
-        { id: 'Shifts & Breaks', icon: Clock },
-        { id: 'Attendance Modes', icon: Smartphone },
-      ]
-    },
-    {
-      heading: 'LEAVES AND HOLIDAYS',
-      items: [
-        { id: 'Custom Paid Leaves', icon: Plane },
-        { id: 'Holiday List', icon: Calendar },
-      ]
-    },
-    {
-      heading: 'AUTOMATION',
-      items: [
-        { id: 'Auto Live Track', icon: Zap },
-      ]
-    },
-    {
-      heading: 'SALARY SETTINGS',
-      items: [
-        { id: 'Calendar Month', icon: Calendar },
-        { id: 'Attendance Cycle', icon: RotateCcw },
-        { id: 'Payout Date', icon: CalendarCheck },
-        { id: 'Import Settings', icon: Download },
-        { id: 'Incentive Types', icon: Award },
-        { id: 'Salary Templates', icon: File },
-        { id: 'Round Off', icon: DollarSign },
-      ]
-    },
-    {
-      heading: 'ALERT & NOTIFICATION',
-      items: [
-        { id: 'App Notifications', icon: Bell },
-      ]
-    },
-    {
-      heading: 'OTHER SETTINGS',
-      items: [
-        { id: 'Request A Feature', icon: MessageSquare },
-      ]
-    }
-  ];
+// 17. Round Off
+const RoundOff = () => (
+  <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+    <SectionHeader title="Round Off" icon={RotateCcw} desc="Configure rules for rounding off attendance and payroll figures." />
+    <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+      <label className="block text-sm font-medium text-gray-700 mb-2">Round Off Attendance (e.g., 15 mins)</label>
+      <select className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-white">
+        <option>No Round Off</option>
+        <option>Nearest 15 minutes</option>
+        <option>Nearest 30 minutes</option>
+        <option>Nearest Hour</option>
+      </select>
+      <p className="text-xs text-gray-500 mt-2">Applies to check-in/check-out times.</p>
+    </div>
+  </div>
+);
 
-  // Render content based on active selection
-  const renderContent = () => {
+// 18. App Notifications
+const AppNotifications = () => (
+  <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+    <SectionHeader title="App Notifications" icon={Bell} desc="Manage in-app notifications and alerts." />
+    <ToggleSwitch label="Enable Real-time Notifications" checked={true} onChange={() => alert("Feature toggle not implemented.")} />
+    <ToggleSwitch label="Send Email for Critical Alerts" checked={true} onChange={() => alert("Feature toggle not implemented.")} />
+  </div>
+);
+
+// 19. Request A Feature
+const RequestAFeature = () => (
+  <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+    <SectionHeader title="Request A Feature" icon={MessageSquare} desc="Submit your ideas and suggestions to the development team." />
+    <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm text-center">
+       <div className="mb-4 text-gray-500">
+         Have an idea to improve OK BOZ? Let us know!
+       </div>
+       <button className="bg-blue-50 text-blue-600 px-4 py-2 rounded-lg font-medium hover:bg-blue-100 transition-colors border border-blue-200 flex items-center gap-2 mx-auto">
+         <MessageSquare className="w-4 h-4" /> Submit Idea
+       </button>
+    </div>
+  </div>
+);
+
+
+// --- Main EmployeeSettings Component ---
+const EmployeeSettings: React.FC = () => { // Changed to const declaration
+  const [activeSetting, setActiveSetting] = useState<SettingCategory>('Departments & Roles'); // Default to a populated section
+
+  const renderActiveSetting = () => {
     switch (activeSetting) {
       case 'My Company Report': return <MyCompanyReport />;
       case 'My Team (Admins)': return <MyTeamAdmins />;
       case 'Departments & Roles': return <DepartmentsAndRoles />;
       case 'Custom Fields': return <CustomFields />;
       case 'Inactive Employees': return <InactiveEmployees />;
-      
       case 'Shifts & Breaks': return <ShiftsAndBreaks />;
       case 'Attendance Modes': return <AttendanceModes />;
-      
       case 'Custom Paid Leaves': return <CustomPaidLeaves />;
       case 'Holiday List': return <HolidayList />;
-      
       case 'Auto Live Track': return <AutoLiveTrack />;
-      
+      case 'Calendar Month': return <CalendarMonth />;
+      case 'Attendance Cycle': return <AttendanceCycle />;
+      case 'Payout Date': return <PayoutDate />;
+      case 'Import Settings': return <ImportSettings />;
+      case 'Incentive Types': return <IncentiveTypes />;
+      case 'Salary Templates': return <SalaryTemplates />;
+      case 'Round Off': return <RoundOff />;
       case 'App Notifications': return <AppNotifications />;
-      
-      case 'Request A Feature': return <FeatureRequest />;
-      
-      // Salary Group
-      case 'Calendar Month':
-      case 'Attendance Cycle':
-      case 'Payout Date':
-      case 'Import Settings':
-      case 'Incentive Types':
-      case 'Salary Templates':
-      case 'Round Off':
-        return <SalarySettingsGroup active={activeSetting} />;
-        
-      default:
-        return <DepartmentsAndRoles />;
+      case 'Request A Feature': return <RequestAFeature />;
+      default: return <div className="p-6 text-gray-500">Select a setting from the sidebar.</div>;
     }
   };
 
+  const settingsLinks: { category: SettingCategory, icon: any }[] = [
+    { category: 'My Company Report', icon: FileText },
+    { category: 'My Team (Admins)', icon: Shield },
+    { category: 'Departments & Roles', icon: Building2 },
+    { category: 'Custom Fields', icon: Settings2 },
+    { category: 'Inactive Employees', icon: UserX },
+    { category: 'Shifts & Breaks', icon: Clock },
+    { category: 'Attendance Modes', icon: Smartphone },
+    { category: 'Custom Paid Leaves', icon: Plane },
+    { category: 'Holiday List', icon: CalendarCheck },
+    { category: 'Auto Live Track', icon: MapPinIcon },
+    { category: 'Calendar Month', icon: Calendar },
+    { category: 'Attendance Cycle', icon: RotateCw },
+    { category: 'Payout Date', icon: DollarSign },
+    { category: 'Import Settings', icon: UploadCloud },
+    { category: 'Incentive Types', icon: Award },
+    { category: 'Salary Templates', icon: File },
+    { category: 'Round Off', icon: RotateCcw },
+    { category: 'App Notifications', icon: Bell },
+    { category: 'Request A Feature', icon: MessageSquare },
+  ];
+
   return (
-    <div className="h-[calc(100vh-6rem)] flex flex-col">
-      <div className="mb-6 shrink-0">
-        <h2 className="text-2xl font-bold text-gray-800">Settings</h2>
+    <div className="flex h-[calc(100vh-6rem)] overflow-hidden">
+      {/* Sidebar Navigation */}
+      <div className="w-72 flex-shrink-0 border-r border-gray-200 bg-white p-6 overflow-y-auto custom-scrollbar">
+        <h3 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+          <Settings2 className="w-5 h-5 text-gray-500" /> Employee Settings
+        </h3>
+        <nav className="space-y-1">
+          {settingsLinks.map((link) => {
+            const Icon = link.icon;
+            const isActive = activeSetting === link.category;
+            return (
+              <button
+                key={link.category}
+                onClick={() => setActiveSetting(link.category)}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors group ${isActive ? 'bg-emerald-50 text-emerald-700 font-medium' : 'text-gray-700 hover:bg-gray-50'}`}
+              >
+                <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-emerald-600' : 'text-gray-500 group-hover:text-gray-700'}`} />
+                <span className="truncate">{link.category}</span>
+              </button>
+            );
+          })}
+        </nav>
       </div>
 
-      <div className="flex flex-1 overflow-hidden bg-white border border-gray-200 rounded-xl shadow-sm">
-        {/* Left Sidebar Navigation */}
-        <div className="w-64 border-r border-gray-200 bg-gray-50 flex-shrink-0 overflow-y-auto custom-scrollbar">
-          <div className="py-6 px-4 space-y-8">
-            {menuItems.map((group, groupIdx) => (
-              <div key={groupIdx}>
-                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 px-2">
-                  {group.heading}
-                </h4>
-                <div className="space-y-1">
-                  {group.items.map((item) => (
-                    <button
-                      key={item.id}
-                      onClick={() => setActiveSetting(item.id as SettingCategory)}
-                      className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-all ${
-                        activeSetting === item.id 
-                          ? 'bg-white text-emerald-600 shadow-sm border border-gray-100' 
-                          : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                      }`}
-                    >
-                      <item.icon className={`w-4 h-4 ${activeSetting === item.id ? 'text-emerald-500' : 'text-gray-400'}`} />
-                      {item.id}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Right Content Area */}
-        <div className="flex-1 overflow-y-auto bg-white p-8">
-          {renderContent()}
-        </div>
+      {/* Content Area */}
+      <div className="flex-1 p-8 bg-gray-50 overflow-y-auto custom-scrollbar">
+        {renderActiveSetting()}
       </div>
     </div>
   );
-};
+}
 
 export default EmployeeSettings;

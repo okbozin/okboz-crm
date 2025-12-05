@@ -140,6 +140,7 @@ export interface Enquiry {
   vehicleType?: VehicleType;
   outstationSubType?: OutstationSubType; // Only for Outstation
   transportData?: {
+    pickup?: string;
     drop?: string;
     estKm?: string;
     waitingMins?: string;
