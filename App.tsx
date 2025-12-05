@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
@@ -15,13 +16,9 @@ import VendorAttachment from './pages/admin/VendorAttachment';
 import Corporate from './pages/admin/Corporate';
 import Documents from './pages/Documents';
 import Leads from './pages/admin/Leads';
-// Fix: Change named import to default import for Reception
-import Reception from '@/pages/admin/Reception'; 
-// Fix: Change named import to default import for TripBooking
+import Reception from './pages/admin/Reception'; 
 import TripBooking from './pages/admin/TripBooking'; 
-// Fix: Change named import to default import for CustomerCare
 import CustomerCare from './pages/admin/CustomerCare';
-import EmailMarketing from './pages/admin/EmailMarketing'; // Added missing import
 import UserAttendance from './pages/user/UserAttendance';
 import UserSalary from './pages/user/UserSalary';
 import ApplyLeave from './pages/user/ApplyLeave';
@@ -115,12 +112,6 @@ const App: React.FC = () => {
   // Determine home path based on role
   const homePath = userRole === UserRole.EMPLOYEE ? '/user' : '/admin';
 
-  // AI Assistant Config (Commented out as per request)
-  // const hrAssistantSystemInstruction = `You are an expert HR assistant for a small business staff management platform called OK BOZ. 
-  // Your goal is to help the admin or employee with questions about labor laws in India, leave policies, or drafting announcements.
-  // Keep answers concise, professional, and helpful.`;
-  // const hrAssistantInitialMessage = 'Hi! I am your OK BOZ HR Assistant. Ask me about leave policies, labor laws, or how to manage your staff.';
-
   return (
     <ThemeProvider>
       <BrandingProvider>
@@ -143,14 +134,7 @@ const App: React.FC = () => {
                       <>
                         <Route path="/admin" element={<Dashboard />} />
                         <Route path="/admin/reports" element={<Reports />} />
-                        {/* Email Marketing - Only Super Admin */}
-                        <Route 
-                          path="/admin/marketing" 
-                          element={userRole === UserRole.ADMIN ? <EmailMarketing /> : <Navigate to="/admin" replace />} 
-                        />
                         <Route path="/admin/reception" element={<Reception />} />
-                        {/* Vehicle Enquiries route removed */}
-                        {/* <Route path="/admin/vehicle-enquiries" element={<VehicleEnquiries />} /> */}
                         <Route path="/admin/customer-care" element={<CustomerCare role={userRole} />} />
                         <Route path="/admin/trips" element={<TripBooking />} /> 
                         <Route path="/admin/tracking" element={<LiveTracking />} />

@@ -17,7 +17,6 @@ interface LayoutProps {
 const MASTER_ADMIN_LINKS = [
   { id: 'dashboard', path: '/admin', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'reports', path: '/admin/reports', label: 'Reports', icon: BarChart3 },
-  { id: 'marketing', path: '/admin/marketing', label: 'Email Marketing', icon: Mail },
   { id: 'reception', path: '/admin/reception', label: 'Reception Desk', icon: PhoneCall },
   { id: 'customer-care', path: '/admin/customer-care', label: 'Customer Care', icon: Headset },
   { id: 'trips', path: '/admin/trips', label: 'Trip Booking', icon: Map },
@@ -267,28 +266,25 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
     // 3. "Employee Setting" hidden for Corporate users
     if (link.id === 'employee-settings' && role === UserRole.CORPORATE) return false;
 
-    // 4. "Email Marketing" is hidden for Corporate users
-    if (link.id === 'marketing' && role === UserRole.CORPORATE) return false;
-
-    // 5. "Reception Desk" is hidden for Corporate users
+    // 4. "Reception Desk" is hidden for Corporate users
     if (link.id === 'reception' && role === UserRole.CORPORATE) return false;
 
-    // 6. "Settings" is hidden for Corporate users (Franchise Panel)
+    // 5. "Settings" is hidden for Corporate users (Franchise Panel)
     if (link.id === 'settings' && role === UserRole.CORPORATE) return false;
 
-    // 7. "Admin Finance" is ONLY for Super Admin
+    // 6. "Admin Finance" is ONLY for Super Admin
     if (link.id === 'admin-finance' && role !== UserRole.ADMIN) return false;
     
-    // 8. "Finance & Expenses" is hidden for EMPLOYEES
+    // 7. "Finance & Expenses" is hidden for EMPLOYEES
     if (link.id === 'finance-and-expenses' && role === UserRole.EMPLOYEE) return false;
     
-    // 9. "Vehicle Enquiries" is hidden for ALL Admin roles (previously removed)
+    // 8. "Vehicle Enquiries" is hidden for ALL Admin roles (previously removed)
     if (link.id === 'vehicle-enquiries') return false;
 
-    // 10. "Driver Monitoring" is ONLY for Super Admin - REMOVED
+    // 9. "Driver Monitoring" is ONLY for Super Admin - REMOVED
     if (link.id === 'driver-monitoring') return false;
 
-    // 11. "CMS" is ONLY for Super Admin
+    // 10. "CMS" is ONLY for Super Admin
     if (link.id === 'cms' && role !== UserRole.ADMIN) return false;
 
 
