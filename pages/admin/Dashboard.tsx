@@ -1,5 +1,4 @@
 
-
 import React, { useMemo, useState, useEffect } from 'react';
 // @google/genai: Add missing import for Headset
 import { Users, UserCheck, UserX, MapPin, ArrowRight, Building2, Car, TrendingUp, DollarSign, Clock, BarChart3, Calendar, Truck, CheckCircle, Headset } from 'lucide-react';
@@ -46,6 +45,7 @@ const Dashboard = () => {
   const [filterType, setFilterType] = useState<'Daily' | 'Monthly'>('Daily');
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [selectedMonth, setSelectedMonth] = useState<string>(new Date().toISOString().slice(0, 7));
+  const [refreshTrigger, setRefreshTrigger] = useState(0); // New trigger for updates
 
   // --- 2. Data Loading States ---
   const [corporates, setCorporates] = useState<CorporateAccount[]>([]);
@@ -157,7 +157,19 @@ const Dashboard = () => {
     if (savedApprovals) setPendingApprovals(JSON.parse(savedApprovals));
     else setPendingApprovals([]);
 
-  }, [isSuperAdmin, sessionId]);
+  }, [isSuperAdmin, sessionId, refreshTrigger]);
+
+  // Listen for storage changes to auto-refresh dashboard when attendance is punched in other tabs
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      // Refresh if attendance data or staff data changes
+      if (e.key && (e.key.startsWith('attendance_data') || e.key.includes('staff_data'))) {
+        setRefreshTrigger(prev => prev + 1);
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
 
   // --- 4. Filtering Logic ---
   
@@ -259,7 +271,7 @@ const Dashboard = () => {
       }
 
       return { present, absent, late, onField: 0 }; // onField is removed
-  }, [filteredEmployees, filterType, selectedDate, selectedMonth]);
+  }, [filteredEmployees, filterType, selectedDate, selectedMonth, refreshTrigger]); // Added refreshTrigger
 
   // Trip Stats
   const tripStats = useMemo(() => {
@@ -316,7 +328,7 @@ const Dashboard = () => {
           data.push({ name: dayName, present: p });
       }
       return data;
-  }, [selectedDate, filteredEmployees]);
+  }, [selectedDate, filteredEmployees, refreshTrigger]); // Added refreshTrigger
 
   // Vehicle Revenue Chart Data
   const vehicleChartData = useMemo(() => {

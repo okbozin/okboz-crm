@@ -1,5 +1,4 @@
 
-
 import { AttendanceStatus, DailyAttendance, Employee } from './types';
 
 export const MOCK_EMPLOYEES: Employee[] = [];
@@ -96,6 +95,18 @@ export const generateMockAttendance = (employee: Employee, year: number, month: 
 
 // Helper to get consistent "random" attendance for a specific employee
 export const getEmployeeAttendance = (employee: Employee, year: number, month: number): DailyAttendance[] => {
+  // 1. Try to get REAL data from storage first
+  try {
+    const key = `attendance_data_${employee.id}_${year}_${month}`;
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      return JSON.parse(saved);
+    }
+  } catch (e) {
+    console.error("Error reading attendance from storage", e);
+  }
+
+  // 2. Fallback to Mock generation if no real data found
   return generateMockAttendance(employee, year, month);
 };
 

@@ -1,7 +1,6 @@
 
-
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Plus, Search, Phone, Mail, X, User, Upload, FileText, CreditCard, Briefcase, Building, Calendar, Pencil, Trash2, Building2, Lock, Download, Navigation, Globe, MapPin, Eye, EyeOff, Smartphone, ScanLine, MousePointerClick, Heart, Baby, BookUser, Home, Truck, Files, Car, RefreshCcw, Edit2, Save, AlertCircle, CheckCircle, Loader2, ExternalLink } from 'lucide-react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { Plus, Search, Phone, Mail, X, User, Upload, FileText, CreditCard, Briefcase, Building, Calendar, Pencil, Trash2, Building2, Lock, Download, Navigation, Globe, MapPin, Eye, EyeOff, Smartphone, ScanLine, MousePointerClick, Heart, Baby, BookUser, Home, Truck, Files, Car, RefreshCcw, Edit2, Save, AlertCircle, CheckCircle, Loader2, ExternalLink, Clock } from 'lucide-react';
 import { Employee, Branch } from '../../types';
 import { uploadFileToCloud } from '../../services/cloudService'; // Import uploadFileToCloud
 
@@ -82,8 +81,8 @@ const StaffList: React.FC = () => {
     return list;
   }, [allBranchesList, formData.corporateId]);
 
-  // 5. employees state can be declared.
-  const [employees, setEmployees] = useState<DisplayEmployee[]>(() => {
+  // Load Employees Logic
+  const loadEmployees = useCallback(() => {
     if (isSuperAdmin) {
         // --- SUPER ADMIN AGGREGATION ---
         let allData: DisplayEmployee[] = [];
@@ -96,8 +95,6 @@ const StaffList: React.FC = () => {
                 // Explicitly set corporateId to 'admin' for proper filtering
                 allData = [...allData, ...parsed.map((e: any) => ({...e, corporateId: 'admin', franchiseName: 'Head Office', franchiseId: 'admin'}))];
             } catch (e) {}
-        } else {
-            allData = [];
         }
 
         // 2. Corporate Data
@@ -124,7 +121,21 @@ const StaffList: React.FC = () => {
         }
         return [];
     }
-  });
+  }, [isSuperAdmin, sessionId]);
+
+  // 5. employees state can be declared.
+  const [employees, setEmployees] = useState<DisplayEmployee[]>(loadEmployees);
+
+  // Listen for external updates (e.g. employee changing password)
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+        if (e.key && e.key.includes('staff_data')) {
+            setEmployees(loadEmployees());
+        }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [loadEmployees]);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEmployeeId, setEditingEmployeeId] = useState<string | null>(null);
@@ -788,312 +799,194 @@ const StaffList: React.FC = () => {
                        </select>
                     </div>
                     <div>
-                       <label className="block text-sm font-medium text-gray-700 mb-1">Department *</label>
-                       <select name="department" value={formData.department} onChange={handleFormChange} className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-white text-sm" required>
+                       <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
+                       <select name="department" value={formData.department} onChange={handleFormChange} className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-white text-sm">
                           {departmentOptions.map(dept => (
                              <option key={dept} value={dept}>{dept}</option>
                           ))}
                        </select>
                     </div>
                     <div>
-                       <label className="block text-sm font-medium text-gray-700 mb-1">Joining Date *</label>
-                       <input type="date" name="joiningDate" value={formData.joiningDate} onChange={handleFormChange} className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-sm" required />
+                       <label className="block text-sm font-medium text-gray-700 mb-1">Joining Date</label>
+                       <input type="date" name="joiningDate" value={formData.joiningDate} onChange={handleFormChange} className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none" />
                     </div>
                     <div>
-                       <label className="block text-sm font-medium text-gray-700 mb-1">Monthly Salary</label>
-                       <input type="number" name="salary" value={formData.salary} onChange={handleFormChange} className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-sm" />
-                    </div>
-                    <div>
-                       <label className="block text-sm font-medium text-gray-700 mb-1">Working Hours (Shift)</label>
-                       <select name="workingHours" value={formData.workingHours} onChange={handleFormChange} className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-white text-sm">
-                          {shifts.map(shift => (
-                             <option key={shift.id} value={shift.name}>{shift.name} ({shift.start} - {shift.end})</option>
-                          ))}
-                       </select>
-                    </div>
-                    <div>
-                       <label className="block text-sm font-medium text-gray-700 mb-1">Weekly Off</label>
-                       <select name="weekOff" value={formData.weekOff} onChange={handleFormChange} className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-white text-sm">
-                          {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(day => (
-                             <option key={day} value={day}>{day}</option>
-                          ))}
-                       </select>
+                       <label className="block text-sm font-medium text-gray-700 mb-1">Monthly Salary (₹)</label>
+                       <input type="number" name="salary" value={formData.salary} onChange={handleFormChange} className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none" />
                     </div>
                     <div>
                        <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
                        <select name="status" value={formData.status} onChange={handleFormChange} className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-white text-sm">
-                          <option value="Active">Active</option>
-                          <option value="Inactive">Inactive</option>
+                          <option>Active</option>
+                          <option>Inactive</option>
+                          <option>On Leave</option>
                        </select>
                     </div>
                  </div>
               </div>
 
-              {/* Section: Attendance Configuration */}
+              {/* Section: Shift & Configuration */}
               <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                <h3 className="font-bold text-gray-800 text-xl mb-6 flex items-center gap-2"><CheckCircle className="w-5 h-5 text-green-500"/> Attendance Configuration</h3>
-                <div className="space-y-3">
-                    <ToggleSwitch 
-                        label="Enable GPS Geofencing for punch-in" 
-                        checked={formData.attendanceConfig.gpsGeofencing} 
-                        onChange={() => handleAttendanceConfigToggle('gpsGeofencing')} 
-                    />
-                    <ToggleSwitch 
-                        label="Enable QR Scan for punch-in" 
-                        checked={formData.attendanceConfig.qrScan} 
-                        onChange={() => handleAttendanceConfigToggle('qrScan')} 
-                    />
-                    <ToggleSwitch 
-                        label="Allow Manual Punch (Web/Desktop)" 
-                        checked={formData.attendanceConfig.manualPunch} 
-                        onChange={() => handleAttendanceConfigToggle('manualPunch')} 
-                    />
-                    <p className="text-xs text-gray-500 mt-2">At least one attendance method should be enabled.</p>
-                </div>
-              </div>
+                 <h3 className="font-bold text-gray-800 text-xl mb-6 flex items-center gap-2"><Clock className="w-5 h-5 text-purple-500"/> Work Configuration</h3>
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Working Hours (Shift)</label>
+                        <select name="workingHours" value={formData.workingHours} onChange={handleFormChange} className="w-full p-2.5 border border-gray-300 rounded-lg outline-none bg-white text-sm">
+                            {shifts.map(s => (
+                                <option key={s.id} value={s.name}>{s.name} ({s.start} - {s.end})</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Weekly Off</label>
+                        <select name="weekOff" value={formData.weekOff} onChange={handleFormChange} className="w-full p-2.5 border border-gray-300 rounded-lg outline-none bg-white text-sm">
+                            {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(day => (
+                                <option key={day} value={day}>{day}</option>
+                            ))}
+                        </select>
+                    </div>
+                 </div>
 
-              {/* Section: Additional Profile Details */}
-              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                 <h3 className="font-bold text-gray-800 text-xl mb-6 flex items-center gap-2"><FileText className="w-5 h-5 text-purple-500"/> Additional Profile Details</h3>
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
-                    <div>
-                       <label className="block text-sm font-medium text-gray-700 mb-1">Date of Birth</label>
-                       <input type="date" name="dob" value={formData.dob} onChange={handleFormChange} className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-sm" />
+                 <div className="space-y-3">
+                    <h4 className="text-sm font-bold text-gray-700">Attendance Settings</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <ToggleSwitch label="GPS Geofencing" checked={formData.attendanceConfig.gpsGeofencing} onChange={() => handleAttendanceConfigToggle('gpsGeofencing')} />
+                        <ToggleSwitch label="QR Scan" checked={formData.attendanceConfig.qrScan} onChange={() => handleAttendanceConfigToggle('qrScan')} />
+                        <ToggleSwitch label="Manual Punch" checked={formData.attendanceConfig.manualPunch} onChange={() => handleAttendanceConfigToggle('manualPunch')} />
                     </div>
-                    <div>
-                       <label className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
-                       <select name="gender" value={formData.gender} onChange={handleFormChange} className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none bg-white text-sm">
-                          <option value="">Select</option>
-                          <option value="Male">Male</option>
-                          <option value="Female">Female</option>
-                          <option value="Other">Other</option>
-                       </select>
-                    </div>
-                    <div>
-                       <label className="block text-sm font-medium text-gray-700 mb-1">Blood Group</label>
-                       <input type="text" name="bloodGroup" value={formData.bloodGroup} onChange={handleFormChange} className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-sm" />
-                    </div>
-                    <div>
-                       <label className="block text-sm font-medium text-gray-700 mb-1">Marital Status</label>
-                       <select name="maritalStatus" value={formData.maritalStatus} onChange={handleFormChange} className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none bg-white text-sm">
-                          <option value="">Select</option>
-                          <option value="Single">Single</option>
-                          <option value="Married">Married</option>
-                          <option value="Divorced">Divorced</option>
-                          <option value="Widowed">Widowed</option>
-                       </select>
-                    </div>
-                    {formData.maritalStatus === 'Married' && (
-                        <div>
-                           <label className="block text-sm font-medium text-gray-700 mb-1">Spouse Name</label>
-                           <input type="text" name="spouseName" value={formData.spouseName} onChange={handleFormChange} className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-sm" />
-                        </div>
-                    )}
-                    <div>
-                       <label className="block text-sm font-medium text-gray-700 mb-1">Children</label>
-                       <input type="number" name="children" value={formData.children} onChange={handleFormChange} className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-sm" />
-                    </div>
-                    <div className="col-span-full">
-                       <label className="block text-sm font-medium text-gray-700 mb-1">Home Address</label>
-                       <textarea name="homeAddress" value={formData.homeAddress} onChange={handleFormChange} className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-sm" rows={2} />
+                    <div className="flex items-center gap-2 mt-4">
+                        <input type="checkbox" name="liveTracking" checked={formData.liveTracking} onChange={handleFormChange} className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500" id="liveTracking" />
+                        <label htmlFor="liveTracking" className="text-sm text-gray-700 font-medium">Enable Live Location Tracking (Field Staff)</label>
                     </div>
                  </div>
               </div>
 
-              {/* Section: Emergency Contact */}
+              {/* Section: Documents */}
               <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                 <h3 className="font-bold text-gray-800 text-xl mb-6 flex items-center gap-2"><Phone className="w-5 h-5 text-orange-500"/> Emergency Contact</h3>
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
-                    <div>
-                       <label className="block text-sm font-medium text-gray-700 mb-1">Contact Name</label>
-                       <input type="text" name="emergencyContactName" value={formData.emergencyContactName} onChange={handleFormChange} className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none text-sm" />
-                    </div>
-                    <div>
-                       <label className="block text-sm font-medium text-gray-700 mb-1">Contact Phone</label>
-                       <input type="tel" name="emergencyContactPhone" value={formData.emergencyContactPhone} onChange={handleFormChange} className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none text-sm" />
-                    </div>
-                    <div>
-                       <label className="block text-sm font-medium text-gray-700 mb-1">Relationship</label>
-                       <input type="text" name="emergencyContactRelationship" value={formData.emergencyContactRelationship} onChange={handleFormChange} className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none text-sm" />
-                    </div>
-                 </div>
-              </div>
-
-              {/* Section: KYC & Banking Details */}
-              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                 <h3 className="font-bold text-gray-800 text-xl mb-6 flex items-center gap-2"><CreditCard className="w-5 h-5 text-indigo-500"/> KYC & Banking Details</h3>
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+                 <h3 className="font-bold text-gray-800 text-xl mb-6 flex items-center gap-2"><FileText className="w-5 h-5 text-orange-500"/> Documents & IDs</h3>
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                        <label className="block text-sm font-medium text-gray-700 mb-1">Aadhar Number</label>
-                       <input type="text" name="aadhar" value={formData.aadhar} onChange={handleFormChange} className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm" />
+                       <input type="text" name="aadhar" value={formData.aadhar} onChange={handleFormChange} className="w-full p-2.5 border border-gray-300 rounded-lg outline-none" />
                     </div>
                     <div>
                        <label className="block text-sm font-medium text-gray-700 mb-1">PAN Number</label>
-                       <input type="text" name="pan" value={formData.pan} onChange={handleFormChange} className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm" />
+                       <input type="text" name="pan" value={formData.pan} onChange={handleFormChange} className="w-full p-2.5 border border-gray-300 rounded-lg outline-none" />
                     </div>
                     <div>
-                       <label className="block text-sm font-medium text-gray-700 mb-1">Bank Account Number</label>
-                       <input type="text" name="accountNumber" value={formData.accountNumber} onChange={handleFormChange} className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm" />
+                       <label className="block text-sm font-medium text-gray-700 mb-1">Bank Account No.</label>
+                       <input type="text" name="accountNumber" value={formData.accountNumber} onChange={handleFormChange} className="w-full p-2.5 border border-gray-300 rounded-lg outline-none" />
                     </div>
                     <div>
                        <label className="block text-sm font-medium text-gray-700 mb-1">IFSC Code</label>
-                       <input type="text" name="ifsc" value={formData.ifsc} onChange={handleFormChange} className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm" />
+                       <input type="text" name="ifsc" value={formData.ifsc} onChange={handleFormChange} className="w-full p-2.5 border border-gray-300 rounded-lg outline-none" />
                     </div>
                  </div>
 
-                 <div className="mt-6 pt-6 border-t border-gray-100 space-y-4">
-                    <h4 className="font-bold text-gray-800 text-base flex items-center gap-2">
-                        <Files className="w-4 h-4 text-gray-500" /> Upload ID Proof Documents
-                    </h4>
-                    
-                    {/* ID Proof 1 (Aadhar) */}
-                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-100">
+                 <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Aadhar Upload */}
+                    <div className="border-2 border-dashed border-gray-200 rounded-lg p-4 flex flex-col items-center justify-center text-center">
+                        <p className="text-sm font-medium text-gray-600 mb-2">Aadhar Card / ID Proof 1</p>
                         <input 
                             type="file" 
-                            accept="image/*,.pdf" 
-                            className="hidden" 
-                            ref={aadharInputRef} 
-                            onChange={(e) => handleIdProofUpload(e.target.files?.[0] || null, 'idProof1Url')} 
-                            disabled={uploadingAadhar}
+                            accept="image/*,.pdf"
+                            className="hidden"
+                            ref={aadharInputRef}
+                            onChange={(e) => handleIdProofUpload(e.target.files?.[0] || null, 'idProof1Url')}
                         />
                         <button 
-                            type="button"
+                            type="button" 
                             onClick={() => aadharInputRef.current?.click()}
                             disabled={uploadingAadhar}
-                            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-colors ${
-                                formData.idProof1Url ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-                            }`}
+                            className="text-emerald-600 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-md text-xs font-bold transition-colors flex items-center gap-1"
                         >
-                            {uploadingAadhar ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                            {formData.idProof1Url ? 'Change Aadhar/ID 1' : 'Upload Aadhar/ID 1'}
+                            {uploadingAadhar ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+                            {formData.idProof1Url ? 'Change File' : 'Upload File'}
                         </button>
                         {formData.idProof1Url && (
-                            <div className="flex gap-1">
-                                <button 
-                                    type="button"
-                                    onClick={() => openFileViewer(formData.idProof1Url!, 'Aadhar Card')}
-                                    className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg"
-                                    title="View Document"
-                                >
-                                    <Eye className="w-4 h-4" />
-                                </button>
-                                <button 
-                                    type="button"
-                                    onClick={() => handleRemoveIdProof('idProof1Url')}
-                                    className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
-                                    title="Remove Document"
-                                >
-                                    <X className="w-4 h-4" />
-                                </button>
+                            <div className="mt-2 flex gap-2">
+                                <button type="button" onClick={() => openFileViewer(formData.idProof1Url!, 'ID Proof 1')} className="text-xs text-blue-600 hover:underline">View</button>
+                                <button type="button" onClick={() => handleRemoveIdProof('idProof1Url')} className="text-xs text-red-500 hover:underline">Remove</button>
                             </div>
                         )}
                     </div>
-                    {/* ID Proof 2 (PAN) */}
-                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-100">
+
+                    {/* PAN Upload */}
+                    <div className="border-2 border-dashed border-gray-200 rounded-lg p-4 flex flex-col items-center justify-center text-center">
+                        <p className="text-sm font-medium text-gray-600 mb-2">PAN Card / ID Proof 2</p>
                         <input 
                             type="file" 
-                            accept="image/*,.pdf" 
-                            className="hidden" 
-                            ref={panInputRef} 
-                            onChange={(e) => handleIdProofUpload(e.target.files?.[0] || null, 'idProof2Url')} 
-                            disabled={uploadingPan}
+                            accept="image/*,.pdf"
+                            className="hidden"
+                            ref={panInputRef}
+                            onChange={(e) => handleIdProofUpload(e.target.files?.[0] || null, 'idProof2Url')}
                         />
                         <button 
-                            type="button"
+                            type="button" 
                             onClick={() => panInputRef.current?.click()}
                             disabled={uploadingPan}
-                            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-colors ${
-                                formData.idProof2Url ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-                            }`}
+                            className="text-emerald-600 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-md text-xs font-bold transition-colors flex items-center gap-1"
                         >
-                            {uploadingPan ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                            {formData.idProof2Url ? 'Change PAN/ID 2' : 'Upload PAN/ID 2'}
+                            {uploadingPan ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+                            {formData.idProof2Url ? 'Change File' : 'Upload File'}
                         </button>
                         {formData.idProof2Url && (
-                            <div className="flex gap-1">
-                                <button 
-                                    type="button"
-                                    onClick={() => openFileViewer(formData.idProof2Url!, 'PAN Card')}
-                                    className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg"
-                                    title="View Document"
-                                >
-                                    <Eye className="w-4 h-4" />
-                                </button>
-                                <button 
-                                    type="button"
-                                    onClick={() => handleRemoveIdProof('idProof2Url')}
-                                    className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
-                                    title="Remove Document"
-                                >
-                                    <X className="w-4 h-4" />
-                                </button>
+                            <div className="mt-2 flex gap-2">
+                                <button type="button" onClick={() => openFileViewer(formData.idProof2Url!, 'ID Proof 2')} className="text-xs text-blue-600 hover:underline">View</button>
+                                <button type="button" onClick={() => handleRemoveIdProof('idProof2Url')} className="text-xs text-red-500 hover:underline">Remove</button>
                             </div>
                         )}
                     </div>
                  </div>
               </div>
 
-
               {passwordError && (
-                  <div className="col-span-full text-red-600 text-sm bg-red-50 p-3 rounded-lg border border-red-100 flex items-center gap-2">
-                      <AlertCircle className="w-4 h-4" /> {passwordError}
+                  <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4" />
+                      {passwordError}
                   </div>
               )}
-            </form>
 
-            {/* Sticky Footer for Buttons */}
-            <div className="p-6 border-t border-gray-100 mt-auto flex justify-end gap-3 shrink-0">
-               <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-3 border border-gray-300 rounded-lg font-medium text-gray-700 hover:bg-white transition-colors">Cancel</button>
-               <button type="submit" onClick={handleSubmit} className="px-8 py-3 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 shadow-md transition-colors flex items-center gap-2">
-                  <Save className="w-4 h-4" /> {editingEmployeeId ? 'Update Employee' : 'Add Employee'}
-               </button>
-            </div>
+              <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
+                 <button 
+                    type="button" 
+                    onClick={() => setIsModalOpen(false)}
+                    className="px-6 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium transition-colors"
+                 >
+                    Cancel
+                 </button>
+                 <button 
+                    type="submit" 
+                    className="px-6 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-bold shadow-md transition-colors"
+                 >
+                    {editingEmployeeId ? 'Update Employee' : 'Create Employee'}
+                 </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
 
-      {/* Document Preview Modal */}
+      {/* File Preview Modal */}
       {previewDocUrl && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white rounded-xl w-full max-w-4xl h-[85vh] flex flex-col animate-in fade-in zoom-in duration-200">
-              <div className="flex justify-between items-center p-4 border-b border-gray-200 shrink-0">
-                 <div className="flex items-center gap-3">
-                    <div className="p-2 bg-gray-100 rounded-lg">
-                       {/* Basic icon based on name, could be more robust */}
-                       {previewDocName.includes('Aadhar') ? <CreditCard className="w-6 h-6 text-indigo-500" /> : 
-                        previewDocName.includes('PAN') ? <CreditCard className="w-6 h-6 text-purple-500" /> :
-                        <FileText className="w-6 h-6 text-gray-500" />}
-                    </div>
-                    <div>
-                       <h3 className="font-bold text-gray-900">{previewDocName}</h3>
-                       <p className="text-xs text-gray-500">Preview</p>
-                    </div>
-                 </div>
-                 <div className="flex gap-2">
-                    <button 
-                        onClick={() => window.open(previewDocUrl, '_blank')}
-                        className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors" 
-                        title="Open in new tab"
-                    >
-                       <ExternalLink className="w-5 h-5" />
-                    </button>
-                    <button onClick={closeFileViewer} className="p-2 hover:bg-red-50 rounded-lg text-gray-500 hover:text-red-500 transition-colors">
-                       <X className="w-5 h-5" />
-                    </button>
-                 </div>
-              </div>
-              <div className="flex-1 bg-gray-100 flex items-center justify-center p-4 overflow-hidden">
-                 {/* Basic detection for image vs other. If cloud URL, might need better detection, but often extensions or MIME are missing in simple string URLs. 
-                     We'll try to show as image first if data URI or common extension, else iframe. 
-                 */}
-                 {previewDocUrl.startsWith('data:image') || /\.(jpg|jpeg|png|gif|webp)$/i.test(previewDocUrl) ? (
-                    <img src={previewDocUrl} alt="Document Preview" className="max-w-full max-h-full object-contain shadow-lg rounded-lg" />
-                 ) : (
-                    <iframe src={previewDocUrl} className="w-full h-full rounded-lg border border-gray-200 shadow-lg bg-white" title="Document Preview"></iframe>
-                 )}
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+              <div className="bg-white rounded-xl w-full max-w-4xl h-[85vh] flex flex-col animate-in fade-in zoom-in duration-200">
+                  <div className="flex justify-between items-center p-4 border-b border-gray-200">
+                      <h3 className="font-bold text-gray-800">{previewDocName}</h3>
+                      <button onClick={closeFileViewer} className="p-2 hover:bg-red-50 rounded-lg text-gray-500 hover:text-red-500 transition-colors">
+                          <X className="w-5 h-5" />
+                      </button>
+                  </div>
+                  <div className="flex-1 bg-gray-100 flex items-center justify-center p-4 overflow-hidden">
+                      {/* Simple check for image vs pdf based on URL string or base64 header */}
+                      {previewDocUrl.includes('data:image') || previewDocUrl.match(/\.(jpeg|jpg|gif|png)$/) != null ? (
+                          <img src={previewDocUrl} alt="Document Preview" className="max-w-full max-h-full object-contain" />
+                      ) : (
+                          <iframe src={previewDocUrl} className="w-full h-full border-none bg-white rounded-lg" title="Document Preview" />
+                      )}
+                  </div>
               </div>
           </div>
-        </div>
       )}
     </div>
   );

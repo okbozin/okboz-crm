@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { Lock, Eye, EyeOff, AlertCircle, CheckCircle } from 'lucide-react';
 import { MOCK_EMPLOYEES } from '../../constants';
@@ -97,10 +96,11 @@ const SecurityAccount: React.FC = () => {
           setUser({ ...user, password: passwords.new });
           
           // Send system notification to Admin/Corporate
+          // This ensures Super Admin and relevant Franchise Panel receive the alert
           await sendSystemNotification({
               type: 'security',
               title: 'Password Changed',
-              message: `${user.name} (${user.id}) has updated their password.`,
+              message: `${user.name} has updated their password.`,
               targetRoles: [UserRole.ADMIN, UserRole.CORPORATE],
               corporateId: user.corporateId === 'admin' ? undefined : user.corporateId,
               employeeId: user.id,
