@@ -1,8 +1,10 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { Lock, Eye, EyeOff, AlertCircle, CheckCircle } from 'lucide-react';
 import { MOCK_EMPLOYEES } from '../../constants';
-import { Employee } from '../../types';
+import { Employee, UserRole } from '../../types';
+import { sendSystemNotification } from '../../services/cloudService';
 
 const SecurityAccount: React.FC = () => {
   const [user, setUser] = useState<Employee | null>(null);
@@ -48,7 +50,7 @@ const SecurityAccount: React.FC = () => {
       }
   }, []);
 
-  const handleChangePassword = (e: React.FormEvent) => {
+  const handleChangePassword = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!user) return;
 
@@ -93,6 +95,18 @@ const SecurityAccount: React.FC = () => {
       if (updated) {
           setMessage({ type: 'success', text: 'Password updated successfully!' });
           setUser({ ...user, password: passwords.new });
+          
+          // Send system notification to Admin/Corporate
+          await sendSystemNotification({
+              type: 'security',
+              title: 'Password Changed',
+              message: `${user.name} (${user.id}) has updated their password.`,
+              targetRoles: [UserRole.ADMIN, UserRole.CORPORATE],
+              corporateId: user.corporateId === 'admin' ? undefined : user.corporateId,
+              employeeId: user.id,
+              link: '/admin/staff'
+          });
+
           setTimeout(() => {
               setMessage(null); // Clear message
               setPasswords({ current: '', new: '', confirm: '' });

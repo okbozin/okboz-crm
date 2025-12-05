@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Plus, Search, Phone, Mail, X, User, Upload, FileText, CreditCard, Briefcase, Building, Calendar, Pencil, Trash2, Building2, Lock, Download, Navigation, Globe, MapPin, Eye, EyeOff, Smartphone, ScanLine, MousePointerClick, Heart, Baby, BookUser, Home, Truck, Files, Car, RefreshCcw, Edit2, Save, AlertCircle, CheckCircle, Loader2, ExternalLink } from 'lucide-react';
 import { Employee, Branch } from '../../types';
@@ -339,7 +340,7 @@ const StaffList: React.FC = () => {
         ...employee,
         joiningDate: employee.joiningDate.split('T')[0], // Ensure date format for input
         attendanceConfig: employee.attendanceConfig || { gpsGeofencing: false, qrScan: false, manualPunch: true },
-        password: '', // Never pre-fill password for security
+        password: employee.password || '', // Pre-fill password so admin can see/edit it
         corporateId: employee.corporateId || 'admin', // Ensure corporateId is passed to form
         // Ensure branch is valid for formAvailableBranches
         branch: employee.branch && formAvailableBranches.some(b => b.name === employee.branch) ? employee.branch : formAvailableBranches[0]?.name || '',
@@ -364,7 +365,7 @@ const StaffList: React.FC = () => {
       return;
     }
 
-    if (!editingEmployeeId) { // Only require password on creation
+    if (!editingEmployeeId) { // Only require password confirmation on creation
       if (!formData.password) {
         setPasswordError("Password is required for new employees.");
         return;
@@ -386,13 +387,11 @@ const StaffList: React.FC = () => {
         // Update existing employee
         setEmployees(prev => prev.map(emp => {
             if (emp.id === editingEmployeeId) {
-                // If password field is empty, retain old password
-                const updatedPassword = formData.password ? formData.password : emp.password;
-                
                 return {
                     ...emp,
                     ...formData,
-                    password: updatedPassword,
+                    // If formData.password is changed in edit, use it. If not, the pre-filled value is used.
+                    // This handles both explicit change and keeping current.
                     corporateId: targetCorporateId, // Ensure corporateId is updated
                     franchiseName: corporates.find(c => c.email === targetCorporateId)?.companyName || 'Head Office',
                 };
@@ -723,7 +722,7 @@ const StaffList: React.FC = () => {
                               value={formData.password} 
                               onChange={handleFormChange} 
                               className="w-full p-2.5 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none" 
-                              placeholder={editingEmployeeId ? "Leave blank to keep current" : "••••••••"}
+                              placeholder={editingEmployeeId ? "Update password (optional)" : "••••••••"}
                               required={!editingEmployeeId}
                           />
                           <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute inset-y-0 right-3 flex items-center text-gray-400 hover:text-gray-600">
