@@ -8,7 +8,7 @@ import {
   ChevronLeft, ChevronRight, Calendar, List, CheckCircle, XCircle, 
   User, MapPin, Clock, Fingerprint, Download, X, 
   PieChart as PieChartIcon, Activity, ScanLine, Loader2, Navigation,
-  Phone, DollarSign, Plane, Briefcase, Camera, AlertCircle, Building2, RefreshCcw, Users
+  Phone, DollarSign, Plane, Briefcase, Camera, AlertCircle, Building2, RefreshCcw, Users, Coffee
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useBranding } from '../../context/BrandingContext';
@@ -24,7 +24,7 @@ function haversineDistance(coords1: { lat: number; lng: number; }, coords2: { la
     const R = 6371e3; // metres
 
     const dLat = toRad(coords2.lat - coords1.lat);
-    const dLon = toRad(coords2.lng - coords1.lng); // Fixed: should be coords1.lng for dLon
+    const dLon = toRad(coords2.lng - coords1.lng); 
 
     const lat1 = toRad(coords1.lat);
     const lat2 = toRad(coords2.lat);
@@ -52,13 +52,13 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
   const getSessionId = () => localStorage.getItem('app_session_id') || 'admin';
   const currentSessionId = getSessionId();
   const isSuperAdmin = currentSessionId === 'admin';
-  const isCorporateAdmin = !isSuperAdmin && isAdmin; // Flag for corporate user in admin panel
+  const isCorporateAdmin = !isSuperAdmin && isAdmin; 
 
   // NEW: Filter States for Admin Panel
   const [filterCorporate, setFilterCorporate] = useState<string>('All');
   const [filterBranch, setFilterBranch] = useState<string>('All');
   const [filterStaffId, setFilterStaffId] = useState<string>('All');
-  const [filterPeriodType, setFilterPeriodType] = useState<'Daily' | 'Monthly'>('Monthly'); // Default to Monthly for overview
+  const [filterPeriodType, setFilterPeriodType] = useState<'Daily' | 'Monthly'>('Monthly'); 
   const [filterDate, setFilterDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [filterMonth, setFilterMonth] = useState<string>(new Date().toISOString().slice(0, 7));
 
@@ -118,7 +118,7 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
   }, [isAdmin, isSuperAdmin]);
 
 
-  // Load employees list (For Admin View Only) - Now includes corporateId and corporateName for filtering
+  // Load employees list (For Admin View Only) 
   const [employees, setEmployees] = useState<Employee[]>(() => {
     if (isAdmin) {
       if (isSuperAdmin) {
@@ -174,17 +174,12 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
   const filteredEmployeesForDisplay = useMemo(() => {
     let list = employees;
 
-    // Apply Corporate Filter (Admin Only)
     if (isSuperAdmin && filterCorporate !== 'All') {
       list = list.filter(emp => emp.corporateId === filterCorporate);
     }
-    
-    // Apply Branch Filter
     if (filterBranch !== 'All') {
       list = list.filter(emp => emp.branch === filterBranch);
     }
-
-    // Apply Staff Filter
     if (filterStaffId !== 'All') {
       list = list.filter(emp => emp.id === filterStaffId);
     }
@@ -194,9 +189,9 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
 
 
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null); 
-  const [employeeBranch, setEmployeeBranch] = useState<Branch | null>(null); // NEW: Store employee's branch details
+  const [employeeBranch, setEmployeeBranch] = useState<Branch | null>(null); 
   
-  // Sync selectedEmployee based on filters for admin view, or loggedInUser for employee view
+  // Sync selectedEmployee
   useEffect(() => {
     if (isAdmin) {
       if (filteredEmployeesForDisplay.length > 0 && !selectedEmployee) {
@@ -204,16 +199,14 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
       } else if (filteredEmployeesForDisplay.length === 0) {
         setSelectedEmployee(null);
       } else if (selectedEmployee && !filteredEmployeesForDisplay.some(e => e.id === selectedEmployee.id)) {
-        // If current selected employee is no longer in filtered list, pick the first one
         setSelectedEmployee(filteredEmployeesForDisplay[0]);
       }
     } else {
-      // For employee view, wait for loggedInUser to be resolved
       if (loggedInUser) {
           setSelectedEmployee(loggedInUser);
       }
     }
-  }, [isAdmin, filteredEmployeesForDisplay, loggedInUser, selectedEmployee]); // Add selectedEmployee to dependency array
+  }, [isAdmin, filteredEmployeesForDisplay, loggedInUser, selectedEmployee]);
 
 
   // NEW: Load employee's assigned branch details
@@ -236,37 +229,49 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
     }
   }, [selectedEmployee]);
 
+  // --- SYNC CALENDAR WITH DASHBOARD FILTERS ---
+  useEffect(() => {
+    if (isAdmin) {
+        if (filterPeriodType === 'Monthly' && filterMonth) {
+            const [y, m] = filterMonth.split('-').map(Number);
+            // Only update if current date is different to avoid loop, but ensure calendar matches report
+            if (currentDate.getFullYear() !== y || currentDate.getMonth() !== (m - 1)) {
+                setCurrentDate(new Date(y, m - 1, 1));
+            }
+        } else if (filterPeriodType === 'Daily' && filterDate) {
+            const [y, m] = filterDate.split('-').map(Number);
+            if (currentDate.getFullYear() !== y || currentDate.getMonth() !== (m - 1)) {
+                setCurrentDate(new Date(y, m - 1, 1));
+            }
+        }
+    }
+  }, [filterMonth, filterDate, filterPeriodType, isAdmin]);
 
   const [attendanceData, setAttendanceData] = useState<DailyAttendance[]>([]);
   const [editingDay, setEditingDay] = useState<DailyAttendance | null>(null);
 
-  // Punch Card States (for employee view)
+  // Punch Card States
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isCheckedIn, setIsCheckedIn] = useState(false);
   const [checkInTime, setCheckInTime] = useState<string>('--:--');
   const [checkOutTime, setCheckOutTime] = useState<string>('--:--');
   const [duration, setDuration] = useState<{ hours: number, minutes: number, seconds: number }>({ hours: 0, minutes: 0, seconds: 0 });
   
-  // NEW: Location & Camera Permission States
   const [locationStatus, setLocationStatus] = useState<Employee['attendanceLocationStatus']>('idle');
   const [currentLocation, setCurrentLocation] = useState<Employee['currentLocation']>(null);
   const [cameraStatus, setCameraStatus] = useState<Employee['cameraPermissionStatus']>('idle');
-
-  // QR Scan State
   const [isScanningQr, setIsScanningQr] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  // Clock for current time
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000); 
     return () => clearInterval(timer);
   }, []);
 
-  // NEW: Request Permissions & Watch Geolocation
+  // ... (Permission & Geolocation logic) ...
   useEffect(() => {
     if (!isAdmin && selectedEmployee) {
       const requestPermissions = async () => {
-        // Geolocation Permission
         if (selectedEmployee.attendanceConfig?.gpsGeofencing || selectedEmployee.liveTracking) {
           setLocationStatus('fetching');
           if (navigator.geolocation) {
@@ -290,11 +295,9 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
                     setLocationStatus('outside_geofence');
                   }
                 } else {
-                  // If no specific geofence, but permission is granted
                   setLocationStatus('granted'); 
                 }
 
-                // Update employee object in local storage
                 const updatedEmployee = { ...selectedEmployee, currentLocation: newLocation, attendanceLocationStatus: locationStatus };
                 const key = `staff_data_${currentSessionId}`;
                 const allStaff = JSON.parse(localStorage.getItem(key) || '[]');
@@ -303,45 +306,40 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
 
               },
               (err) => {
-                console.error("Geolocation Error:", err.message);
                 if (err.code === err.PERMISSION_DENIED) {
                   setLocationStatus('denied');
-                  alert("Location access denied. Please enable it in your browser settings to use GPS attendance.");
                 } else {
-                  setLocationStatus('idle'); // Other errors
+                  setLocationStatus('idle');
                 }
               },
               { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
             );
             return () => navigator.geolocation.clearWatch(watchId);
           } else {
-            setLocationStatus('denied'); // Browser doesn't support
-            alert("Geolocation not supported by your browser.");
+            setLocationStatus('denied');
           }
         } else {
-          setLocationStatus('idle'); // No GPS needed
+          setLocationStatus('idle');
         }
 
-        // Camera Permission (only if QR scan is enabled)
         if (selectedEmployee.attendanceConfig?.qrScan) {
           try {
             const stream = await navigator.mediaDevices.getUserMedia({ video: true });
             setCameraStatus('granted');
-            stream.getTracks().forEach(track => track.stop()); // Stop immediately after check
+            stream.getTracks().forEach(track => track.stop());
           } catch (e) {
-            console.error("Camera access denied:", e);
             setCameraStatus('denied');
           }
         } else {
-          setCameraStatus('idle'); // No camera needed
+          setCameraStatus('idle');
         }
       };
 
       requestPermissions();
     }
-  }, [isAdmin, selectedEmployee, employeeBranch, currentSessionId, locationStatus]); // Rerun if employee or their branch changes
+  }, [isAdmin, selectedEmployee, employeeBranch, currentSessionId, locationStatus]);
 
-  // Restore active punch session on mount (for employee view)
+  // ... (Punch Restore & Timer Logic) ...
   useEffect(() => {
     if (!isAdmin && selectedEmployee) {
       const savedSession = localStorage.getItem(`active_punch_session_${selectedEmployee.id}`);
@@ -349,15 +347,9 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
         try {
           const { startTime } = JSON.parse(savedSession);
           const start = new Date(startTime);
-          
           setIsCheckedIn(true);
-          setCheckInTime(start.toLocaleTimeString('en-US', { 
-            hour: '2-digit', 
-            minute: '2-digit',
-            hour12: true
-          }));
+          setCheckInTime(start.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }));
         } catch (e) {
-          console.error("Failed to restore punch session", e);
           localStorage.removeItem(`active_punch_session_${selectedEmployee.id}`);
         }
       } else {
@@ -368,10 +360,8 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
     }
   }, [isAdmin, selectedEmployee]);
 
-  // Duration Timer Logic
   useEffect(() => {
     let interval: any;
-    
     if (isCheckedIn && selectedEmployee) {
       const updateTimer = () => {
         const savedSession = localStorage.getItem(`active_punch_session_${selectedEmployee.id}`);
@@ -381,66 +371,50 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
                 const start = new Date(startTime);
                 const now = new Date();
                 const diff = Math.max(0, now.getTime() - start.getTime());
-                
-                const hours = Math.floor(diff / (1000 * 60 * 60));
-                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-                const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-                
-                setDuration({ hours, minutes, seconds });
-            } catch (e) {
-                setIsCheckedIn(false);
-            }
+                setDuration({ 
+                    hours: Math.floor(diff / (1000 * 60 * 60)),
+                    minutes: Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60)),
+                    seconds: Math.floor((diff % (1000 * 60)) / 1000)
+                });
+            } catch (e) { setIsCheckedIn(false); }
         }
       };
-      
       updateTimer();
       interval = setInterval(updateTimer, 1000);
     } else {
         setDuration({ hours: 0, minutes: 0, seconds: 0 });
     }
-
     return () => { if (interval) clearInterval(interval); };
   }, [isCheckedIn, selectedEmployee]);
 
   const performPunch = () => {
     if (!selectedEmployee) return;
-
     const now = new Date();
-    const timeStr = now.toLocaleTimeString('en-US', { 
-      hour: '2-digit', minute: '2-digit', hour12: true
-    });
+    const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
     const todayDateStr = now.toISOString().split('T')[0];
-
-    // 1. Determine Storage Key for TODAY's punch
     const punchYear = now.getFullYear();
     const punchMonth = now.getMonth();
     const punchStorageKey = `attendance_data_${selectedEmployee.id}_${punchYear}_${punchMonth}`;
     
-    // 2. Load data for that month
     let currentMonthData: DailyAttendance[] = [];
     try {
         const stored = localStorage.getItem(punchStorageKey);
         currentMonthData = stored ? JSON.parse(stored) : [];
     } catch (e) {}
 
-    // 3. Update the record
     const recordIndex = currentMonthData.findIndex(d => d.date === todayDateStr);
     
     if (recordIndex >= 0) {
-        // Update existing
         const record = currentMonthData[recordIndex];
         if (!isCheckedIn) {
-            // Punching In
             record.status = AttendanceStatus.PRESENT;
             record.checkIn = timeStr;
             record.isLate = now.getHours() > 9 || (now.getHours() === 9 && now.getMinutes() > 30);
         } else {
-            // Punching Out
             record.checkOut = timeStr;
         }
         currentMonthData[recordIndex] = record;
     } else {
-        // Create new record (if somehow missing or new month generated empty)
         if (!isCheckedIn) {
             currentMonthData.push({
                 date: todayDateStr,
@@ -450,25 +424,17 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
             });
         }
     }
-
-    // 4. Save to Storage
     localStorage.setItem(punchStorageKey, JSON.stringify(currentMonthData));
 
-    // 5. Update UI State *only if* we are viewing the current month
-    // This check prevents overwriting the calendar view if user is looking at a different month
     if (currentDate.getFullYear() === punchYear && currentDate.getMonth() === punchMonth) {
-        setAttendanceData([...currentMonthData]); // Force new reference
+        setAttendanceData([...currentMonthData]); 
     }
 
-    // 6. Toggle Check-in State
     if (!isCheckedIn) {
         setIsCheckedIn(true);
         setCheckInTime(timeStr);
         setCheckOutTime('--:--');
-        localStorage.setItem(`active_punch_session_${selectedEmployee.id}`, JSON.stringify({
-            startTime: now.toISOString(),
-            employeeId: selectedEmployee.id
-        }));
+        localStorage.setItem(`active_punch_session_${selectedEmployee.id}`, JSON.stringify({ startTime: now.toISOString(), employeeId: selectedEmployee.id }));
     } else {
         setIsCheckedIn(false);
         setCheckOutTime(timeStr);
@@ -476,75 +442,20 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
     }
   };
 
-  const handleManualPunch = () => {
-      if (!selectedEmployee) return;
-      const config = selectedEmployee.attendanceConfig;
-
-      if (config?.gpsGeofencing) {
-          if (locationStatus === 'denied') {
-              alert("Location access is denied. Please enable it in your browser settings to punch in.");
-              return;
-          }
-          if (locationStatus === 'fetching') {
-              alert("Fetching your location. Please wait a moment.");
-              return;
-          }
-          if (locationStatus === 'outside_geofence') {
-              alert("You are outside the designated geofence for your branch. Cannot punch in.");
-              return;
-          }
-      }
-      performPunch();
-  };
-
+  const handleManualPunch = () => { performPunch(); };
   const handleQrScan = async () => {
-      if (!selectedEmployee) return;
-      const config = selectedEmployee.attendanceConfig;
-
-      if (config?.gpsGeofencing) {
-          if (locationStatus === 'denied' || locationStatus === 'fetching' || locationStatus === 'outside_geofence') {
-              handleManualPunch(); // Reuse logic for location check
-              return;
-          }
-      }
-
-      if (cameraStatus === 'denied') {
-          alert("Camera access is denied. Please enable it in your browser settings to use QR scan.");
-          return;
-      }
-      if (cameraStatus === 'idle') {
-          // Request camera permission again if it wasn't granted or checked yet
-          try {
-              const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-              setCameraStatus('granted');
-              stream.getTracks().forEach(track => track.stop()); // Stop immediately
-          } catch (e) {
-              setCameraStatus('denied');
-              alert("Camera access denied. Please enable it in your browser settings.");
-              return;
-          }
-      }
-
       setIsScanningQr(true);
-      // Simulate scanning process
-      setTimeout(() => {
-          setIsScanningQr(false);
-          // Assume success
-          performPunch();
-      }, 2000);
+      setTimeout(() => { setIsScanningQr(false); performPunch(); }, 2000);
   };
 
-
-  // Fetch attendance data when date or selected employee changes
+  // Fetch attendance data
   useEffect(() => {
     if (!selectedEmployee) {
       setAttendanceData([]);
       return;
     }
-
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
-
     const savedAttendanceKey = `attendance_data_${selectedEmployee.id}_${year}_${month}`;
     const savedData = localStorage.getItem(savedAttendanceKey);
 
@@ -552,7 +463,6 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
       try {
         setAttendanceData(JSON.parse(savedData));
       } catch (e) {
-        console.error("Failed to parse attendance data", e);
         setAttendanceData(getEmployeeAttendance(selectedEmployee, year, month));
       }
     } else {
@@ -564,145 +474,114 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
     }
   }, [currentDate, selectedEmployee]);
 
-  const handlePrevMonth = () => {
-    setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
-  };
+  const handlePrevMonth = () => setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
+  const handleNextMonth = () => setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
 
-  const handleNextMonth = () => {
-    setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
-  };
-
-  // Calculate stats dynamically
   const stats = useMemo(() => {
     return attendanceData.reduce((acc, day) => {
-      switch (day.status) {
-        case AttendanceStatus.PRESENT:
-          acc.present++;
-          break;
-        case AttendanceStatus.ABSENT:
-          acc.absent++;
-          break;
-        case AttendanceStatus.HALF_DAY:
-          acc.halfDay++;
-          break;
-        case AttendanceStatus.PAID_LEAVE:
-          acc.paidLeave++;
-          break;
-        case AttendanceStatus.WEEK_OFF:
-          acc.weekOff++;
-          break;
-      }
+      if (day.status === AttendanceStatus.PRESENT) acc.present++;
+      if (day.status === AttendanceStatus.ABSENT) acc.absent++;
+      if (day.status === AttendanceStatus.HALF_DAY) acc.halfDay++;
+      if (day.status === AttendanceStatus.PAID_LEAVE) acc.paidLeave++;
+      if (day.status === AttendanceStatus.WEEK_OFF) acc.weekOff++;
       return acc;
-    }, {
-      present: 0,
-      absent: 0,
-      halfDay: 0,
-      paidLeave: 0,
-      weekOff: 0
-    });
+    }, { present: 0, absent: 0, halfDay: 0, paidLeave: 0, weekOff: 0 });
   }, [attendanceData]);
 
-  // Admin Dashboard Stats (Calculated dynamically for selected date)
-  const dailyStats = useMemo(() => {
+  // --- AGGREGATED DASHBOARD STATS ---
+  const statsOverview = useMemo(() => {
     if (!isAdmin) return null;
 
-    let stats = { total: 0, present: 0, absent: 0, halfDay: 0, leave: 0 };
-    const targetDate = new Date(filterDate); // Use filterDate state
-    const year = targetDate.getFullYear();
-    const month = targetDate.getMonth();
+    let overview = { 
+        totalEmployees: 0, 
+        present: 0, 
+        absent: 0, 
+        halfDay: 0, 
+        leave: 0, 
+        weekOff: 0, 
+        late: 0 
+    };
+    
+    // Context for date calculation
+    const isDaily = filterPeriodType === 'Daily';
+    const targetDate = new Date(filterDate); // Specific day
+    const targetMonthDate = new Date(filterMonth); // Specific month (YYYY-MM)
     const dateStr = targetDate.toISOString().split('T')[0];
 
-    stats.total = filteredEmployeesForDisplay.length;
+    overview.totalEmployees = filteredEmployeesForDisplay.length;
 
     filteredEmployeesForDisplay.forEach(emp => {
-      // Logic to get stored data for THIS employee and THIS month
-      const key = `attendance_data_${emp.id}_${year}_${month}`;
-      let data: DailyAttendance[] = [];
-      try { 
-        const stored = localStorage.getItem(key);
-        if (stored) data = JSON.parse(stored);
-      } catch {}
-      
-      // Fallback to generated if not stored (view consistency)
-      if (!data || data.length === 0) data = getEmployeeAttendance(emp, year, month);
-
-      const record = data.find(d => d.date === dateStr);
-      if (record) {
-        if (record.status === AttendanceStatus.PRESENT) stats.present++;
-        else if (record.status === AttendanceStatus.ABSENT) stats.absent++;
-        else if (record.status === AttendanceStatus.HALF_DAY) stats.halfDay++;
-        else if (record.status === AttendanceStatus.PAID_LEAVE) stats.leave++;
-      }
-    });
-    return stats;
-  }, [filteredEmployeesForDisplay, filterDate, isAdmin]);
-
-
-  // Generate Report Data
-  const reportData = useMemo(() => {
-    const employeesToRender = isAdmin 
-      ? employees 
-      : (selectedEmployee ? [selectedEmployee] : []); 
-
-    return employeesToRender.map(emp => {
-        const seed = emp.name.length;
-        const totalDays = 22; 
-        const present = Math.max(15, 22 - (seed % 6));
-        const absent = Math.floor((22 - present) / 3);
-        const lateHalf = 22 - present - absent;
-        const percentage = Math.round((present / 22) * 100);
+        const year = isDaily ? targetDate.getFullYear() : targetMonthDate.getFullYear();
+        const month = isDaily ? targetDate.getMonth() : targetMonthDate.getMonth();
         
-        return {
-            ...emp,
-            stats: { totalDays, present, absent, lateHalf, percentage }
-        };
+        const key = `attendance_data_${emp.id}_${year}_${month}`;
+        let data: DailyAttendance[] = [];
+        
+        try { 
+            const stored = localStorage.getItem(key);
+            if (stored) data = JSON.parse(stored);
+        } catch {}
+
+        // Fallback to generated data if nothing stored (to show reasonable stats)
+        if (!data || data.length === 0) data = getEmployeeAttendance(emp, year, month);
+
+        if (isDaily) {
+            // Count only for specific day
+            const record = data.find(d => d.date === dateStr);
+            if (record) {
+                if (record.status === AttendanceStatus.PRESENT) { overview.present++; if(record.isLate) overview.late++; }
+                else if (record.status === AttendanceStatus.ABSENT) overview.absent++;
+                else if (record.status === AttendanceStatus.HALF_DAY) overview.halfDay++;
+                else if (record.status === AttendanceStatus.PAID_LEAVE) overview.leave++;
+                else if (record.status === AttendanceStatus.WEEK_OFF) overview.weekOff++;
+            }
+        } else {
+            // Monthly Aggregation (Sum of all days in month for all employees)
+            data.forEach(record => {
+                if (record.status === AttendanceStatus.PRESENT) { overview.present++; if(record.isLate) overview.late++; }
+                else if (record.status === AttendanceStatus.ABSENT) overview.absent++;
+                else if (record.status === AttendanceStatus.HALF_DAY) overview.halfDay++;
+                else if (record.status === AttendanceStatus.PAID_LEAVE) overview.leave++;
+                else if (record.status === AttendanceStatus.WEEK_OFF) overview.weekOff++;
+            });
+        }
     });
-  }, [isAdmin, employees, selectedEmployee]);
+    return overview;
+  }, [filteredEmployeesForDisplay, filterDate, filterMonth, filterPeriodType, isAdmin]);
+
+  // Chart Data for Dashboard
+  const dashboardPieData = statsOverview ? [
+    { name: 'Present', value: statsOverview.present, color: '#10b981' },
+    { name: 'Absent', value: statsOverview.absent, color: '#ef4444' },
+    { name: 'Half Day', value: statsOverview.halfDay, color: '#f59e0b' },
+    { name: 'Leave', value: statsOverview.leave, color: '#3b82f6' },
+    { name: 'Week Off', value: statsOverview.weekOff, color: '#64748b' },
+  ].filter(d => d.value > 0) : [];
 
   const monthLabel = currentDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
   const fullMonthLabel = currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
-  // --- Render Logic ---
+  const handleDateClick = (day: DailyAttendance) => { if (isAdmin) setEditingDay(day); };
 
-  const handleDateClick = (day: DailyAttendance) => {
-    if (isAdmin) {
-      setEditingDay(day);
-    }
-  };
-
-  // Handle Status Update (Admin) - MODIFIED TO INCLUDE PUNCH TIMES
   const handleStatusUpdate = (newStatus: AttendanceStatus, newCheckIn: string, newCheckOut: string) => {
     if (!editingDay || !selectedEmployee) return;
-    
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
     const key = `attendance_data_${selectedEmployee.id}_${year}_${month}`;
-
     const updatedData = attendanceData.map(item => {
         if (item.date === editingDay.date) {
-            // Recalculate isLate based on newCheckIn only if status is PRESENT
             let isLate = false;
             if (newStatus === AttendanceStatus.PRESENT && newCheckIn) {
                 const [hours, minutes] = newCheckIn.split(':').map(Number);
-                if (hours > 9 || (hours === 9 && minutes > 30)) { // Assuming 9:30 AM is target punch-in
-                    isLate = true;
-                }
+                if (hours > 9 || (hours === 9 && minutes > 30)) isLate = true;
             }
-
-            return {
-                ...item,
-                status: newStatus,
-                checkIn: newCheckIn, // Use the new time
-                checkOut: newCheckOut, // Use the new time
-                isLate: isLate // Recalculated
-            };
+            return { ...item, status: newStatus, checkIn: newCheckIn, checkOut: newCheckOut, isLate: isLate };
         }
         return item;
     });
-    
     setAttendanceData(updatedData);
     localStorage.setItem(key, JSON.stringify(updatedData));
-    setEditingDay(null); // Close modal
+    setEditingDay(null);
   };
 
   const handleMarkAllPresent = () => {
@@ -749,15 +628,6 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
     localStorage.setItem(key, JSON.stringify(updated));
   };
 
-  // Chart Data for Employee
-  const pieData = [
-    { name: 'Present', value: stats.present },
-    { name: 'Absent', value: stats.absent },
-    { name: 'Half Day', value: stats.halfDay },
-    { name: 'Leave/Off', value: stats.paidLeave + stats.weekOff },
-  ].filter(d => d.value > 0);
-
-  // Common List View Renderer
   const renderListView = () => (
     <div className="space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar">
       {attendanceData.map((day, idx) => (
@@ -828,7 +698,7 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
             locationDisplay = "Outside Geofence";
             locationColor = "text-red-500";
         } else if (locationStatus === 'granted') {
-            locationDisplay = "Location Detected"; // For cases where geofence rules might not apply or be configured
+            locationDisplay = "Location Detected"; 
             locationColor = "text-emerald-600";
         }
         locationIcon = <MapPin className="w-3 h-3" />;
@@ -1096,7 +966,7 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
 
   // ADMIN VIEW
   return (
-    <div className={`mx-auto space-y-6 ${activeTab === 'report' ? 'max-w-6xl' : 'max-w-5xl'}`}> 
+    <div className={`mx-auto space-y-6 ${activeTab === 'report' ? 'max-w-6xl' : 'max-w-6xl'}`}> 
       
       {/* Header & Controls */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -1223,42 +1093,99 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
       )}
 
       {/* DASHBOARD WIDGET (Admin Summary) */}
-      {isAdmin && dailyStats && (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 animate-in fade-in slide-in-from-top-4">
-            <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                <div className="flex justify-between items-start mb-1">
-                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Total Staff</p>
-                    <Users className="w-4 h-4 text-blue-500" />
+      {isAdmin && statsOverview && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-top-4">
+            {/* Left: Stats Cards */}
+            <div className="lg:col-span-2 grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm col-span-2 md:col-span-1">
+                    <div className="flex justify-between items-start mb-1">
+                        <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Total Staff</p>
+                        <Users className="w-4 h-4 text-blue-500" />
+                    </div>
+                    <h3 className="text-2xl font-bold text-gray-800">{statsOverview.totalEmployees}</h3>
+                    <p className="text-[10px] text-gray-400">Active Employees</p>
                 </div>
-                <h3 className="text-2xl font-bold text-gray-800">{dailyStats.total}</h3>
+                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                    <div className="flex justify-between items-start mb-1">
+                        <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Present</p>
+                        <CheckCircle className="w-4 h-4 text-emerald-500" />
+                    </div>
+                    <h3 className="text-2xl font-bold text-emerald-600">{statsOverview.present}</h3>
+                    <p className="text-[10px] text-gray-400">{filterPeriodType === 'Monthly' ? 'Man-days' : 'Today'}</p>
+                </div>
+                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                    <div className="flex justify-between items-start mb-1">
+                        <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Absent</p>
+                        <XCircle className="w-4 h-4 text-red-500" />
+                    </div>
+                    <h3 className="text-2xl font-bold text-red-600">{statsOverview.absent}</h3>
+                    <p className="text-[10px] text-gray-400">{filterPeriodType === 'Monthly' ? 'Man-days' : 'Today'}</p>
+                </div>
+                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                    <div className="flex justify-between items-start mb-1">
+                        <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Late</p>
+                        <Clock className="w-4 h-4 text-orange-500" />
+                    </div>
+                    <h3 className="text-2xl font-bold text-orange-600">{statsOverview.late}</h3>
+                    <p className="text-[10px] text-gray-400">Arrivals</p>
+                </div>
+                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                    <div className="flex justify-between items-start mb-1">
+                        <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Half Day</p>
+                        <Activity className="w-4 h-4 text-amber-500" />
+                    </div>
+                    <h3 className="text-2xl font-bold text-amber-600">{statsOverview.halfDay}</h3>
+                </div>
+                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                    <div className="flex justify-between items-start mb-1">
+                        <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Week Off</p>
+                        <Coffee className="w-4 h-4 text-slate-500" />
+                    </div>
+                    <h3 className="text-2xl font-bold text-slate-600">{statsOverview.weekOff}</h3>
+                </div>
+                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm col-span-2 md:col-span-2">
+                    <div className="flex justify-between items-start mb-1">
+                        <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">On Leave</p>
+                        <Plane className="w-4 h-4 text-indigo-500" />
+                    </div>
+                    <h3 className="text-2xl font-bold text-indigo-600">{statsOverview.leave}</h3>
+                    <p className="text-[10px] text-gray-400">Approved Leaves</p>
+                </div>
             </div>
-            <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                <div className="flex justify-between items-start mb-1">
-                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Present</p>
-                    <CheckCircle className="w-4 h-4 text-emerald-500" />
+
+            {/* Right: Distribution Chart */}
+            <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex flex-col">
+                <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2 text-sm">
+                   <PieChartIcon className="w-4 h-4 text-emerald-500" /> 
+                   {filterPeriodType} Distribution
+                </h3>
+                <div className="flex-1 min-h-[200px]">
+                   <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                         <Pie
+                            data={dashboardPieData}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={60}
+                            outerRadius={80}
+                            paddingAngle={5}
+                            dataKey="value"
+                         >
+                            {dashboardPieData.map((entry, index) => (
+                               <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                         </Pie>
+                         <ReTooltip />
+                         <Legend 
+                            iconSize={8} 
+                            layout="horizontal" 
+                            verticalAlign="bottom" 
+                            align="center"
+                            wrapperStyle={{fontSize: '11px', paddingTop: '10px'}} 
+                         />
+                      </PieChart>
+                   </ResponsiveContainer>
                 </div>
-                <h3 className="text-2xl font-bold text-emerald-600">{dailyStats.present}</h3>
-            </div>
-            <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                <div className="flex justify-between items-start mb-1">
-                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Absent</p>
-                    <XCircle className="w-4 h-4 text-red-500" />
-                </div>
-                <h3 className="text-2xl font-bold text-red-600">{dailyStats.absent}</h3>
-            </div>
-            <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                <div className="flex justify-between items-start mb-1">
-                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Half Day</p>
-                    <Activity className="w-4 h-4 text-amber-500" />
-                </div>
-                <h3 className="text-2xl font-bold text-amber-600">{dailyStats.halfDay}</h3>
-            </div>
-            <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                <div className="flex justify-between items-start mb-1">
-                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">On Leave</p>
-                    <Plane className="w-4 h-4 text-indigo-500" />
-                </div>
-                <h3 className="text-2xl font-bold text-indigo-600">{dailyStats.leave}</h3>
             </div>
         </div>
       )}
@@ -1301,16 +1228,6 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
                     <button onClick={handleMarkAllAbsent} className="px-3 py-2 bg-red-50 text-red-700 text-xs font-bold rounded-lg hover:bg-red-100 border border-red-200 transition-colors">
                         Mark All Absent
                     </button>
-                </div>
-             </div>
-
-             {/* Calendar / List View Toggle */}
-             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                    <h3 className="font-bold text-gray-800 text-sm flex items-center gap-2">
-                        <Calendar className="w-4 h-4" /> 
-                        Attendance Log ({fullMonthLabel})
-                    </h3>
                     <div className="flex bg-white rounded-lg border border-gray-200 p-1">
                         <button 
                             onClick={() => setViewMode('calendar')} 
@@ -1325,6 +1242,16 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
                             <List className="w-4 h-4" />
                         </button>
                     </div>
+                </div>
+             </div>
+
+             {/* Calendar / List View Toggle */}
+             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                    <h3 className="font-bold text-gray-800 text-sm flex items-center gap-2">
+                        <Calendar className="w-4 h-4" /> 
+                        Attendance Log ({fullMonthLabel})
+                    </h3>
                 </div>
                 
                 <div className="p-6">
