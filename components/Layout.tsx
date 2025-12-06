@@ -17,7 +17,6 @@ interface LayoutProps {
 const MASTER_ADMIN_LINKS = [
   { id: 'dashboard', path: '/admin', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'reports', path: '/admin/reports', label: 'Reports', icon: BarChart3 },
-  { id: 'reception', path: '/admin/reception', label: 'Reception Desk', icon: PhoneCall },
   { id: 'customer-care', path: '/admin/customer-care', label: 'Customer Care', icon: Headset },
   { id: 'trips', path: '/admin/trips', label: 'Trip Booking', icon: Map },
   { id: 'tracking', path: '/admin/tracking', label: 'Live Tracking', icon: Navigation },
@@ -246,7 +245,6 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
     if (link.id === 'corporate' && role !== UserRole.ADMIN) return false;
     if (link.id === 'leads' && role === UserRole.CORPORATE) return false;
     if (link.id === 'employee-settings' && role === UserRole.CORPORATE) return false;
-    if (link.id === 'reception' && role === UserRole.CORPORATE) return false;
     if (link.id === 'settings' && role === UserRole.CORPORATE) return false;
     if (link.id === 'finance-and-expenses' && role === UserRole.EMPLOYEE) return false;
     if (link.id === 'cms' && role !== UserRole.ADMIN) return false;
@@ -257,21 +255,57 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
   const employeeLinks = useMemo(() => {
       const baseLinks = [
         { id: 'attendance', path: '/user', label: 'My Attendance', icon: Calendar },
-        { id: 'tasks', path: '/user/tasks', label: 'My Tasks', icon: ClipboardList },
-        { id: 'customer-care', path: '/user/customer-care', label: 'Customer Care', icon: Headset }, 
-        { id: 'vendors', path: '/user/vendors', label: 'Vendor Attachment', icon: Car },
         { id: 'salary', path: '/user/salary', label: 'My Salary', icon: DollarSign },
         { id: 'leave', path: '/user/apply-leave', label: 'Apply Leave', icon: Briefcase },
         { id: 'profile', path: '/user/profile', label: 'My Profile', icon: UserCircle }, 
         { id: 'security', path: '/user/security-account', label: 'Security & Account', icon: Lock }, 
       ];
 
-      // Add extra modules if permitted
-      if (currentEmployee?.allowedModules?.includes('documents')) {
-          baseLinks.splice(5, 0, { id: 'documents', path: '/user/documents', label: 'Documents', icon: FileText });
-      }
-      if (currentEmployee?.allowedModules?.includes('expenses')) {
-          baseLinks.splice(5, 0, { id: 'expenses', path: '/user/expenses', label: 'My Expenses', icon: CreditCard });
+      if (currentEmployee?.allowedModules) {
+          // Task Management
+          if (currentEmployee.allowedModules.includes('tasks')) {
+              baseLinks.splice(1, 0, { id: 'tasks', path: '/user/tasks', label: 'My Tasks', icon: ClipboardList });
+          }
+          // Customer Care
+          if (currentEmployee.allowedModules.includes('customer_care')) {
+              baseLinks.splice(1, 0, { id: 'customer_care', path: '/user/customer-care', label: 'Customer Care', icon: Headset });
+          }
+          // Trip Booking
+          if (currentEmployee.allowedModules.includes('trip_booking')) {
+              baseLinks.splice(1, 0, { id: 'trip_booking', path: '/admin/trips', label: 'Trip Booking', icon: Map });
+          }
+          // Live Tracking
+          if (currentEmployee.allowedModules.includes('live_tracking')) {
+              baseLinks.splice(1, 0, { id: 'live_tracking', path: '/admin/tracking', label: 'Live Tracking', icon: Navigation });
+          }
+          // Attendance (Admin View)
+          if (currentEmployee.allowedModules.includes('attendance')) {
+              baseLinks.splice(1, 0, { id: 'attendance_admin', path: '/admin/attendance', label: 'Attendance (Admin)', icon: Calendar });
+          }
+          // Branches
+          if (currentEmployee.allowedModules.includes('branches')) {
+              baseLinks.splice(1, 0, { id: 'branches', path: '/admin/branches', label: 'Branches', icon: Building });
+          }
+          // Staff Management
+          if (currentEmployee.allowedModules.includes('staff_management')) {
+              baseLinks.splice(1, 0, { id: 'staff_management', path: '/admin/staff', label: 'Staff Management', icon: Users });
+          }
+          // Documents
+          if (currentEmployee.allowedModules.includes('documents')) {
+              baseLinks.splice(1, 0, { id: 'documents', path: '/user/documents', label: 'Documents', icon: FileText });
+          }
+          // Vendor Attachment
+          if (currentEmployee.allowedModules.includes('vendor_attachment')) {
+              baseLinks.splice(1, 0, { id: 'vendor_attachment', path: '/user/vendors', label: 'Vendor Attachment', icon: CarFront });
+          }
+          // Payroll
+          if (currentEmployee.allowedModules.includes('payroll')) {
+              baseLinks.splice(1, 0, { id: 'payroll', path: '/admin/payroll', label: 'Payroll', icon: DollarSign });
+          }
+          // Finance & Expenses
+          if (currentEmployee.allowedModules.includes('expenses') || currentEmployee.allowedModules.includes('finance_expenses')) {
+              baseLinks.splice(1, 0, { id: 'expenses', path: '/user/expenses', label: 'Finance & Expenses', icon: CreditCard });
+          }
       }
 
       return baseLinks;
@@ -357,7 +391,7 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
                    <Icon className={`w-5 h-5 shrink-0 ${isActive ? '' : 'text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-200'}`} style={isActive ? { color: primaryColor } : {}} />
                    <span className={`truncate ${isActive ? '' : 'text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white'}`}>{link.label}</span>
                    {(link.id === 'tasks' || link.path === '/user/tasks') && newTaskCount > 0 && (
-                     <span className="ml-auto px-2 py-0.5 bg-red-500 text-white text-xs font-bold rounded-full min-w-[24px] text-center">
+                     <span className="ml-auto px-2 py-0.5 bg-red-50 text-white text-xs font-bold rounded-full min-w-[24px] text-center">
                        {newTaskCount}
                      </span>
                    )}

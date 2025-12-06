@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Settings, Loader2, ArrowRight, ArrowRightLeft, 
@@ -174,7 +173,7 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
   // --- Google Maps Script Loader ---
   useEffect(() => {
     if (window.gm_authFailure_detected) {
-      setMapError("Map API Error: Check required APIs (Maps JS, Places).");
+      setMapError("Map Error: Google Cloud Billing is not enabled. Please enable billing in the Google Cloud Console.");
       return;
     }
     const apiKey = localStorage.getItem('maps_api_key');
@@ -185,7 +184,7 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
     const originalAuthFailure = window.gm_authFailure;
     window.gm_authFailure = () => {
       window.gm_authFailure_detected = true;
-      setMapError("Map Load Error: API Key invalid or APIs not enabled.");
+      setMapError("Map Error: Google Cloud Billing is not enabled. Please enable billing in the Google Cloud Console.");
       if (originalAuthFailure) originalAuthFailure();
     };
 
@@ -228,41 +227,49 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
   useEffect(() => {
     if (!isMapReady || !window.google || !window.google.maps.DistanceMatrixService || !pickupCoords) return;
 
-    const service = new window.google.maps.DistanceMatrixService();
+    try {
+        const service = new window.google.maps.DistanceMatrixService();
 
-    const calculateDistance = (destination: google.maps.LatLngLiteral, isRoundTripCalculation: boolean, isOutstationState: boolean) => {
-        service.getDistanceMatrix(
-            {
-                origins: [pickupCoords],
-                destinations: [destination],
-                travelMode: window.google.maps.TravelMode.DRIVING,
-                unitSystem: window.google.maps.UnitSystem.METRIC,
-            },
-            (response: any, status: any) => {
-                if (status === "OK" && response.rows[0].elements[0].status === "OK") {
-                    const distanceInMeters = response.rows[0].elements[0].distance.value;
-                    let distanceInKm = distanceInMeters / 1000;
-                    
-                    if (isRoundTripCalculation) distanceInKm = distanceInKm * 2; 
+        const calculateDistance = (destination: google.maps.LatLngLiteral, isRoundTripCalculation: boolean, isOutstationState: boolean) => {
+            service.getDistanceMatrix(
+                {
+                    origins: [pickupCoords],
+                    destinations: [destination],
+                    travelMode: window.google.maps.TravelMode.DRIVING,
+                    unitSystem: window.google.maps.UnitSystem.METRIC,
+                },
+                (response: any, status: any) => {
+                    if (status === "OK" && response.rows[0].elements[0].status === "OK") {
+                        const distanceInMeters = response.rows[0].elements[0].distance.value;
+                        let distanceInKm = distanceInMeters / 1000;
+                        
+                        if (isRoundTripCalculation) distanceInKm = distanceInKm * 2; 
 
-                    const formattedDist = distanceInKm.toFixed(1);
+                        const formattedDist = distanceInKm.toFixed(1);
 
-                    setTransportDetails(prev => ({ 
-                        ...prev, 
-                        [isOutstationState ? 'estTotalKm' : 'estKm']: formattedDist 
-                    }));
-                } else {
-                    console.error("Error calculating distance:", status, response);
+                        setTransportDetails(prev => ({ 
+                            ...prev, 
+                            [isOutstationState ? 'estTotalKm' : 'estKm']: formattedDist 
+                        }));
+                    } else {
+                        console.error("Error calculating distance:", status, response);
+                        if (status === 'REQUEST_DENIED' || status === 'OVER_QUERY_LIMIT') {
+                            setMapError("Map Error: Google Cloud Billing is not enabled. Please enable billing in the Google Cloud Console.");
+                        }
+                    }
                 }
-            }
-        );
-    };
+            );
+        };
 
-    if (tripType === 'Local' && dropCoords) {
-        calculateDistance(dropCoords, false, false);
-    } else if (tripType === 'Outstation' && destCoords) {
-        const isRoundTrip = outstationSubType === 'RoundTrip';
-        calculateDistance(destCoords, isRoundTrip, true); 
+        if (tripType === 'Local' && dropCoords) {
+            calculateDistance(dropCoords, false, false);
+        } else if (tripType === 'Outstation' && destCoords) {
+            const isRoundTrip = outstationSubType === 'RoundTrip';
+            calculateDistance(destCoords, isRoundTrip, true); 
+        }
+    } catch (error: any) {
+        console.error("Failed to initialize Distance Matrix Service:", error);
+        setMapError("Map Error: Google Cloud Billing is not enabled. Please enable billing in the Google Cloud Console.");
     }
 
   }, [pickupCoords, dropCoords, destCoords, isMapReady, tripType, outstationSubType]);
@@ -518,6 +525,13 @@ Book now with OK BOZ Transport!`;
           <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 mb-4">
               <p className="text-sm text-gray-600">Rate settings are managed in Transport Settings page.</p>
           </div>
+      )}
+
+      {/* Map Error Display */}
+      {mapError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg flex items-center gap-2 mb-4">
+          <AlertTriangle className="w-5 h-5" /> {mapError}
+        </div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -793,7 +807,19 @@ Book now with OK BOZ Transport!`;
 
                   {/* New Sections: Requirement Details & Assignments */}
                   <div className="mt-6 pt-6 border-t border-gray-100 space-y-5">
-                      {/* Assign Enquiry To */}
+                      {/* 1. Requirement Details */}
+                      <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Requirement Details</label>
+                          <textarea 
+                              rows={2}
+                              className="w-full p-3 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 resize-none text-sm"
+                              placeholder="Special requests, extra luggage, etc..."
+                              value={customerDetails.requirements}
+                              onChange={e => setCustomerDetails({...customerDetails, requirements: e.target.value})}
+                          />
+                      </div>
+
+                      {/* 2. Assign Enquiry To */}
                       <div>
                           <label className="block text-xs font-bold text-gray-500 uppercase mb-2 flex items-center gap-1">
                               <Building2 className="w-3 h-3" /> Assign Enquiry To
@@ -884,9 +910,9 @@ Book now with OK BOZ Transport!`;
                                   </button>
                                   <button 
                                       onClick={() => handleGeneralAction('Complete')}
-                                      className="col-span-2 py-2.5 bg-green-600 text-white rounded-lg font-bold text-sm hover:bg-green-700 transition-colors shadow-md flex items-center justify-center gap-2"
+                                      className="col-span-2 py-2.5 bg-green-600 text-white rounded-lg font-bold text-sm hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
                                   >
-                                      <CheckCircle className="w-4 h-4" /> Complete Task
+                                      <CheckCircle className="w-4 h-4" /> Resolved / Closed
                                   </button>
                               </>
                           )}
@@ -895,46 +921,24 @@ Book now with OK BOZ Transport!`;
               </div>
           </div>
 
-          {/* Right Column: Output & History */}
+          {/* Right Column: Output */}
           <div className="space-y-6">
-              {enquiryCategory === 'Transport' && (
-                  <div className="bg-slate-900 text-white p-6 rounded-xl shadow-lg relative overflow-hidden">
-                      <div className="relative z-10">
-                          <p className="text-slate-400 text-xs uppercase font-bold mb-1">Estimated Cost</p>
-                          <h3 className="text-4xl font-bold mb-4">₹{estimatedCost.toLocaleString()}</h3>
-                          <div className="text-sm text-slate-300 border-t border-slate-700 pt-3">
+              <div className="bg-slate-900 text-white p-6 rounded-xl shadow-lg relative overflow-hidden">
+                  <div className="relative z-10">
+                      <p className="text-slate-400 text-xs uppercase font-bold mb-1">Estimated Cost</p>
+                      <h3 className="text-4xl font-bold mb-4">₹{estimatedCost.toLocaleString()}</h3>
+                      <div className="text-sm text-slate-300 border-t border-slate-700 pt-3">
+                          {enquiryCategory === 'Transport' ? (
                               <p>Includes basic fare calculations. Tolls & Parking extra.</p>
-                          </div>
-                      </div>
-                      <div className="absolute right-0 bottom-0 opacity-10">
-                          <DollarSign className="w-32 h-32 text-white" />
-                      </div>
-                  </div>
-              )}
-
-              {/* Customer History (Only visible if phone number is present) */}
-              {customerDetails.phone.length > 5 && (
-                  <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                      <h4 className="font-bold text-gray-800 flex items-center gap-2 mb-3">
-                          <Clock className="w-4 h-4 text-orange-500" /> Recent History
-                      </h4>
-                      <div className="space-y-3 max-h-40 overflow-y-auto custom-scrollbar">
-                          {customerHistory.length === 0 ? (
-                              <p className="text-xs text-gray-400 italic">No previous enquiries found.</p>
                           ) : (
-                              customerHistory.map(h => (
-                                  <div key={h.id} className="text-xs p-2 bg-gray-50 rounded border border-gray-100">
-                                      <div className="flex justify-between mb-1">
-                                          <span className="font-bold text-gray-700">{h.status}</span>
-                                          <span className="text-gray-400">{h.createdAt.split(',')[0]}</span>
-                                      </div>
-                                      <p className="text-gray-600 line-clamp-2">{h.details}</p>
-                                  </div>
-                              ))
+                              <p>Standard Enquiry. No cost calculated.</p>
                           )}
                       </div>
                   </div>
-              )}
+                  <div className="absolute right-0 bottom-0 opacity-10">
+                      <DollarSign className="w-32 h-32 text-white" />
+                  </div>
+              </div>
 
               <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
                   <div className="flex justify-between items-center mb-2">

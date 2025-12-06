@@ -1,6 +1,6 @@
 
 import React, { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, Loader2, Settings } from 'lucide-react';
+import { AlertTriangle, Loader2, Settings, Users, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 declare global {
@@ -17,22 +17,72 @@ const LiveTracking: React.FC = () => {
   const [isMapReady, setIsMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
   const [mapInstance, setMapInstance] = useState<any>(null);
+  const [markers, setMarkers] = useState<any[]>([]); // Keep track of marker instances
   
   // Determine Session Context
-  const userRole = localStorage.getItem('user_role');
-  const isSuperAdminUser = userRole === 'ADMIN';
-  const isCorporateUser = userRole === 'CORPORATE';
+  const sessionId = localStorage.getItem('app_session_id') || 'admin';
+  const isSuperAdmin = sessionId === 'admin';
 
   // Center of Coimbatore for default view
   const center = { lat: 11.0168, lng: 76.9558 };
 
-  // Staff Locations state - initialized as empty (no mock data)
+  // Staff Locations state
   const [staffLocations, setStaffLocations] = useState<any[]>([]);
+  const [isDemoMode, setIsDemoMode] = useState(false);
+
+  // Function to load staff data
+  const refreshLocations = () => {
+      let allStaff: any[] = [];
+
+      if (isSuperAdmin) {
+         // Load from all sources
+         try {
+            const adminStaff = JSON.parse(localStorage.getItem('staff_data') || '[]');
+            allStaff = [...adminStaff];
+            
+            const corps = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
+            corps.forEach((c: any) => {
+                const cStaff = JSON.parse(localStorage.getItem(`staff_data_${c.email}`) || '[]');
+                allStaff = [...allStaff, ...cStaff];
+            });
+         } catch(e) { console.error("Error loading staff", e); }
+      } else {
+         const key = `staff_data_${sessionId}`;
+         try {
+            allStaff = JSON.parse(localStorage.getItem(key) || '[]');
+         } catch(e) { console.error("Error loading staff", e); }
+      }
+
+      // Filter for those with location data
+      const activeStaff = allStaff.filter((s: any) => s.currentLocation && s.currentLocation.lat).map((s: any) => ({
+          id: s.id,
+          name: s.name,
+          role: s.role,
+          lat: s.currentLocation.lat,
+          lng: s.currentLocation.lng,
+          lastUpdate: 'Live'
+      }));
+      
+      // If no active staff with location, generate MOCKS for demo purposes
+      if (activeStaff.length === 0) {
+          setIsDemoMode(true);
+          const MOCK_LOCATIONS = [
+              { id: 'm1', name: 'Rajesh (Driver)', role: 'Driver', lat: 11.0168 + 0.01, lng: 76.9558 + 0.01, lastUpdate: 'Just now' },
+              { id: 'm2', name: 'Suresh (Sales)', role: 'Sales Exec', lat: 11.0168 - 0.01, lng: 76.9558 - 0.005, lastUpdate: '2m ago' },
+              { id: 'm3', name: 'Priya (Field)', role: 'Field Officer', lat: 11.0168 + 0.005, lng: 76.9558 - 0.015, lastUpdate: '5m ago' },
+          ];
+          setStaffLocations(MOCK_LOCATIONS);
+      } else {
+          setIsDemoMode(false);
+          setStaffLocations(activeStaff);
+      }
+  };
 
   useEffect(() => {
+    refreshLocations();
     // 1. Check global failure flag
     if (window.gm_authFailure_detected) {
-      setMapError("Map Error: Google Cloud Billing is not enabled. Please enable billing in the Google Cloud Console.");
+      setMapError("Map Error: Billing not enabled OR API Key Invalid. Check Google Cloud Console.");
       return;
     }
 
@@ -47,7 +97,7 @@ const LiveTracking: React.FC = () => {
     const originalAuthFailure = window.gm_authFailure;
     window.gm_authFailure = () => {
       window.gm_authFailure_detected = true;
-      setMapError("Map Error: Google Cloud Billing is not enabled. Please enable billing in the Google Cloud Console.");
+      setMapError("Map Error: Billing not enabled OR API Key Invalid. Check Google Cloud Console.");
       if (originalAuthFailure) originalAuthFailure();
     };
 
@@ -86,28 +136,30 @@ const LiveTracking: React.FC = () => {
         script.addEventListener('load', () => setIsMapReady(true));
         if (window.google && window.google.maps) setIsMapReady(true);
     }
-
-    return () => {
-        // cleanup if needed
-    };
   }, []);
 
   // Initialize Map & Markers
   useEffect(() => {
-    if (mapError || !isMapReady || !mapRef.current || mapInstance || !window.google) return;
+    if (mapError || !isMapReady || !mapRef.current || !window.google) return;
 
     try {
-      const map = new window.google.maps.Map(mapRef.current, {
-        center: center,
-        zoom: 13,
-        mapTypeControl: false,
-        streetViewControl: false,
-        fullscreenControl: true,
-      });
+      let map = mapInstance;
+      if (!map) {
+          map = new window.google.maps.Map(mapRef.current, {
+            center: center,
+            zoom: 13,
+            mapTypeControl: false,
+            streetViewControl: false,
+            fullscreenControl: true,
+          });
+          setMapInstance(map);
+      }
 
-      setMapInstance(map);
+      // Clear existing markers
+      markers.forEach(m => m.setMap(null));
+      const newMarkers: any[] = [];
 
-      // Add Markers (Only if staffLocations has data)
+      // Add Markers
       staffLocations.forEach(emp => {
         const marker = new window.google.maps.Marker({
           position: { lat: emp.lat, lng: emp.lng },
@@ -118,15 +170,16 @@ const LiveTracking: React.FC = () => {
              color: 'white',
              fontSize: '12px',
              fontWeight: 'bold'
-          }
+          },
+          animation: window.google.maps.Animation.DROP,
         });
 
         const infoWindow = new window.google.maps.InfoWindow({
             content: `
               <div style="padding: 5px;">
-                <h3 style="margin:0; font-weight:bold;">${emp.name}</h3>
+                <h3 style="margin:0; font-weight:bold; font-size: 14px;">${emp.name}</h3>
                 <p style="margin:2px 0; font-size:12px; color:gray;">${emp.role}</p>
-                <p style="margin:0; font-size:10px;">Last seen: ${emp.lastUpdate}</p>
+                <p style="margin:0; font-size:10px; color: green;">● ${emp.lastUpdate}</p>
               </div>
             `
         });
@@ -134,11 +187,19 @@ const LiveTracking: React.FC = () => {
         marker.addListener("click", () => {
             infoWindow.open(map, marker);
         });
+        
+        newMarkers.push(marker);
       });
+      
+      setMarkers(newMarkers);
 
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      setMapError("Error initializing map.");
+      if (e.name === 'BillingNotEnabledMapError' || e.message?.includes('Billing')) {
+         setMapError("Billing Not Enabled: Please enable billing in Google Cloud Console.");
+      } else {
+         setMapError("Error initializing map.");
+      }
     }
   }, [isMapReady, mapError, staffLocations]);
 
@@ -149,9 +210,17 @@ const LiveTracking: React.FC = () => {
            <h2 className="text-2xl font-bold text-gray-800">Live Staff Tracking</h2>
            <p className="text-gray-500">Real-time location of your field force</p>
         </div>
-        <div className="flex items-center gap-2 text-sm text-gray-500 bg-white px-3 py-1.5 rounded-full shadow-sm border border-gray-100">
-           <span className={`w-2 h-2 rounded-full ${staffLocations.length > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-gray-300'}`}></span>
-           {staffLocations.length > 0 ? 'Live Updating' : 'No active devices'}
+        <div className="flex items-center gap-3">
+            <button 
+                onClick={refreshLocations}
+                className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm hover:bg-gray-50 transition-colors"
+            >
+                <RefreshCw className="w-4 h-4 text-gray-500" /> Refresh
+            </button>
+            <div className={`flex items-center gap-2 text-sm px-3 py-1.5 rounded-full shadow-sm border ${staffLocations.length > 0 ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-gray-100 border-gray-200 text-gray-500'}`}>
+                <span className={`w-2 h-2 rounded-full ${staffLocations.length > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-gray-400'}`}></span>
+                {staffLocations.length > 0 ? `${staffLocations.length} Active` : 'No active devices'}
+            </div>
         </div>
       </div>
 
@@ -162,29 +231,12 @@ const LiveTracking: React.FC = () => {
                 <AlertTriangle className="w-10 h-10 text-red-400" />
                 <h3 className="font-medium text-gray-900">Map Unavailable</h3>
                 <p className="text-sm text-gray-600">{mapError}</p>
-                {isCorporateUser ? (
-                    <p className="text-sm text-gray-500 mt-2">
-                      Please contact Super Admin to enable Google Cloud Billing for Maps.
-                    </p>
-                ) : (
-                    <>
-                        <div className="bg-amber-50 border border-amber-100 p-3 rounded text-xs text-amber-800 mt-2 text-left w-full">
-                               <strong>Action Required:</strong>
-                               <ul className="list-disc list-inside mt-1 space-y-1">
-                                  <li>Go to Google Cloud Console</li>
-                                  <li>Enable Billing for this project</li>
-                                  <li>Enable "Maps JavaScript API"</li>
-                               </ul>
-                        </div>
-
-                        <button 
-                          onClick={() => navigate('/admin/settings')} 
-                          className="mt-2 text-xs flex items-center gap-1 bg-white border border-gray-300 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
-                        >
-                          <Settings className="w-3 h-3" /> Check Settings
-                        </button>
-                    </>
-                )}
+                <button 
+                  onClick={() => navigate('/admin/settings')} 
+                  className="mt-2 text-xs flex items-center gap-1 bg-white border border-gray-300 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <Settings className="w-3 h-3" /> Check Settings
+                </button>
               </div>
             </div>
          ) : (
@@ -201,11 +253,21 @@ const LiveTracking: React.FC = () => {
                
                {/* Overlay Legend */}
                {isMapReady && staffLocations.length > 0 && (
-                 <div className="absolute bottom-6 left-6 bg-white p-3 rounded-lg shadow-lg max-w-xs border border-gray-100 hidden md:block">
-                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Active Staff</h4>
+                 <div className="absolute bottom-6 left-6 bg-white p-3 rounded-lg shadow-lg max-w-xs border border-gray-100 hidden md:block z-10">
+                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 flex justify-between items-center">
+                        Active Staff
+                        {isDemoMode && <span className="text-[9px] bg-orange-100 text-orange-700 px-1.5 rounded">DEMO MODE</span>}
+                    </h4>
                     <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
                        {staffLocations.map((emp, idx) => (
-                          <div key={idx} className="flex items-center justify-between text-sm gap-4 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                          <div 
+                            key={idx} 
+                            onClick={() => {
+                                mapInstance?.panTo({lat: emp.lat, lng: emp.lng});
+                                mapInstance?.setZoom(15);
+                            }}
+                            className="flex items-center justify-between text-sm gap-4 cursor-pointer hover:bg-gray-50 p-1 rounded"
+                          >
                              <div className="flex items-center gap-2">
                                 <div className="w-2 h-2 rounded-full bg-blue-500"></div>
                                 <span className="font-medium text-gray-700">{emp.name}</span>

@@ -244,6 +244,26 @@ const Settings: React.FC = () => {
         <p className="text-gray-500">System configuration, branding, and data management</p>
       </div>
 
+      {/* API Key Missing Warning */}
+      {!mapsKey && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
+            <AlertCircle className="w-6 h-6 text-red-600 mt-0.5 shrink-0" />
+            <div>
+                <h3 className="font-bold text-red-800">Google Maps API Key Missing</h3>
+                <p className="text-sm text-red-700 mt-1">
+                    Live Tracking, Pickup/Drop Autocomplete, and Map views will <strong>not work</strong> without a valid API Key.
+                    <br/>Please add your key in the "Integrations" section below.
+                </p>
+                <button 
+                    onClick={() => setShowMapsInput(true)} 
+                    className="mt-2 text-sm font-bold text-red-800 hover:underline"
+                >
+                    Add Key Now &rarr;
+                </button>
+            </div>
+        </div>
+      )}
+
       {/* General / Branding Section */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
          <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
@@ -280,6 +300,54 @@ const Settings: React.FC = () => {
             >
                <Save className="w-4 h-4" /> Save Changes
             </button>
+         </div>
+      </div>
+
+      {/* Integrations Section */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+         <h3 className="font-bold text-gray-800 mb-4">Integrations</h3>
+         <div className="space-y-4">
+            <div className={`p-4 border rounded-lg ${!mapsKey ? 'border-red-300 bg-red-50' : 'border-gray-200'}`}>
+               <div className="flex items-center justify-between">
+                   <div className="flex items-center gap-3">
+                      <div className="p-2 bg-yellow-50 rounded text-yellow-600">
+                         <MapIcon className="w-6 h-6" />
+                      </div>
+                      <div>
+                         <h4 className="font-bold text-gray-800">Google Maps API</h4>
+                         <p className="text-xs text-gray-500">For location tracking and address search</p>
+                      </div>
+                   </div>
+                   <button 
+                      className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${!mapsKey ? 'bg-red-600 text-white hover:bg-red-700' : 'text-blue-600 hover:underline border border-blue-200 hover:bg-blue-50'}`}
+                      onClick={() => setShowMapsInput(!showMapsInput)}
+                   >
+                      {showMapsInput ? 'Cancel' : (mapsKey ? 'Edit Key' : 'Configure Now')}
+                   </button>
+               </div>
+               
+               {showMapsInput && (
+                   <div className="mt-4 pt-4 border-t border-gray-100 animate-in fade-in slide-in-from-top-2">
+                       <label className="block text-xs font-bold text-gray-500 uppercase mb-1">API Key</label>
+                       <div className="flex gap-2">
+                           <input 
+                               type="text" 
+                               value={mapsKey}
+                               onChange={(e) => setMapsKey(e.target.value)}
+                               placeholder="Paste your AIza... API Key here"
+                               className="flex-1 p-2 border border-gray-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-blue-500 outline-none"
+                           />
+                           <button 
+                               onClick={handleSaveMapsKey}
+                               className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 flex items-center gap-1 shadow-sm"
+                           >
+                               <Check className="w-4 h-4" /> Save
+                           </button>
+                       </div>
+                       <p className="text-[10px] text-gray-400 mt-1">Get this key from Google Cloud Console (Maps JavaScript API & Places API)</p>
+                   </div>
+               )}
+            </div>
          </div>
       </div>
 
@@ -438,54 +506,6 @@ const Settings: React.FC = () => {
           </div>
       </div>
       
-      {/* Integrations Section */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-         <h3 className="font-bold text-gray-800 mb-4">Integrations</h3>
-         <div className="space-y-4">
-            <div className="p-4 border border-gray-200 rounded-lg">
-               <div className="flex items-center justify-between">
-                   <div className="flex items-center gap-3">
-                      <div className="p-2 bg-yellow-50 rounded text-yellow-600">
-                         <MapIcon className="w-6 h-6" />
-                      </div>
-                      <div>
-                         <h4 className="font-bold text-gray-800">Google Maps API</h4>
-                         <p className="text-xs text-gray-500">For location tracking and address search</p>
-                      </div>
-                   </div>
-                   <button 
-                      className="text-xs font-bold text-blue-600 hover:underline border border-blue-200 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors"
-                      onClick={() => setShowMapsInput(!showMapsInput)}
-                   >
-                      {showMapsInput ? 'Cancel' : (mapsKey ? 'Edit Key' : 'Configure')}
-                   </button>
-               </div>
-               
-               {showMapsInput && (
-                   <div className="mt-4 pt-4 border-t border-gray-100 animate-in fade-in slide-in-from-top-2">
-                       <label className="block text-xs font-bold text-gray-500 uppercase mb-1">API Key</label>
-                       <div className="flex gap-2">
-                           <input 
-                               type="text" 
-                               value={mapsKey}
-                               onChange={(e) => setMapsKey(e.target.value)}
-                               placeholder="Paste your AIza... API Key here"
-                               className="flex-1 p-2 border border-gray-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-blue-500 outline-none"
-                           />
-                           <button 
-                               onClick={handleSaveMapsKey}
-                               className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 flex items-center gap-1 shadow-sm"
-                           >
-                               <Check className="w-4 h-4" /> Save
-                           </button>
-                       </div>
-                       <p className="text-[10px] text-gray-400 mt-1">Get this key from Google Cloud Console (Maps JavaScript API)</p>
-                   </div>
-               )}
-            </div>
-         </div>
-      </div>
-
       {/* NEW: Security & Account Section */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
           <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">

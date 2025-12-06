@@ -35,6 +35,7 @@ export interface Employee {
   pan?: string;
   accountNumber?: string;
   ifsc?: string;
+  upiId?: string; // NEW: UPI ID
   password?: string; 
   liveTracking?: boolean; 
   allowRemotePunch?: boolean; 

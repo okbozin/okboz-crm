@@ -1,6 +1,13 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Plus, Search, Phone, Mail, X, User, Upload, FileText, CreditCard, Briefcase, Building, Calendar, Pencil, Trash2, Building2, Lock, Download, Navigation, Globe, MapPin, Eye, EyeOff, Smartphone, ScanLine, MousePointerClick, Heart, Baby, BookUser, Home, Truck, Files, Car, RefreshCcw, Edit2, Save, AlertCircle, CheckCircle, Loader2, ExternalLink, Clock, Shield } from 'lucide-react';
+import { 
+  Plus, Search, Phone, Mail, X, User, Upload, FileText, CreditCard, 
+  Briefcase, Building, Calendar, Pencil, Trash2, Building2, Lock, 
+  Download, Navigation, Globe, MapPin, Eye, EyeOff, Smartphone, 
+  ScanLine, MousePointerClick, Heart, Baby, BookUser, Home, Truck, 
+  Files, Car, RefreshCcw, Edit2, Save, AlertCircle, CheckCircle, 
+  Loader2, ExternalLink, Clock, Shield, Users, Check, LayoutGrid, Hash
+} from 'lucide-react';
 import { Employee, Branch } from '../../types';
 import { uploadFileToCloud } from '../../services/cloudService';
 
@@ -17,18 +24,31 @@ interface DisplayEmployee extends Employee {
     franchiseId?: string;
 }
 
+// Permissions List
+const PERMISSIONS = [
+    { id: 'customer_care', label: 'Customer Care' },
+    { id: 'trip_booking', label: 'Trip Booking' },
+    { id: 'live_tracking', label: 'Live Tracking' },
+    { id: 'tasks', label: 'Tasks' },
+    { id: 'attendance', label: 'Attendance (Admin View)' },
+    { id: 'branches', label: 'Branches' },
+    { id: 'staff_management', label: 'Staff Management' },
+    { id: 'documents', label: 'Documents' },
+    { id: 'vendor_attachment', label: 'Vendor Attachment' },
+    { id: 'payroll', label: 'Payroll' },
+    { id: 'finance_expenses', label: 'Finance & Expenses' },
+];
+
 // Reusable ToggleSwitch component
 const ToggleSwitch = ({ label, checked, onChange, disabled = false }: { label: string, checked: boolean, onChange: () => void, disabled?: boolean }) => (
-    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100">
-        <span className="font-medium text-gray-700 text-sm">{label}</span>
-        <button 
-            type="button"
-            onClick={onChange}
-            disabled={disabled}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${checked ? 'bg-emerald-500' : 'bg-gray-300'} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-        >
+    <div 
+        onClick={!disabled ? onChange : undefined}
+        className={`flex items-center justify-between p-4 rounded-xl border transition-all cursor-pointer ${checked ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-gray-200 hover:border-gray-300'} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+    >
+        <span className={`font-medium text-sm ${checked ? 'text-emerald-700' : 'text-gray-700'}`}>{label}</span>
+        <div className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${checked ? 'bg-emerald-500' : 'bg-gray-300'}`}>
             <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
-        </button>
+        </div>
     </div>
 );
 
@@ -101,19 +121,30 @@ const StaffList: React.FC = () => {
 
   // Initial Form State
   const initialFormState = {
+    // Professional
     name: '', email: '', phone: '', password: '',
     role: '', department: '',
     joiningDate: new Date().toISOString().split('T')[0],
     salary: '25000', branch: '', 
     status: 'Active',
     workingHours: '', 
-    weekOff: 'Sunday', aadhar: '', pan: '', accountNumber: '', ifsc: '',
+    weekOff: 'Sunday', 
     liveTracking: false, allowRemotePunch: true,
     attendanceConfig: { gpsGeofencing: false, qrScan: false, manualPunch: true },
     allowedModules: [] as string[],
+    
+    // Personal & KYC
     dob: '', gender: '', bloodGroup: '',
+    maritalStatus: '', spouseName: '', children: 0,
+    homeAddress: '',
+    aadhar: '', pan: '', 
+    
+    // Emergency
     emergencyContactName: '', emergencyContactPhone: '', emergencyContactRelationship: '',
-    homeAddress: '', maritalStatus: '', spouseName: '', children: 0,
+    
+    // Banking
+    accountNumber: '', ifsc: '', upiId: '',
+
     idProof1Url: '', idProof2Url: '',
     corporateId: isSuperAdmin ? 'admin' : sessionId
   };
@@ -242,30 +273,33 @@ const StaffList: React.FC = () => {
     
     if (type === 'checkbox') {
         setFormData((prev: any) => ({ ...prev, [name]: checked }));
-    } else if (name.startsWith('attendanceConfig.')) {
-        const field = name.split('.')[1];
-        setFormData((prev: any) => ({
-            ...prev,
-            attendanceConfig: {
-                ...prev.attendanceConfig,
-                [field]: checked
-            }
-        }));
     } else {
         setFormData((prev: any) => ({ ...prev, [name]: value }));
     }
     setPasswordError('');
   };
 
-  const handleModuleToggle = (module: string) => {
+  // Specific Handlers for Permissions & Config
+  const handleModuleToggle = (moduleId: string) => {
     setFormData((prev: any) => {
-        const currentModules = prev.allowedModules || [];
-        if (currentModules.includes(module)) {
-            return { ...prev, allowedModules: currentModules.filter((m: string) => m !== module) };
-        } else {
-            return { ...prev, allowedModules: [...currentModules, module] };
-        }
+        const current = prev.allowedModules || [];
+        return {
+            ...prev,
+            allowedModules: current.includes(moduleId) 
+                ? current.filter((m: string) => m !== moduleId)
+                : [...current, moduleId]
+        };
     });
+  };
+
+  const handleAttendanceConfigChange = (key: string) => {
+    setFormData((prev: any) => ({
+        ...prev,
+        attendanceConfig: {
+            ...prev.attendanceConfig,
+            [key]: !prev.attendanceConfig?.[key]
+        }
+    }));
   };
 
   const handleOpenModal = () => {
@@ -288,12 +322,25 @@ const StaffList: React.FC = () => {
     setFormData({
         ...employee,
         joiningDate: employee.joiningDate.split('T')[0],
+        dob: employee.dob ? employee.dob.split('T')[0] : '',
         attendanceConfig: employee.attendanceConfig || { gpsGeofencing: false, qrScan: false, manualPunch: true },
         allowedModules: employee.allowedModules || [],
-        password: employee.password || '', // Pre-fill password so admin can view/edit
+        password: employee.password || '', 
         corporateId: employee.corporateId || (isSuperAdmin ? 'admin' : sessionId),
         branch: employee.branch && formAvailableBranches.some(b => b.name === employee.branch) ? employee.branch : (formAvailableBranches[0]?.name || ''),
-        dob: employee.dob ? employee.dob.split('T')[0] : '',
+        // Ensure new fields are initialized even if undefined in old records
+        maritalStatus: employee.maritalStatus || '',
+        children: employee.children || 0,
+        spouseName: employee.spouseName || '',
+        emergencyContactName: employee.emergencyContactName || '',
+        emergencyContactPhone: employee.emergencyContactPhone || '',
+        emergencyContactRelationship: employee.emergencyContactRelationship || '',
+        accountNumber: employee.accountNumber || '',
+        ifsc: employee.ifsc || '',
+        upiId: employee.upiId || '',
+        bloodGroup: employee.bloodGroup || '',
+        gender: employee.gender || '',
+        homeAddress: employee.homeAddress || ''
     });
     setPasswordConfirm(employee.password || '');
     setPasswordError('');
@@ -324,7 +371,6 @@ const StaffList: React.FC = () => {
         return;
       }
     } else {
-        // If editing and password was changed
         if (formData.password && formData.password !== passwordConfirm) {
              setPasswordError("Passwords do not match.");
              return;
@@ -339,6 +385,7 @@ const StaffList: React.FC = () => {
                 return {
                     ...emp,
                     ...formData,
+                    children: Number(formData.children), // Ensure number
                     corporateId: targetCorporateId,
                     franchiseName: corporates.find((c: any) => c.email === targetCorporateId)?.companyName || 'Head Office',
                 };
@@ -354,6 +401,7 @@ const StaffList: React.FC = () => {
         const newEmployee: DisplayEmployee = {
             id: `E${Date.now()}`,
             ...formData,
+            children: Number(formData.children), // Ensure number
             avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(formData.name)}&background=random&color=fff`,
             corporateId: targetCorporateId,
             franchiseName: corporates.find((c: any) => c.email === targetCorporateId)?.companyName || 'Head Office',
@@ -417,10 +465,41 @@ const StaffList: React.FC = () => {
         </div>
         <button 
           onClick={handleOpenModal}
-          className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 shadow-sm transition-colors"
+          className="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-2.5 rounded-xl font-medium flex items-center gap-2 shadow-lg shadow-emerald-200 transition-all hover:scale-105"
         >
           <Plus className="w-5 h-5" /> New Employee
         </button>
+      </div>
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+         <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
+            <div>
+               <p className="text-sm font-semibold text-gray-500 mb-1">Total Employees</p>
+               <h3 className="text-3xl font-bold text-gray-900">{filteredEmployees.length}</h3>
+            </div>
+            <div className="p-4 bg-blue-50 rounded-xl text-blue-600">
+               <Users className="w-6 h-6" />
+            </div>
+         </div>
+         <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
+            <div>
+               <p className="text-sm font-semibold text-gray-500 mb-1">Active Staff</p>
+               <h3 className="text-3xl font-bold text-emerald-600">{filteredEmployees.filter(e => e.status === 'Active').length}</h3>
+            </div>
+            <div className="p-4 bg-emerald-50 rounded-xl text-emerald-600">
+               <CheckCircle className="w-6 h-6" />
+            </div>
+         </div>
+         <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
+            <div>
+               <p className="text-sm font-semibold text-gray-500 mb-1">Departments</p>
+               <h3 className="text-3xl font-bold text-purple-600">{departmentOptions.length}</h3>
+            </div>
+            <div className="p-4 bg-purple-50 rounded-xl text-purple-600">
+               <Briefcase className="w-6 h-6" />
+            </div>
+         </div>
       </div>
 
       {/* Filters */}
@@ -429,7 +508,7 @@ const StaffList: React.FC = () => {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
             <input 
               type="text" 
-              placeholder="Search..." 
+              placeholder="Search by name, email or phone..." 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -440,7 +519,7 @@ const StaffList: React.FC = () => {
               <select 
                 value={filterCorporate} 
                 onChange={(e) => setFilterCorporate(e.target.value)} 
-                className="px-3 py-2 border border-gray-200 rounded-lg outline-none bg-white text-sm"
+                className="px-3 py-2 border border-gray-200 rounded-lg outline-none bg-white text-sm focus:ring-2 focus:ring-emerald-500"
               >
                   <option value="All">All Corporates</option>
                   <option value="admin">Head Office</option>
@@ -448,12 +527,12 @@ const StaffList: React.FC = () => {
               </select>
           )}
 
-          <select value={filterBranch} onChange={(e) => setFilterBranch(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-lg outline-none bg-white text-sm">
+          <select value={filterBranch} onChange={(e) => setFilterBranch(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-lg outline-none bg-white text-sm focus:ring-2 focus:ring-emerald-500">
               <option value="All">All Branches</option>
               {filterAvailableBranches.map((b: any, i) => <option key={i} value={b.name}>{b.name}</option>)}
           </select>
 
-          <select value={filterDepartment} onChange={(e) => setFilterDepartment(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-lg outline-none bg-white text-sm">
+          <select value={filterDepartment} onChange={(e) => setFilterDepartment(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-lg outline-none bg-white text-sm focus:ring-2 focus:ring-emerald-500">
               <option value="All">All Departments</option>
               {departmentOptions.map(d => <option key={d} value={d}>{d}</option>)}
           </select>
@@ -475,19 +554,19 @@ const StaffList: React.FC = () => {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                     {filteredEmployees.map(emp => (
-                        <tr key={emp.id} className="hover:bg-gray-50 transition-colors">
+                        <tr key={emp.id} className="hover:bg-gray-50 transition-colors group">
                             <td className="px-6 py-4">
                                 <div className="flex items-center gap-3">
-                                    <img src={emp.avatar} alt="" className="w-9 h-9 rounded-full border border-gray-200" />
+                                    <img src={emp.avatar} alt="" className="w-10 h-10 rounded-full border border-gray-200 object-cover" />
                                     <div>
                                         <div className="font-bold text-gray-900">{emp.name}</div>
-                                        <div className="text-xs text-gray-500">{emp.email}</div>
+                                        <div className="text-xs text-gray-500 flex items-center gap-1"><Phone className="w-3 h-3"/> {emp.phone}</div>
                                     </div>
                                 </div>
                             </td>
                             <td className="px-6 py-4">
                                 <div className="text-gray-800 font-medium">{emp.role}</div>
-                                <div className="text-xs text-gray-500">{emp.department}</div>
+                                <div className="text-xs text-emerald-600 font-medium bg-emerald-50 px-2 py-0.5 rounded-full inline-block mt-1">{emp.department}</div>
                             </td>
                             {isSuperAdmin && (
                                 <td className="px-6 py-4">
@@ -496,18 +575,22 @@ const StaffList: React.FC = () => {
                                     </span>
                                 </td>
                             )}
-                            <td className="px-6 py-4 text-gray-600">{emp.branch}</td>
+                            <td className="px-6 py-4 text-gray-600">
+                                <div className="flex items-center gap-1">
+                                    <MapPin className="w-4 h-4 text-gray-400" /> {emp.branch}
+                                </div>
+                            </td>
                             <td className="px-6 py-4">
-                                <span className={`px-2 py-1 rounded-full text-xs font-bold border ${emp.status === 'Active' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                                <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${emp.status === 'Active' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
                                     {emp.status}
                                 </span>
                             </td>
                             <td className="px-6 py-4 text-right">
-                                <div className="flex justify-end gap-2">
-                                    <button onClick={() => handleEdit(emp)} className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded">
+                                <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button onClick={() => handleEdit(emp)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Edit">
                                         <Edit2 className="w-4 h-4" />
                                     </button>
-                                    <button onClick={() => handleDelete(emp.id)} className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded">
+                                    <button onClick={() => handleDelete(emp.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
                                         <Trash2 className="w-4 h-4" />
                                     </button>
                                 </div>
@@ -515,175 +598,319 @@ const StaffList: React.FC = () => {
                         </tr>
                     ))}
                     {filteredEmployees.length === 0 && (
-                        <tr><td colSpan={6} className="text-center py-8 text-gray-500">No employees found.</td></tr>
+                        <tr>
+                            <td colSpan={6} className="text-center py-12 text-gray-500 bg-gray-50">
+                                <User className="w-12 h-12 mx-auto text-gray-300 mb-3" />
+                                <p>No employees found matching your filters.</p>
+                            </td>
+                        </tr>
                     )}
                 </tbody>
             </table>
         </div>
       </div>
 
-      {/* Add/Edit Modal */}
+      {/* Add/Edit Modal - Redesigned */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-           <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col animate-in fade-in zoom-in duration-200">
-              <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-2xl">
-                 <h3 className="font-bold text-gray-800 text-lg">{editingEmployeeId ? 'Edit Employee' : 'Add New Employee'}</h3>
-                 <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5"/></button>
+           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col animate-in fade-in zoom-in duration-200 overflow-hidden">
+              {/* Header */}
+              <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-white z-10">
+                 <div>
+                    <h3 className="font-bold text-gray-900 text-xl">{editingEmployeeId ? 'Edit Employee Profile' : 'Add New Employee'}</h3>
+                    <p className="text-sm text-gray-500">Fill in the details to {editingEmployeeId ? 'update' : 'create'} an employee account.</p>
+                 </div>
+                 <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-full transition-colors"><X className="w-6 h-6"/></button>
               </div>
               
-              <div className="flex-1 overflow-y-auto p-6">
-                 <form id="staffForm" onSubmit={handleSubmit} className="space-y-6">
+              {/* Scrollable Form Body */}
+              <div className="flex-1 overflow-y-auto p-6 bg-gray-50/50">
+                 <form onSubmit={handleSubmit} className="space-y-6">
                     
-                    {/* Basic Info */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Full Name *</label>
-                            <input required name="name" value={formData.name} onChange={handleFormChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500" />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
-                            <input required type="email" name="email" value={formData.email} onChange={handleFormChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500" />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Phone *</label>
-                            <input required name="phone" value={formData.phone} onChange={handleFormChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500" />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Password {editingEmployeeId ? '(Edit to change)' : '*'}</label>
-                            <div className="flex gap-2">
-                                <input 
-                                    type="text" 
-                                    name="password" 
-                                    value={formData.password} 
-                                    onChange={handleFormChange} 
-                                    className="flex-1 p-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
-                                    placeholder={editingEmployeeId ? "••••••" : "Create password"}
-                                />
-                                <input 
-                                    type="text" 
-                                    value={passwordConfirm} 
-                                    onChange={(e) => setPasswordConfirm(e.target.value)} 
-                                    className="flex-1 p-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
-                                    placeholder="Confirm password"
-                                />
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Work Details */}
-                    <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
-                        <h4 className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center gap-2"><Briefcase className="w-3 h-3"/> Work Details</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            {isSuperAdmin && (
+                    {/* 1. Professional Details Card */}
+                    <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                        <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-6 flex items-center gap-2 border-b border-gray-100 pb-3">
+                            <div className="p-1.5 bg-blue-50 text-blue-600 rounded-lg"><Briefcase className="w-4 h-4" /></div> Professional Details
+                        </h4>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Corporate / Owner</label>
-                                    <select name="corporateId" value={formData.corporateId} onChange={handleFormChange} className="w-full p-2 border border-gray-300 rounded-lg bg-white outline-none text-sm">
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Full Name <span className="text-red-500">*</span></label>
+                                    <div className="relative">
+                                        <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                                        <input required name="name" value={formData.name} onChange={handleFormChange} className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none transition-all" placeholder="John Doe" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Email <span className="text-red-500">*</span></label>
+                                    <div className="relative">
+                                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                                        <input required type="email" name="email" value={formData.email} onChange={handleFormChange} className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none transition-all" placeholder="john@company.com" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Phone <span className="text-red-500">*</span></label>
+                                    <div className="relative">
+                                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                                        <input required name="phone" value={formData.phone} onChange={handleFormChange} className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none transition-all" placeholder="+91 98765 43210" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Branch</label>
+                                    <div className="relative">
+                                        <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                                        <select name="branch" value={formData.branch} onChange={handleFormChange} className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-emerald-500 outline-none transition-all appearance-none">
+                                            <option value="">Select Branch</option>
+                                            {formAvailableBranches.map((b: any) => <option key={b.id} value={b.name}>{b.name}</option>)}
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="space-y-6">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Password</label>
+                                    <div className="relative">
+                                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                                        <input 
+                                            type="password" 
+                                            name="password" 
+                                            value={formData.password} 
+                                            onChange={(e) => {handleFormChange(e); setPasswordError('');}} 
+                                            placeholder={editingEmployeeId ? "Leave blank to keep" : "Min 6 chars"} 
+                                            className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none transition-all" 
+                                        />
+                                    </div>
+                                </div>
+                                {(!editingEmployeeId || formData.password) && (
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Confirm Password</label>
+                                        <div className="relative">
+                                            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                                            <input 
+                                                type="password" 
+                                                value={passwordConfirm} 
+                                                onChange={(e) => setPasswordConfirm(e.target.value)} 
+                                                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none transition-all" 
+                                                placeholder="Confirm password"
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+                                {passwordError && <p className="text-xs text-red-500 font-medium flex items-center gap-1"><AlertCircle className="w-3 h-3"/> {passwordError}</p>}
+                            </div>
+
+                            {/* Row 2 */}
+                            <div className="md:col-span-3 grid grid-cols-2 md:grid-cols-4 gap-6 pt-2">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Department</label>
+                                    <select name="department" value={formData.department} onChange={handleFormChange} className="w-full px-3 py-2.5 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
+                                        {departmentOptions.map(d => <option key={d}>{d}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Role</label>
+                                    <select name="role" value={formData.role} onChange={handleFormChange} className="w-full px-3 py-2.5 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
+                                        {roleOptions.map(r => <option key={r}>{r}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Monthly Salary (₹)</label>
+                                    <input type="number" name="salary" value={formData.salary} onChange={handleFormChange} className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Shift</label>
+                                    <select name="workingHours" value={formData.workingHours} onChange={handleFormChange} className="w-full px-3 py-2.5 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
+                                        {shifts.map(s => <option key={s.id} value={s.name}>{s.name} ({s.start}-{s.end})</option>)}
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            {/* Super Admin Corporate Select */}
+                            {isSuperAdmin && (
+                                <div className="md:col-span-3">
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Assign Corporate</label>
+                                    <select 
+                                        name="corporateId" 
+                                        value={formData.corporateId} 
+                                        onChange={handleFormChange} 
+                                        className="w-full px-3 py-2.5 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-emerald-500 outline-none"
+                                    >
                                         <option value="admin">Head Office</option>
                                         {corporates.map((c: any) => <option key={c.email} value={c.email}>{c.companyName}</option>)}
                                     </select>
                                 </div>
                             )}
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Branch</label>
-                                <select name="branch" value={formData.branch} onChange={handleFormChange} className="w-full p-2 border border-gray-300 rounded-lg bg-white outline-none text-sm">
-                                    <option value="">Select Branch</option>
-                                    {formAvailableBranches.map((b: any, i) => <option key={i} value={b.name}>{b.name}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
-                                <select name="department" value={formData.department} onChange={handleFormChange} className="w-full p-2 border border-gray-300 rounded-lg bg-white outline-none text-sm">
-                                    {departmentOptions.map(d => <option key={d} value={d}>{d}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-                                <select name="role" value={formData.role} onChange={handleFormChange} className="w-full p-2 border border-gray-300 rounded-lg bg-white outline-none text-sm">
-                                    {roleOptions.map(r => <option key={r} value={r}>{r}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Salary (CTC)</label>
-                                <input type="number" name="salary" value={formData.salary} onChange={handleFormChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Shift</label>
-                                <select name="workingHours" value={formData.workingHours} onChange={handleFormChange} className="w-full p-2 border border-gray-300 rounded-lg bg-white outline-none text-sm">
-                                    {shifts.map(s => <option key={s.id} value={s.name}>{s.name} ({s.start}-{s.end})</option>)}
-                                </select>
-                            </div>
                         </div>
                     </div>
 
-                    {/* Extra Permissions & Attendance Config */}
+                    {/* 2. Access & Configuration Cards */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
-                            <h4 className="text-xs font-bold text-blue-700 uppercase mb-3 flex items-center gap-2"><Shield className="w-3 h-3"/> Extra Access Permissions</h4>
-                            <div className="space-y-3">
-                                <label className="flex items-center gap-2 cursor-pointer bg-white p-2 rounded border border-blue-100 hover:border-blue-300 transition-colors">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={formData.allowedModules?.includes('expenses')} 
-                                        onChange={() => handleModuleToggle('expenses')}
-                                        className="rounded text-emerald-600 focus:ring-emerald-500 h-4 w-4"
-                                    />
-                                    <span className="text-sm font-medium text-gray-700">Expenses Module</span>
-                                </label>
-                                <label className="flex items-center gap-2 cursor-pointer bg-white p-2 rounded border border-blue-100 hover:border-blue-300 transition-colors">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={formData.allowedModules?.includes('documents')} 
-                                        onChange={() => handleModuleToggle('documents')}
-                                        className="rounded text-emerald-600 focus:ring-emerald-500 h-4 w-4"
-                                    />
-                                    <span className="text-sm font-medium text-gray-700">Documents Module</span>
-                                </label>
+                        {/* Permissions */}
+                        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col">
+                            <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-6 flex items-center gap-2 border-b border-gray-100 pb-3">
+                                <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg"><Shield className="w-4 h-4" /></div> Access Permissions
+                            </h4>
+                            <div className="grid grid-cols-2 gap-3 flex-1 content-start">
+                                {PERMISSIONS.map((perm) => (
+                                    <label key={perm.id} className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-all border ${formData.allowedModules?.includes(perm.id) ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-gray-100 hover:bg-gray-50'}`}>
+                                        <div className={`w-5 h-5 rounded flex items-center justify-center border transition-colors ${formData.allowedModules?.includes(perm.id) ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-gray-300'}`}>
+                                            {formData.allowedModules?.includes(perm.id) && <Check className="w-3.5 h-3.5 text-white" />}
+                                        </div>
+                                        <input 
+                                            type="checkbox" 
+                                            className="hidden" 
+                                            checked={formData.allowedModules?.includes(perm.id) || false} 
+                                            onChange={() => handleModuleToggle(perm.id)} 
+                                        />
+                                        <span className="text-sm font-medium text-gray-700">{perm.label}</span>
+                                    </label>
+                                ))}
                             </div>
                         </div>
 
-                        <div className="bg-orange-50 p-4 rounded-xl border border-orange-100">
-                            <h4 className="text-xs font-bold text-orange-700 uppercase mb-3 flex items-center gap-2"><ScanLine className="w-3 h-3"/> Attendance Config</h4>
-                            <div className="space-y-2">
-                                <ToggleSwitch label="GPS Geofencing" checked={formData.attendanceConfig.gpsGeofencing} onChange={() => setFormData({...formData, attendanceConfig: {...formData.attendanceConfig, gpsGeofencing: !formData.attendanceConfig.gpsGeofencing}})} />
-                                <ToggleSwitch label="QR Scan" checked={formData.attendanceConfig.qrScan} onChange={() => setFormData({...formData, attendanceConfig: {...formData.attendanceConfig, qrScan: !formData.attendanceConfig.qrScan}})} />
-                                <ToggleSwitch label="Manual Punch (Web)" checked={formData.attendanceConfig.manualPunch} onChange={() => setFormData({...formData, attendanceConfig: {...formData.attendanceConfig, manualPunch: !formData.attendanceConfig.manualPunch}})} />
+                        {/* Attendance Config */}
+                        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col">
+                            <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-6 flex items-center gap-2 border-b border-gray-100 pb-3">
+                                <div className="p-1.5 bg-orange-50 text-orange-600 rounded-lg"><ScanLine className="w-4 h-4" /></div> Attendance Config
+                            </h4>
+                            <div className="space-y-4 flex-1">
+                                <ToggleSwitch 
+                                    label="GPS Geofencing" 
+                                    checked={formData.attendanceConfig?.gpsGeofencing || false} 
+                                    onChange={() => handleAttendanceConfigChange('gpsGeofencing')} 
+                                />
+                                <ToggleSwitch 
+                                    label="QR Scan" 
+                                    checked={formData.attendanceConfig?.qrScan || false} 
+                                    onChange={() => handleAttendanceConfigChange('qrScan')} 
+                                />
+                                <ToggleSwitch 
+                                    label="Manual Punch (Web)" 
+                                    checked={formData.attendanceConfig?.manualPunch || false} 
+                                    onChange={() => handleAttendanceConfigChange('manualPunch')} 
+                                />
+                                <div className="mt-4 p-4 bg-orange-50 rounded-xl border border-orange-100 text-xs text-orange-800">
+                                    <p className="font-bold mb-1 flex items-center gap-1"><AlertCircle className="w-3 h-3"/> Note:</p>
+                                    Geofencing requires branch location to be set. QR Scan uses camera.
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    {/* ID Proofs */}
-                    <div className="border-t border-gray-100 pt-4">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">ID Proofs (Aadhar / PAN)</label>
-                        <div className="flex gap-4">
-                            <div className="flex-1">
-                                <input type="file" ref={aadharInputRef} className="hidden" onChange={(e) => handleIdProofUpload(e.target.files?.[0] || null, 'idProof1Url')} />
-                                <button type="button" onClick={() => aadharInputRef.current?.click()} className="w-full border-2 border-dashed border-gray-300 rounded-lg p-3 text-sm text-gray-500 hover:bg-gray-50 flex items-center justify-center gap-2">
-                                    {uploadingAadhar ? <Loader2 className="w-4 h-4 animate-spin"/> : <Upload className="w-4 h-4"/>} 
-                                    {formData.idProof1Url ? 'Update ID Proof 1' : 'Upload ID Proof 1'}
-                                </button>
+                    {/* 3. Personal & Emergency Details */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Personal Details */}
+                        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                            <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-6 flex items-center gap-2 border-b border-gray-100 pb-3">
+                                <div className="p-1.5 bg-purple-50 text-purple-600 rounded-lg"><User className="w-4 h-4" /></div> Personal Details
+                            </h4>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Date of Birth</label>
+                                    <input type="date" name="dob" value={formData.dob} onChange={handleFormChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Gender</label>
+                                    <select name="gender" value={formData.gender} onChange={handleFormChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-purple-500 outline-none">
+                                        <option value="">Select</option>
+                                        <option>Male</option>
+                                        <option>Female</option>
+                                        <option>Other</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Blood Group</label>
+                                    <input name="bloodGroup" value={formData.bloodGroup} onChange={handleFormChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none" placeholder="e.g. O+" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Marital Status</label>
+                                    <select name="maritalStatus" value={formData.maritalStatus} onChange={handleFormChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-purple-500 outline-none">
+                                        <option value="">Select</option>
+                                        <option>Single</option>
+                                        <option>Married</option>
+                                        <option>Divorced</option>
+                                        <option>Widowed</option>
+                                    </select>
+                                </div>
+                                {formData.maritalStatus === 'Married' && (
+                                    <>
+                                        <div className="col-span-2">
+                                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Spouse Name</label>
+                                            <input name="spouseName" value={formData.spouseName} onChange={handleFormChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none" />
+                                        </div>
+                                        <div className="col-span-2">
+                                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">No. of Children</label>
+                                            <input type="number" name="children" value={formData.children} onChange={handleFormChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none" />
+                                        </div>
+                                    </>
+                                )}
+                                <div className="col-span-2">
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Home Address</label>
+                                    <textarea name="homeAddress" value={formData.homeAddress} onChange={handleFormChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none resize-none h-20" placeholder="Full address..." />
+                                </div>
                             </div>
-                            <div className="flex-1">
-                                <input type="file" ref={panInputRef} className="hidden" onChange={(e) => handleIdProofUpload(e.target.files?.[0] || null, 'idProof2Url')} />
-                                <button type="button" onClick={() => panInputRef.current?.click()} className="w-full border-2 border-dashed border-gray-300 rounded-lg p-3 text-sm text-gray-500 hover:bg-gray-50 flex items-center justify-center gap-2">
-                                    {uploadingPan ? <Loader2 className="w-4 h-4 animate-spin"/> : <Upload className="w-4 h-4"/>} 
-                                    {formData.idProof2Url ? 'Update ID Proof 2' : 'Upload ID Proof 2'}
-                                </button>
+                        </div>
+
+                        {/* Emergency Contact */}
+                        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm h-fit">
+                            <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-6 flex items-center gap-2 border-b border-gray-100 pb-3">
+                                <div className="p-1.5 bg-red-50 text-red-600 rounded-lg"><Heart className="w-4 h-4" /></div> Emergency Contact
+                            </h4>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Contact Name</label>
+                                    <input name="emergencyContactName" value={formData.emergencyContactName} onChange={handleFormChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Contact Phone</label>
+                                    <input name="emergencyContactPhone" value={formData.emergencyContactPhone} onChange={handleFormChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Relationship</label>
+                                    <input name="emergencyContactRelationship" value={formData.emergencyContactRelationship} onChange={handleFormChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none" placeholder="e.g. Father, Spouse" />
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    {passwordError && (
-                        <div className="p-3 bg-red-50 text-red-600 rounded-lg text-sm flex items-center gap-2">
-                            <AlertCircle className="w-4 h-4"/> {passwordError}
+                    {/* 4. Banking & KYC */}
+                    <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                        <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-6 flex items-center gap-2 border-b border-gray-100 pb-3">
+                            <div className="p-1.5 bg-teal-50 text-teal-600 rounded-lg"><CreditCard className="w-4 h-4" /></div> Banking & KYC
+                        </h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Bank Account No.</label>
+                                <input name="accountNumber" value={formData.accountNumber} onChange={handleFormChange} className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none" />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">IFSC Code</label>
+                                <input name="ifsc" value={formData.ifsc} onChange={handleFormChange} className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none" />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">UPI ID</label>
+                                <input name="upiId" value={formData.upiId} onChange={handleFormChange} className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none" placeholder="name@upi" />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Aadhar Number</label>
+                                <input name="aadhar" value={formData.aadhar} onChange={handleFormChange} className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none" />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">PAN Number</label>
+                                <input name="pan" value={formData.pan} onChange={handleFormChange} className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none" />
+                            </div>
                         </div>
-                    )}
+                    </div>
+
                  </form>
               </div>
 
-              <div className="p-6 border-t border-gray-100 bg-gray-50 rounded-b-2xl flex justify-end gap-3">
-                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-white transition-colors">Cancel</button>
-                 <button type="submit" form="staffForm" className="px-6 py-2 bg-emerald-500 text-white rounded-lg font-bold hover:bg-emerald-600 transition-colors shadow-sm">
-                    {editingEmployeeId ? 'Update Employee' : 'Create Employee'}
+              {/* Footer Actions */}
+              <div className="p-6 border-t border-gray-100 bg-white flex justify-end gap-3 z-10">
+                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-5 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-700 font-medium hover:bg-gray-50 transition-colors">Cancel</button>
+                 <button onClick={handleSubmit} type="button" className="px-8 py-2.5 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-200 transition-all transform active:scale-95 flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4" /> Save Employee
                  </button>
               </div>
            </div>

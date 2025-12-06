@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Autocomplete from '../../components/Autocomplete';
 import { MOCK_EMPLOYEES } from '../../constants';
@@ -248,7 +247,7 @@ const Reception: React.FC = () => {
   // --- Google Maps Script Loader ---
   useEffect(() => {
     if (window.gm_authFailure_detected) {
-      setMapError("Map Error: Google Cloud Billing is not enabled. Please enable billing in the Google Cloud Console.");
+      setMapError("Google Maps Error: Billing is not enabled. Please enable billing in Google Cloud Console.");
       return;
     }
     const apiKey = localStorage.getItem('maps_api_key');
@@ -259,7 +258,7 @@ const Reception: React.FC = () => {
     const originalAuthFailure = window.gm_authFailure;
     window.gm_authFailure = () => {
       window.gm_authFailure_detected = true;
-      setMapError("Map Error: Google Cloud Billing is not enabled. Please enable billing in the Google Cloud Console.");
+      setMapError("Google Maps Error: Billing not enabled. Please enable billing in Google Cloud Console.");
       if (originalAuthFailure) originalAuthFailure();
     };
 
@@ -302,39 +301,50 @@ const Reception: React.FC = () => {
   useEffect(() => {
     if (!window.google || !pickupCoords || !consoleTaxiType) return;
 
-    const calculateDistance = (destination: google.maps.LatLngLiteral, isRoundTrip: boolean, isOutstation: boolean) => {
-        const service = new window.google.maps.DistanceMatrixService();
-        service.getDistanceMatrix(
-            {
-                origins: [pickupCoords],
-                destinations: [destination],
-                travelMode: window.google.maps.TravelMode.DRIVING,
-                unitSystem: window.google.maps.UnitSystem.METRIC,
-            },
-            (response: any, status: any) => {
-                if (status === "OK" && response.rows[0].elements[0].status === "OK") {
-                    const distanceInMeters = response.rows[0].elements[0].distance.value;
-                    let distanceInKm = distanceInMeters / 1000;
-                    
-                    if (isRoundTrip) distanceInKm = distanceInKm * 2; 
+    // Added try-catch to handle billing errors during service instantiation
+    try {
+        const calculateDistance = (destination: google.maps.LatLngLiteral, isRoundTrip: boolean, isOutstation: boolean) => {
+            const service = new window.google.maps.DistanceMatrixService();
+            service.getDistanceMatrix(
+                {
+                    origins: [pickupCoords],
+                    destinations: [destination],
+                    travelMode: window.google.maps.TravelMode.DRIVING,
+                    unitSystem: window.google.maps.UnitSystem.METRIC,
+                },
+                (response: any, status: any) => {
+                    if (status === "OK" && response.rows[0].elements[0].status === "OK") {
+                        const distanceInMeters = response.rows[0].elements[0].distance.value;
+                        let distanceInKm = distanceInMeters / 1000;
+                        
+                        if (isRoundTrip) distanceInKm = distanceInKm * 2; 
 
-                    const formattedDist = distanceInKm.toFixed(1);
+                        const formattedDist = distanceInKm.toFixed(1);
 
-                    if (isOutstation) {
-                        setConsoleCalcDetails(prev => ({ ...prev, estTotalKm: formattedDist }));
+                        if (isOutstation) {
+                            setConsoleCalcDetails(prev => ({ ...prev, estTotalKm: formattedDist }));
+                        } else {
+                            setConsoleCalcDetails(prev => ({ ...prev, estKm: formattedDist }));
+                        }
                     } else {
-                        setConsoleCalcDetails(prev => ({ ...prev, estKm: formattedDist }));
+                        console.error("Error calculating distance:", status, response);
+                        if (status === 'REQUEST_DENIED' || status === 'OVER_QUERY_LIMIT') {
+                            setMapError("Google Maps Error: Billing is not enabled. Please enable billing in Google Cloud Console.");
+                        }
                     }
                 }
-            }
-        );
-    };
+            );
+        };
 
-    if (consoleTaxiType === 'Local' && dropCoords) {
-        calculateDistance(dropCoords, false, false);
-    } else if (consoleTaxiType === 'Outstation' && destCoords) {
-        const isRoundTrip = consoleOutstationType === 'RoundTrip';
-        calculateDistance(destCoords, isRoundTrip, true); 
+        if (consoleTaxiType === 'Local' && dropCoords) {
+            calculateDistance(dropCoords, false, false);
+        } else if (consoleTaxiType === 'Outstation' && destCoords) {
+            const isRoundTrip = consoleOutstationType === 'RoundTrip';
+            calculateDistance(destCoords, isRoundTrip, true); 
+        }
+    } catch (error: any) {
+        console.error("Failed to initialize Distance Matrix Service:", error);
+        setMapError("Google Maps Error: Billing is not enabled. Please enable billing in Google Cloud Console.");
     }
 
   }, [pickupCoords, dropCoords, destCoords, consoleTaxiType, consoleOutstationType]);

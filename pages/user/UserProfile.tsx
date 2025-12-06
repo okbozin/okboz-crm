@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   User, Mail, Phone, MapPin, Briefcase, Calendar, CreditCard, Shield, 
@@ -97,6 +98,7 @@ const UserProfile: React.FC = () => { // Changed to a const declaration
         pan: ensureString(employee.pan),
         accountNumber: ensureString(employee.accountNumber),
         ifsc: ensureString(employee.ifsc),
+        upiId: ensureString(employee.upiId), // NEW
         idProof1Url: ensureString(employee.idProof1Url),
         idProof2Url: ensureString(employee.idProof2Url),
     });
@@ -493,6 +495,7 @@ const UserProfile: React.FC = () => { // Changed to a const declaration
                </div>
             </div>
             {profileFormData.maritalStatus === 'Married' && (
+                <>
                 <div className="flex items-start gap-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
                    <User className="w-5 h-5 text-gray-400 mt-0.5" />
                    <div className="flex-1">
@@ -510,24 +513,25 @@ const UserProfile: React.FC = () => { // Changed to a const declaration
                       )}
                    </div>
                 </div>
+                <div className="flex items-start gap-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
+                   <Baby className="w-5 h-5 text-gray-400 mt-0.5" />
+                   <div className="flex-1">
+                      <p className="text-xs text-gray-500 mb-0.5">Number of Children</p>
+                      {isEditingProfile ? (
+                          <input 
+                              type="number" 
+                              name="children"
+                              value={profileFormData.children?.toString() || ''} 
+                              onChange={handleProfileInputChange}
+                              className="w-full p-1 border-b border-gray-300 focus:outline-none focus:border-emerald-500 bg-transparent text-gray-800 font-medium"
+                          />
+                      ) : (
+                          <p className="text-gray-800 font-medium">{user.children ?? 'Not Provided'}</p>
+                      )}
+                   </div>
+                </div>
+                </>
             )}
-            <div className="flex items-start gap-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
-               <Baby className="w-5 h-5 text-gray-400 mt-0.5" />
-               <div className="flex-1">
-                  <p className="text-xs text-gray-500 mb-0.5">Number of Children</p>
-                  {isEditingProfile ? (
-                      <input 
-                          type="number" 
-                          name="children"
-                          value={profileFormData.children?.toString() || ''} 
-                          onChange={handleProfileInputChange}
-                          className="w-full p-1 border-b border-gray-300 focus:outline-none focus:border-emerald-500 bg-transparent text-gray-800 font-medium"
-                      />
-                  ) : (
-                      <p className="text-gray-800 font-medium">{user.children ?? 'Not Provided'}</p>
-                  )}
-               </div>
-            </div>
           </section>
 
           {/* Contact and Emergency Details */}
@@ -699,6 +703,23 @@ const UserProfile: React.FC = () => { // Changed to a const declaration
                       />
                   ) : (
                       <p className="text-gray-800 font-medium">{user.ifsc || 'Not Provided'}</p>
+                  )}
+               </div>
+            </div>
+            <div className="flex items-start gap-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
+               <Shield className="w-5 h-5 text-gray-400 mt-0.5" />
+               <div className="flex-1">
+                  <p className="text-xs text-gray-500 mb-0.5">UPI ID</p>
+                  {isEditingProfile ? (
+                      <input 
+                          type="text" 
+                          name="upiId"
+                          value={profileFormData.upiId || ''} 
+                          onChange={handleProfileInputChange}
+                          className="w-full p-1 border-b border-gray-300 focus:outline-none focus:border-emerald-500 bg-transparent text-gray-800 font-medium"
+                      />
+                  ) : (
+                      <p className="text-gray-800 font-medium">{user.upiId || 'Not Provided'}</p>
                   )}
                </div>
             </div>

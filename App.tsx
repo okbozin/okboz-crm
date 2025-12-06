@@ -16,7 +16,6 @@ import VendorAttachment from './pages/admin/VendorAttachment';
 import Corporate from './pages/admin/Corporate';
 import Documents from './pages/Documents';
 import Leads from './pages/admin/Leads';
-import Reception from './pages/admin/Reception'; 
 import TripBooking from './pages/admin/TripBooking'; 
 import CustomerCare from './pages/admin/CustomerCare';
 import EmailMarketing from './pages/admin/EmailMarketing'; // Added import
@@ -135,7 +134,6 @@ const App: React.FC = () => {
                       <>
                         <Route path="/admin" element={<Dashboard />} />
                         <Route path="/admin/reports" element={<Reports />} />
-                        <Route path="/admin/reception" element={<Reception />} />
                         <Route path="/admin/customer-care" element={<CustomerCare role={userRole} />} />
                         <Route path="/admin/trips" element={<TripBooking />} /> 
                         <Route path="/admin/tracking" element={<LiveTracking />} />

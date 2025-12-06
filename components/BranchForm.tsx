@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { MapPin, Maximize, Crosshair, Loader2, AlertTriangle, Building, Trash2, Settings, Building2, Pencil, X, QrCode, Download } from 'lucide-react';
 import { Branch } from '../types';
@@ -89,9 +88,6 @@ const BranchForm: React.FC = () => {
         localStorage.setItem('branches_data', JSON.stringify(cleanAdmin));
 
         // Save Corporate Branches (Iterate corporates to find their branches in state)
-        // Note: This relies on the branches state being the source of truth. 
-        // If a corporate added a branch externally (e.g. diff browser), this overwrite might be risky without sync.
-        // But for the requested "Admin sees updates" flow, this state aggregation is the standard react way.
         const corps = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
         corps.forEach((c: any) => {
              const cBranches = branches.filter(b => b.owner === c.email);
@@ -124,12 +120,16 @@ const BranchForm: React.FC = () => {
     }
     // Also fetch address for the selected place
     if (window.google && window.google.maps && window.google.maps.Geocoder) {
-      const geocoder = new window.google.maps.Geocoder();
-      geocoder.geocode({ location: newPos }, (results: any, status: any) => {
-        if (status === "OK" && results[0]) {
-          setAddress(results[0].formatted_address);
-        }
-      });
+      try {
+        const geocoder = new window.google.maps.Geocoder();
+        geocoder.geocode({ location: newPos }, (results: any, status: any) => {
+          if (status === "OK" && results[0]) {
+            setAddress(results[0].formatted_address);
+          }
+        });
+      } catch (e) {
+        console.error("Geocoder init failed", e);
+      }
     }
   };
 
@@ -137,7 +137,7 @@ const BranchForm: React.FC = () => {
   useEffect(() => {
     // 1. Check global failure flag
     if (window.gm_authFailure_detected) {
-      setMapError("Map Error: Google Cloud Billing is not enabled. Please enable billing in the Google Cloud Console.");
+      setMapError("Map Error: Billing not enabled OR API Key Invalid. Check Google Cloud Console.");
       return;
     }
     // 2. Handle Missing API Key
@@ -150,7 +150,7 @@ const BranchForm: React.FC = () => {
     const originalAuthFailure = window.gm_authFailure;
     window.gm_authFailure = () => {
       window.gm_authFailure_detected = true;
-      setMapError("Map Error: Google Cloud Billing is not enabled. Please enable billing in the Google Cloud Console.");
+      setMapError("Map Error: Billing not enabled OR API Key Invalid. Check Google Cloud Console.");
       if (originalAuthFailure) originalAuthFailure();
     };
 
@@ -181,15 +181,11 @@ const BranchForm: React.FC = () => {
       script.onerror = () => setMapError("Network error: Failed to load Google Maps script.");
       document.head.appendChild(script);
     } else {
-        // If script already exists but might not have finished loading 'places' library,
-        // attach load listener just in case.
         script.addEventListener('load', () => {
           if (window.google && window.google.maps && window.google.maps.places) {
             setIsMapReady(true);
           }
         });
-        // If script is already present and theoretically loaded, but `isMapReady` is false,
-        // manually trigger check if `places` is there.
         if (window.google && window.google.maps && window.google.maps.places) {
             setIsMapReady(true);
         }
@@ -228,8 +224,12 @@ const BranchForm: React.FC = () => {
         });
         setMapInstance(map);
         setMarkerInstance(marker);
-      } catch (e) {
-        setMapError("Error initializing map interface. Check Settings.");
+      } catch (e: any) {
+        if (e.name === 'BillingNotEnabledMapError' || e.message?.includes('Billing')) {
+           setMapError("Billing Not Enabled: Please enable billing in Google Cloud Console.");
+        } else {
+           setMapError("Error initializing map interface. Check Settings.");
+        }
       }
     }
   }, [isMapReady, mapError, location]);
@@ -247,7 +247,11 @@ const BranchForm: React.FC = () => {
         if (status === "OK" && results[0]) {
           setAddress(results[0].formatted_address);
         } else {
-          alert("Could not fetch address. Please enable 'Geocoding API' in Google Cloud Console.");
+          if (status === 'REQUEST_DENIED' || status === 'OVER_QUERY_LIMIT') {
+            alert("Map Error: Billing not enabled or API Key invalid.");
+          } else {
+            alert(`Could not fetch address. Status: ${status}`);
+          }
         }
       });
     } catch (e) {
@@ -290,7 +294,6 @@ const BranchForm: React.FC = () => {
     setLocation(newLoc);
     
     // For Admin: We can't change the owner during edit easily in this UI, so we just lock it implicitly
-    // But we need to make sure we don't accidentally switch the dropdown context
     if(isSuperAdmin) setSelectedOwner(branch.owner || 'admin');
 
     if (mapInstance && markerInstance) {
@@ -306,7 +309,6 @@ const BranchForm: React.FC = () => {
     setBranchName('');
     setAddress('');
     setRadius('100');
-    // Reset owner selection to default if admin
     if (isSuperAdmin) setSelectedOwner('admin');
   };
 
@@ -453,7 +455,7 @@ const BranchForm: React.FC = () => {
                     {mapError && (
                     <p className="text-xs text-amber-600 mt-2 flex items-center gap-1">
                         <AlertTriangle className="w-3 h-3" />
-                        <span>Map services unavailable (Billing not enabled). Please enter address manually.</span>
+                        <span>Map services unavailable. Please enter address manually.</span>
                     </p>
                     )}
                 </div>
@@ -512,7 +514,7 @@ const BranchForm: React.FC = () => {
                 <div className="absolute inset-0 flex items-center justify-center text-gray-500 bg-gray-50 p-6 text-center z-10">
                   <div className="flex flex-col items-center gap-3 max-w-sm">
                     <AlertTriangle className="w-10 h-10 text-red-400" />
-                    <h3 className="font-medium text-gray-900">Map Loading Failed</h3>
+                    <h3 className="font-medium text-gray-900">Map Unavailable</h3>
                     <p className="text-sm text-gray-600">{mapError}</p>
                     {isCorporateUser ? (
                       <p className="text-sm text-gray-500 mt-2">
