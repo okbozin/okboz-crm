@@ -158,7 +158,7 @@ export const VehicleEnquiries: React.FC = () => {
   // --- Google Maps Script Loader ---
   useEffect(() => {
     if (window.gm_authFailure_detected) {
-      setMapError("Map Error: Billing not enabled or API Key invalid.");
+      setMapError("Map Error: Google Cloud Billing is not enabled. Please enable billing in the Google Cloud Console.");
       return;
     }
     const apiKey = localStorage.getItem('maps_api_key');
@@ -169,7 +169,7 @@ export const VehicleEnquiries: React.FC = () => {
     const originalAuthFailure = window.gm_authFailure;
     window.gm_authFailure = () => {
       window.gm_authFailure_detected = true;
-      setMapError("Map Error: Google Cloud Billing not enabled or API Key invalid.");
+      setMapError("Map Error: Google Cloud Billing is not enabled. Please enable billing in the Google Cloud Console.");
       if (originalAuthFailure) originalAuthFailure();
     };
 
@@ -476,7 +476,11 @@ Book now with OK BOZ Transport!`;
                   {/* Pickup Location - Moved to Customer Info */}
                   <div className="mb-4">
                       <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Pickup Location</label>
-                      {!isMapReady ? (
+                      {mapError ? (
+                          <div className="p-2 bg-red-50 text-red-500 text-sm rounded flex items-center gap-2 border border-red-200">
+                              <AlertTriangle className="w-4 h-4" /> {mapError}
+                          </div>
+                      ) : !isMapReady ? (
                            <div className="p-2 bg-gray-100 text-gray-500 text-sm rounded flex items-center gap-2">
                               <Loader2 className="w-4 h-4 animate-spin" /> Loading Google Maps...
                            </div>
@@ -546,7 +550,11 @@ Book now with OK BOZ Transport!`;
                               <div className="space-y-3">
                                   <div>
                                       <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Drop Location</label>
-                                      {!isMapReady ? (
+                                      {mapError ? (
+                                          <div className="p-2 bg-red-50 text-red-500 text-sm rounded flex items-center gap-2 border border-red-200">
+                                              <AlertTriangle className="w-4 h-4" /> {mapError}
+                                          </div>
+                                      ) : !isMapReady ? (
                                          <div className="p-2 bg-gray-100 text-gray-500 text-sm rounded flex items-center gap-2">
                                             <Loader2 className="w-4 h-4 animate-spin" /> Loading Maps...
                                          </div>
@@ -601,7 +609,11 @@ Book now with OK BOZ Transport!`;
                                   </div>
                                   <div>
                                       <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Destination</label>
-                                      {!isMapReady ? (
+                                      {mapError ? (
+                                          <div className="p-2 bg-red-50 text-red-500 text-sm rounded flex items-center gap-2 border border-red-200">
+                                              <AlertTriangle className="w-4 h-4" /> {mapError}
+                                          </div>
+                                      ) : !isMapReady ? (
                                          <div className="p-2 bg-gray-100 text-gray-500 text-sm rounded flex items-center gap-2">
                                             <Loader2 className="w-4 h-4 animate-spin" /> Loading Maps...
                                          </div>

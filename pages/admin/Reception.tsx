@@ -248,7 +248,7 @@ const Reception: React.FC = () => {
   // --- Google Maps Script Loader ---
   useEffect(() => {
     if (window.gm_authFailure_detected) {
-      setMapError("Map Error: Billing not enabled or API Key invalid.");
+      setMapError("Map Error: Google Cloud Billing is not enabled. Please enable billing in the Google Cloud Console.");
       return;
     }
     const apiKey = localStorage.getItem('maps_api_key');
@@ -259,7 +259,7 @@ const Reception: React.FC = () => {
     const originalAuthFailure = window.gm_authFailure;
     window.gm_authFailure = () => {
       window.gm_authFailure_detected = true;
-      setMapError("Map Error: Google Cloud Billing not enabled or API Key invalid.");
+      setMapError("Map Error: Google Cloud Billing is not enabled. Please enable billing in the Google Cloud Console.");
       if (originalAuthFailure) originalAuthFailure();
     };
 
@@ -1006,7 +1006,11 @@ const Reception: React.FC = () => {
 
                                     {consoleTaxiType === 'Local' && (
                                         <div className="grid grid-cols-2 gap-3">
-                                            {!isMapReady ? (
+                                            {mapError ? (
+                                                <div className="p-2 bg-red-50 text-red-500 text-xs rounded border border-red-200 col-span-2 flex items-center gap-1">
+                                                    <AlertTriangle className="w-3 h-3"/> {mapError}
+                                                </div>
+                                            ) : !isMapReady ? (
                                                 <div className="p-2 bg-white border rounded text-xs col-span-2 text-gray-500">
                                                     <Loader2 className="w-3 h-3 animate-spin inline mr-1"/> Loading Maps...
                                                 </div>
@@ -1047,7 +1051,11 @@ const Reception: React.FC = () => {
                                                     </button>
                                                 ))}
                                             </div>
-                                            {!isMapReady ? (
+                                            {mapError ? (
+                                                <div className="p-2 bg-red-50 text-red-500 text-xs rounded border border-red-200 flex items-center gap-1">
+                                                    <AlertTriangle className="w-3 h-3"/> {mapError}
+                                                </div>
+                                            ) : !isMapReady ? (
                                                 <div className="p-2 bg-white border rounded text-xs text-gray-500">Loading Maps...</div>
                                             ) : (
                                                 <Autocomplete 
@@ -1070,7 +1078,11 @@ const Reception: React.FC = () => {
                                             </div>
                                             <div className="grid grid-cols-2 gap-3">
                                                 <div className="col-span-2">
-                                                    {!isMapReady ? <div className="p-2 bg-white text-xs border rounded">Loading Maps...</div> : 
+                                                    {mapError ? (
+                                                        <div className="p-2 bg-red-50 text-red-500 text-xs rounded border border-red-200 flex items-center gap-1">
+                                                            <AlertTriangle className="w-3 h-3"/> {mapError}
+                                                        </div>
+                                                    ) : !isMapReady ? <div className="p-2 bg-white text-xs border rounded">Loading Maps...</div> : 
                                                         <Autocomplete 
                                                             placeholder={consoleOutstationType === 'OneWay' ? "Destination (Drop)" : "Destination"}
                                                             setNewPlace={(place) => setDestCoords(place)}
@@ -1078,7 +1090,7 @@ const Reception: React.FC = () => {
                                                         />
                                                     }
                                                 </div>
-                                                {consoleOutstationType === 'OneWay' && isMapReady && (
+                                                {consoleOutstationType === 'OneWay' && isMapReady && !mapError && (
                                                     <div className="col-span-2">
                                                         <Autocomplete 
                                                             placeholder="Pickup Location"

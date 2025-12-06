@@ -137,7 +137,7 @@ const BranchForm: React.FC = () => {
   useEffect(() => {
     // 1. Check global failure flag
     if (window.gm_authFailure_detected) {
-      setMapError("Map Error: Billing not enabled or API Key invalid.");
+      setMapError("Map Error: Google Cloud Billing is not enabled. Please enable billing in the Google Cloud Console.");
       return;
     }
     // 2. Handle Missing API Key
@@ -150,7 +150,7 @@ const BranchForm: React.FC = () => {
     const originalAuthFailure = window.gm_authFailure;
     window.gm_authFailure = () => {
       window.gm_authFailure_detected = true;
-      setMapError("Map Error: Google Cloud Billing not enabled or API Key invalid.");
+      setMapError("Map Error: Google Cloud Billing is not enabled. Please enable billing in the Google Cloud Console.");
       if (originalAuthFailure) originalAuthFailure();
     };
 
@@ -453,7 +453,7 @@ const BranchForm: React.FC = () => {
                     {mapError && (
                     <p className="text-xs text-amber-600 mt-2 flex items-center gap-1">
                         <AlertTriangle className="w-3 h-3" />
-                        <span>Map services unavailable. Please enter address manually.</span>
+                        <span>Map services unavailable (Billing not enabled). Please enter address manually.</span>
                     </p>
                     )}
                 </div>

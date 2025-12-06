@@ -32,6 +32,7 @@ const MASTER_ADMIN_LINKS = [
   { id: 'vendors', path: '/admin/vendors', label: 'Vendor Attachment', icon: CarFront },
   { id: 'payroll', path: '/admin/payroll', label: 'Payroll', icon: DollarSign },
   { id: 'finance-and-expenses', path: '/admin/finance-and-expenses', label: 'Finance & Expenses', icon: CreditCard }, 
+  { id: 'email-marketing', path: '/admin/email-marketing', label: 'Email Marketing', icon: Mail },
   { id: 'corporate', path: '/admin/corporate', label: 'Corporate', icon: Building2 },
   { id: 'settings', path: '/admin/settings', label: 'Settings', icon: Settings },
   { id: 'cms', path: '/admin/cms', label: 'CMS', icon: Pencil }, 

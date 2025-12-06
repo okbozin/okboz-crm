@@ -19,6 +19,7 @@ import Leads from './pages/admin/Leads';
 import Reception from './pages/admin/Reception'; 
 import TripBooking from './pages/admin/TripBooking'; 
 import CustomerCare from './pages/admin/CustomerCare';
+import EmailMarketing from './pages/admin/EmailMarketing'; // Added import
 import UserAttendance from './pages/user/UserAttendance';
 import UserSalary from './pages/user/UserSalary';
 import ApplyLeave from './pages/user/ApplyLeave';
@@ -150,6 +151,8 @@ const App: React.FC = () => {
                         <Route path="/admin/expenses" element={<Expenses />} />
                         {/* NEW ROUTE: Finance & Expenses */}
                         <Route path="/admin/finance-and-expenses" element={<Expenses />} />
+                        {/* NEW ROUTE: Email Marketing */}
+                        <Route path="/admin/email-marketing" element={<EmailMarketing />} />
                         
                         {/* Corporate Management & Settings - Only Super Admin */}
                         {userRole === UserRole.ADMIN && (

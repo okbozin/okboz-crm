@@ -32,7 +32,7 @@ const LiveTracking: React.FC = () => {
   useEffect(() => {
     // 1. Check global failure flag
     if (window.gm_authFailure_detected) {
-      setMapError("Map Error: Billing not enabled or API Key invalid.");
+      setMapError("Map Error: Google Cloud Billing is not enabled. Please enable billing in the Google Cloud Console.");
       return;
     }
 
@@ -47,7 +47,7 @@ const LiveTracking: React.FC = () => {
     const originalAuthFailure = window.gm_authFailure;
     window.gm_authFailure = () => {
       window.gm_authFailure_detected = true;
-      setMapError("Map Error: Google Cloud Billing not enabled or API Key invalid.");
+      setMapError("Map Error: Google Cloud Billing is not enabled. Please enable billing in the Google Cloud Console.");
       if (originalAuthFailure) originalAuthFailure();
     };
 
