@@ -1,6 +1,4 @@
 
-
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
@@ -8,7 +6,7 @@ import {
 } from 'recharts';
 import { 
   Download, TrendingUp, DollarSign, 
-  Briefcase, ArrowUpRight, Car, MapPin, Activity, CheckSquare, Users
+  Briefcase, ArrowUpRight, Car, MapPin, Activity, CheckSquare, Users, PieChart as PieChartIcon
 } from 'lucide-react';
 import { MOCK_EMPLOYEES, getEmployeeAttendance } from '../../constants';
 import { AttendanceStatus, PayrollHistoryRecord } from '../../types';

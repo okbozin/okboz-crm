@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
 // @google/genai: Add missing import for Headset
-import { Users, UserCheck, UserX, MapPin, ArrowRight, Building2, Car, TrendingUp, DollarSign, Clock, BarChart3, Calendar, Truck, CheckCircle, Headset } from 'lucide-react';
+import { Users, UserCheck, UserX, MapPin, ArrowRight, Building2, Car, TrendingUp, DollarSign, Clock, BarChart3, Calendar, Truck, CheckCircle, Headset, RefreshCw } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, AreaChart, Area } from 'recharts';
 import { useNavigate } from 'react-router-dom';
 import { MOCK_EMPLOYEES, getEmployeeAttendance } from '../../constants';
@@ -248,6 +248,7 @@ const Dashboard = () => {
       // If Daily View
       if (filterType === 'Daily') {
           filteredEmployees.forEach(emp => {
+              // Ensure we get fresh data
               const data = getEmployeeAttendance(emp, targetYear, targetMonth);
               const record = data.find(d => d.date === selectedDate);
               
@@ -427,6 +428,14 @@ const Dashboard = () => {
                     className="px-3 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm outline-none bg-white dark:bg-gray-800 dark:text-white"
                 />
             )}
+
+            <button 
+                onClick={() => setRefreshTrigger(prev => prev + 1)} 
+                className="p-1.5 text-gray-500 hover:text-emerald-600 bg-white border border-gray-200 rounded-lg hover:bg-emerald-50 transition-colors"
+                title="Force Refresh"
+            >
+                <RefreshCw className="w-4 h-4" />
+            </button>
         </div>
       </div>
 
