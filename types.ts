@@ -29,26 +29,26 @@ export interface Employee {
   paymentCycle?: string;
   salary?: string;
   status?: string;
-  workingHours?: string; // Added this field
+  workingHours?: string; 
   weekOff?: string;
   aadhar?: string;
   pan?: string;
   accountNumber?: string;
   ifsc?: string;
-  password?: string; // Added this field for login
-  liveTracking?: boolean; // Added for live tracking toggle
-  allowRemotePunch?: boolean; // Legacy: Added for punch-in restriction
+  password?: string; 
+  liveTracking?: boolean; 
+  allowRemotePunch?: boolean; 
   attendanceConfig?: {
     gpsGeofencing: boolean;
     qrScan: boolean;
     manualPunch: boolean;
   };
   allowedModules?: string[]; // NEW: List of extra modules accessible to this employee (e.g., 'expenses', 'documents')
-  corporateId?: string; // NEW: To link employee to a specific corporate account
-  corporateName?: string; // NEW: To link employee to a specific corporate name
-  currentLocation?: { lat: number; lng: number; accuracy: number; }; // NEW: Last known accurate location
-  attendanceLocationStatus?: 'idle' | 'fetching' | 'granted' | 'denied' | 'outside_geofence' | 'within_geofence'; // NEW: Status of location access for attendance
-  cameraPermissionStatus?: 'idle' | 'granted' | 'denied'; // NEW: Status of camera access
+  corporateId?: string; 
+  corporateName?: string; 
+  currentLocation?: { lat: number; lng: number; accuracy: number; }; 
+  attendanceLocationStatus?: 'idle' | 'fetching' | 'granted' | 'denied' | 'outside_geofence' | 'within_geofence'; 
+  cameraPermissionStatus?: 'idle' | 'granted' | 'denied'; 
   // NEW: Profile fields
   dob?: string;
   gender?: string;
@@ -60,9 +60,8 @@ export interface Employee {
   maritalStatus?: string;
   spouseName?: string;
   children?: number;
-  idProof1Url?: string; // For Aadhar/PAN scans etc
-  idProof2Url?: string; // For Aadhar/PAN scans etc
-  // Simulated online/offline events for monitoring
+  idProof1Url?: string; 
+  idProof2Url?: string; 
   onlineHistory?: { timestamp: string; status: 'online' | 'offline'; }[];
 }
 
@@ -123,25 +122,24 @@ type EnquiryCategory = 'Transport' | 'General';
 export interface Enquiry {
   id: string;
   type: 'Customer' | 'Vendor';
-  initialInteraction: 'Incoming' | 'Outgoing'; // New: To distinguish between incoming calls vs. employee-initiated outgoing
+  initialInteraction: 'Incoming' | 'Outgoing'; 
   name: string;
   phone: string;
   city: string;
   email?: string;
-  details: string; // The query/requirement
+  details: string; 
   status: 'New' | 'In Progress' | 'Converted' | 'Closed' | 'Booked' | 'Scheduled' | 'Order Accepted' | 'Driver Assigned' | 'Completed' | 'Cancelled';
-  isExistingVendor?: boolean; // If they were found in the vendor DB
-  vendorId?: string; // Link to vendor if exists
-  assignedTo?: string; // Employee ID
+  isExistingVendor?: boolean; 
+  vendorId?: string; 
+  assignedTo?: string; 
   createdAt: string;
   nextFollowUp?: string;
   history: HistoryLog[];
-  date?: string; // ADDED
-  // New fields for structured transport data
+  date?: string; 
   enquiryCategory?: EnquiryCategory;
   tripType?: TripType;
   vehicleType?: VehicleType;
-  outstationSubType?: OutstationSubType; // Only for Outstation
+  outstationSubType?: OutstationSubType; 
   transportData?: {
     pickup?: string;
     drop?: string;
@@ -154,22 +152,21 @@ export interface Enquiry {
     nights?: string;
   };
   estimatedPrice?: number;
-  // Added priority field to Enquiry interface
   priority?: 'Hot' | 'Warm' | 'Cold';
-  corporateId?: string; // NEW: To link enquiry to a specific corporate
+  corporateId?: string; 
 }
 
 export interface DocumentFile {
   id: string;
   name: string;
-  type: string; // 'pdf', 'image', 'doc', etc.
+  type: string; 
   size: string;
   category: 'General' | 'Contract' | 'ID Proof' | 'Report' | 'Policy';
   uploadedBy: string;
   uploadDate: string;
-  url: string; // Mock URL or Base64
+  url: string; 
   visibility: 'Public' | 'Private' | 'AdminOnly';
-  ownerId?: string; // Corporate ID or Employee ID ownership
+  ownerId?: string; 
 }
 
 export interface SalaryAdvanceRequest {
@@ -177,13 +174,13 @@ export interface SalaryAdvanceRequest {
   employeeId: string;
   employeeName: string;
   amountRequested: number;
-  amountApproved: number; // Editable by Admin
+  amountApproved: number; 
   reason: string;
   status: 'Pending' | 'Approved' | 'Rejected' | 'Paid';
   requestDate: string;
   paymentDate?: string;
-  paymentMode?: string; // Cash, Bank Transfer, UPI
-  corporateId?: string; // For syncing to correct dashboard
+  paymentMode?: string; 
+  corporateId?: string; 
 }
 
 // NEW: Notification Interface
@@ -192,12 +189,12 @@ export interface Notification {
   type: 'system' | 'login' | 'leave_request' | 'advance_request' | 'task_assigned' | 'custom_message' | 'new_enquiry' | 'security';
   title: string;
   message: string;
-  timestamp: string; // ISO string
+  timestamp: string; 
   read: boolean;
-  targetRoles: UserRole[]; // e.g., [UserRole.ADMIN, UserRole.CORPORATE]
-  corporateId?: string; // Optional: target a specific corporate (email)
-  employeeId?: string;  // Optional: target a specific employee (id)
-  link?: string;        // Optional: path to navigate to
+  targetRoles: UserRole[]; 
+  corporateId?: string; 
+  employeeId?: string;  
+  link?: string;        
 }
 
 export interface PayrollHistoryRecord {
@@ -207,10 +204,10 @@ export interface PayrollHistoryRecord {
   totalAmount: number;
   employeeCount: number;
   data: Record<string, PayrollEntry>;
-  ownerId?: string; // NEW: To link payroll history to a specific corporate
+  ownerId?: string; 
 }
 
-export interface PayrollEntry { // Moved this from Payroll.tsx to types.ts for consistent usage
+export interface PayrollEntry { 
   employeeId: string;
   basicSalary: number;
   allowances: number;
@@ -220,10 +217,10 @@ export interface PayrollEntry { // Moved this from Payroll.tsx to types.ts for c
   payableDays: number;
   totalDays: number;
   status: 'Paid' | 'Pending';
-  ownerId?: string; // NEW: To link payroll entry to a corporate for filtering
+  ownerId?: string; 
 }
 
-export interface LeaveRequest { // Moved this from ApplyLeave.tsx to types.ts for consistent usage
+export interface LeaveRequest { 
   id: number;
   type: string;
   from: string;
@@ -232,25 +229,24 @@ export interface LeaveRequest { // Moved this from ApplyLeave.tsx to types.ts fo
   status: string;
   reason: string;
   appliedOn: string;
-  corporateId?: string; // NEW: To link leave request to a specific corporate
+  corporateId?: string; 
 }
 
 export interface Task {
   id: string;
   title: string;
   description: string;
-  assignedTo: string; // Employee ID
+  assignedTo: string; 
   assignedByName: string;
-  corporateId?: string; // To link to specific franchise
-  corporateName?: string; // Display name
-  branch?: string; // NEW: Added branch to Task interface
+  corporateId?: string; 
+  corporateName?: string; 
+  branch?: string; 
   status: 'Todo' | 'In Progress' | 'Review' | 'Done';
   priority: 'Low' | 'Medium' | 'High';
   dueDate: string;
   createdAt: string;
 }
 
-// NEW: Interface for Landing Page Content Management
 export interface LandingPageContent {
   hero: {
     headline: string;
@@ -310,13 +306,12 @@ declare global {
         lat: number;
         lng: number;
       }
-      // Add minimal declarations for other Google Maps classes used directly or for type inference
       class Geocoder {}
       class Map {}
       class Marker {}
       enum Animation {}
       class InfoWindow {}
-      class LatLng {} // For e.latLng methods
+      class LatLng {} 
       namespace geometry {
         namespace spherical {
           function computeDistanceBetween(latLng1: LatLng, latLng2: LatLng): number;
@@ -325,7 +320,7 @@ declare global {
     }
   }
   interface Window {
-    google: any; // Keep this for broader compatibility with runtime access to window.google
+    google: any; 
     gm_authFailure?: () => void;
     gm_authFailure_detected?: boolean;
   }

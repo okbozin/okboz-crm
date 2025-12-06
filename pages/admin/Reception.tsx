@@ -7,7 +7,7 @@ import { generateGeminiResponse } from '../../services/geminiService';
 import {
   Bell, Calculator, CheckCircle, Clock, Copy, Edit2, Loader2, Mail, MessageCircle,
   Phone, PhoneIncoming, PhoneOutgoing, Plus, RefreshCcw, ArrowRight, ArrowRightLeft,
-  Save, Trash2, Truck, User, UserPlus, X, Building2, History, AlertCircle
+  Save, Trash2, Truck, User, UserPlus, X, Building2, History, AlertCircle, AlertTriangle
 } from 'lucide-react';
 
 interface HistoryItem {
@@ -175,17 +175,15 @@ const Reception: React.FC = () => {
       if (rentalPackages.length > 0 && !consoleCalcDetails.packageId) {
           setConsoleCalcDetails(prev => ({...prev, packageId: rentalPackages[0].id}));
       }
-      // Keep calcDetails for the edit modal separate for now
-      // if (rentalPackages.length > 0 && !calcDetails.packageId) {
-      //     setCalcDetails(prev => ({...prev, packageId: rentalPackages[0].id}));
-      // }
   }, [rentalPackages]);
 
   // Maps Coords State
   const [pickupCoords, setPickupCoords] = useState<google.maps.LatLngLiteral | null>(null);
   const [dropCoords, setDropCoords] = useState<google.maps.LatLngLiteral | null>(null);
   const [destCoords, setDestCoords] = useState<google.maps.LatLngLiteral | null>(null);
+  
   const [isMapReady, setIsMapReady] = useState(false);
+  const [mapError, setMapError] = useState<string | null>(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -247,10 +245,56 @@ const Reception: React.FC = () => {
     }
   };
 
+  // --- Google Maps Script Loader ---
   useEffect(() => {
-    // Basic check for maps
-    if (window.google && window.google.maps) {
-        setIsMapReady(true);
+    if (window.gm_authFailure_detected) {
+      setMapError("Map Error: Billing not enabled or API Key invalid.");
+      return;
+    }
+    const apiKey = localStorage.getItem('maps_api_key');
+    if (!apiKey) {
+      setMapError("API Key is missing. Add in Settings > Integrations.");
+      return;
+    }
+    const originalAuthFailure = window.gm_authFailure;
+    window.gm_authFailure = () => {
+      window.gm_authFailure_detected = true;
+      setMapError("Map Error: Google Cloud Billing not enabled or API Key invalid.");
+      if (originalAuthFailure) originalAuthFailure();
+    };
+
+    const scriptId = 'google-maps-script';
+    let script = document.getElementById(scriptId) as HTMLScriptElement;
+
+    if (window.google && window.google.maps && window.google.maps.places) {
+      setIsMapReady(true);
+      return;
+    }
+
+    if (!script) {
+        script = document.createElement('script');
+        script.id = scriptId;
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+        script.async = true;
+        script.defer = true;
+        script.onload = () => {
+            if (window.google && window.google.maps && window.google.maps.places) {
+              setIsMapReady(true);
+            } else {
+              setMapError("Google Maps 'places' library failed to load.");
+            }
+        };
+        script.onerror = () => setMapError("Network error: Failed to load Google Maps script.");
+        document.head.appendChild(script);
+    } else {
+        script.addEventListener('load', () => {
+          if (window.google && window.google.maps && window.google.maps.places) {
+            setIsMapReady(true);
+          }
+        });
+        if (window.google && window.google.maps && window.google.maps.places) {
+            setIsMapReady(true);
+        }
     }
   }, []);
 
@@ -661,6 +705,13 @@ const Reception: React.FC = () => {
          </div>
       </div>
 
+      {/* Map Error Display */}
+      {mapError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg flex items-center gap-2 mb-4">
+          <AlertTriangle className="w-5 h-5" /> {mapError}
+        </div>
+      )}
+
       {/* SETTINGS PANEL (Inline Rate Editor) */}
       {showSettings && (
         <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 animate-in fade-in slide-in-from-top-2 mb-4">
@@ -935,7 +986,7 @@ const Reception: React.FC = () => {
                               ) : (
                                 <div className="space-y-4 bg-indigo-50 p-4 rounded-xl border border-indigo-100">
                                     <div className="flex justify-between items-center mb-2">
-                                        <h4 className="font-bold text-indigo-900 text-sm flex items-center gap-2"><Calculator className="w-4 h-4"/> Fare Calculator</h4>
+                                        <h4 className="font-bold text-indigo-900 text-sm flex items-center gap-2"><Calculator className="w-4 h-4"/> Fare Estimator</h4>
                                         <div className="flex gap-2">
                                             {['Sedan', 'SUV'].map(v => (
                                                 <button key={v} onClick={() => setConsoleVehicleType(v as any)} className={`text-[10px] px-2 py-1 rounded border ${consoleVehicleType === v ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-indigo-600 border-indigo-200'}`}>
@@ -956,7 +1007,9 @@ const Reception: React.FC = () => {
                                     {consoleTaxiType === 'Local' && (
                                         <div className="grid grid-cols-2 gap-3">
                                             {!isMapReady ? (
-                                                <div className="p-2 bg-white border rounded text-xs col-span-2 text-gray-500">Loading Google Maps...</div>
+                                                <div className="p-2 bg-white border rounded text-xs col-span-2 text-gray-500">
+                                                    <Loader2 className="w-3 h-3 animate-spin inline mr-1"/> Loading Maps...
+                                                </div>
                                             ) : (
                                                 <>
                                                     <div className="col-span-1">

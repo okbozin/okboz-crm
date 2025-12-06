@@ -1,5 +1,4 @@
 
-
 import React, { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Loader2, Settings } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -33,7 +32,7 @@ const LiveTracking: React.FC = () => {
   useEffect(() => {
     // 1. Check global failure flag
     if (window.gm_authFailure_detected) {
-      setMapError("Map API Error: Check required APIs (Maps JS).");
+      setMapError("Map Error: Billing not enabled or API Key invalid.");
       return;
     }
 
@@ -48,7 +47,7 @@ const LiveTracking: React.FC = () => {
     const originalAuthFailure = window.gm_authFailure;
     window.gm_authFailure = () => {
       window.gm_authFailure_detected = true;
-      setMapError("Map Load Error: API Key invalid or APIs not enabled (Maps JS).");
+      setMapError("Map Error: Google Cloud Billing not enabled or API Key invalid.");
       if (originalAuthFailure) originalAuthFailure();
     };
 
@@ -102,7 +101,7 @@ const LiveTracking: React.FC = () => {
         center: center,
         zoom: 13,
         mapTypeControl: false,
-        stree2tViewControl: false,
+        streetViewControl: false,
         fullscreenControl: true,
       });
 
@@ -162,18 +161,18 @@ const LiveTracking: React.FC = () => {
               <div className="flex flex-col items-center gap-3 max-w-sm">
                 <AlertTriangle className="w-10 h-10 text-red-400" />
                 <h3 className="font-medium text-gray-900">Map Unavailable</h3>
+                <p className="text-sm text-gray-600">{mapError}</p>
                 {isCorporateUser ? (
-                    <p className="text-sm text-gray-600">
-                      Google Maps API Key is not configured by Super Admin. Please contact your Super Admin to enable map features.
+                    <p className="text-sm text-gray-500 mt-2">
+                      Please contact Super Admin to enable Google Cloud Billing for Maps.
                     </p>
                 ) : (
                     <>
-                        <p className="text-sm text-gray-600">{mapError}</p>
-                        
                         <div className="bg-amber-50 border border-amber-100 p-3 rounded text-xs text-amber-800 mt-2 text-left w-full">
-                               <strong>Troubleshooting "ApiNotActivated":</strong>
+                               <strong>Action Required:</strong>
                                <ul className="list-disc list-inside mt-1 space-y-1">
                                   <li>Go to Google Cloud Console</li>
+                                  <li>Enable Billing for this project</li>
                                   <li>Enable "Maps JavaScript API"</li>
                                </ul>
                         </div>
@@ -182,7 +181,7 @@ const LiveTracking: React.FC = () => {
                           onClick={() => navigate('/admin/settings')} 
                           className="mt-2 text-xs flex items-center gap-1 bg-white border border-gray-300 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
                         >
-                          <Settings className="w-3 h-3" /> Fix in Settings
+                          <Settings className="w-3 h-3" /> Check Settings
                         </button>
                     </>
                 )}

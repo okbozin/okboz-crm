@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Plus, Search, Phone, Mail, X, User, Upload, FileText, CreditCard, Briefcase, Building, Calendar, Pencil, Trash2, Building2, Lock, Download, Navigation, Globe, MapPin, Eye, EyeOff, Smartphone, ScanLine, MousePointerClick, Heart, Baby, BookUser, Home, Truck, Files, Car, RefreshCcw, Edit2, Save, AlertCircle, CheckCircle, Loader2, ExternalLink, Clock, Shield, Map, Layers, DollarSign } from 'lucide-react';
+import { Plus, Search, Phone, Mail, X, User, Upload, FileText, CreditCard, Briefcase, Building, Calendar, Pencil, Trash2, Building2, Lock, Download, Navigation, Globe, MapPin, Eye, EyeOff, Smartphone, ScanLine, MousePointerClick, Heart, Baby, BookUser, Home, Truck, Files, Car, RefreshCcw, Edit2, Save, AlertCircle, CheckCircle, Loader2, ExternalLink, Clock, Shield } from 'lucide-react';
 import { Employee, Branch } from '../../types';
 import { uploadFileToCloud } from '../../services/cloudService';
 
@@ -636,51 +637,6 @@ const StaffList: React.FC = () => {
                                         className="rounded text-emerald-600 focus:ring-emerald-500 h-4 w-4"
                                     />
                                     <span className="text-sm font-medium text-gray-700">Documents Module</span>
-                                </label>
-                                <label className="flex items-center gap-2 cursor-pointer bg-white p-2 rounded border border-blue-100 hover:border-blue-300 transition-colors">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={formData.allowedModules?.includes('trip_booking')} 
-                                        onChange={() => handleModuleToggle('trip_booking')}
-                                        className="rounded text-emerald-600 focus:ring-emerald-500 h-4 w-4"
-                                    />
-                                    <span className="text-sm font-medium text-gray-700">Trip Booking</span>
-                                </label>
-                                <label className="flex items-center gap-2 cursor-pointer bg-white p-2 rounded border border-blue-100 hover:border-blue-300 transition-colors">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={formData.allowedModules?.includes('franchisee_leads')} 
-                                        onChange={() => handleModuleToggle('franchisee_leads')}
-                                        className="rounded text-emerald-600 focus:ring-emerald-500 h-4 w-4"
-                                    />
-                                    <span className="text-sm font-medium text-gray-700">Franchisee Leads</span>
-                                </label>
-                                <label className="flex items-center gap-2 cursor-pointer bg-white p-2 rounded border border-blue-100 hover:border-blue-300 transition-colors">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={formData.allowedModules?.includes('attendance_manager')} 
-                                        onChange={() => handleModuleToggle('attendance_manager')}
-                                        className="rounded text-emerald-600 focus:ring-emerald-500 h-4 w-4"
-                                    />
-                                    <span className="text-sm font-medium text-gray-700">Attendance (Admin View)</span>
-                                </label>
-                                <label className="flex items-center gap-2 cursor-pointer bg-white p-2 rounded border border-blue-100 hover:border-blue-300 transition-colors">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={formData.allowedModules?.includes('payroll')} 
-                                        onChange={() => handleModuleToggle('payroll')}
-                                        className="rounded text-emerald-600 focus:ring-emerald-500 h-4 w-4"
-                                    />
-                                    <span className="text-sm font-medium text-gray-700">Payroll</span>
-                                </label>
-                                <label className="flex items-center gap-2 cursor-pointer bg-white p-2 rounded border border-blue-100 hover:border-blue-300 transition-colors">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={formData.allowedModules?.includes('live_tracking')} 
-                                        onChange={() => handleModuleToggle('live_tracking')}
-                                        className="rounded text-emerald-600 focus:ring-emerald-500 h-4 w-4"
-                                    />
-                                    <span className="text-sm font-medium text-gray-700">Live Tracking</span>
                                 </label>
                             </div>
                         </div>

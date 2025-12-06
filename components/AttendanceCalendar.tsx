@@ -1,5 +1,7 @@
+
 import React from 'react';
 import { DailyAttendance, AttendanceStatus } from '../types';
+import { LogIn, LogOut, Clock, Calendar as CalendarIcon, AlertCircle } from 'lucide-react';
 
 interface AttendanceCalendarProps {
   data: DailyAttendance[];
@@ -18,47 +20,121 @@ interface DayCellProps {
   onClick?: (day: DailyAttendance) => void;
 }
 
+// Helper to calculate duration between two time strings (e.g. "09:30 AM", "06:30 PM")
+const getDuration = (checkIn?: string, checkOut?: string) => {
+  if (!checkIn || !checkOut) return null;
+  try {
+    const parseTime = (t: string) => {
+      const [time, period] = t.split(' ');
+      let [hours, minutes] = time.split(':').map(Number);
+      if (period === 'PM' && hours !== 12) hours += 12;
+      if (period === 'AM' && hours === 12) hours = 0;
+      return hours * 60 + minutes;
+    };
+    const start = parseTime(checkIn);
+    const end = parseTime(checkOut);
+    
+    // Handle overnight shifts if end is smaller than start (add 24 hours)
+    let diff = end - start;
+    if (diff < 0) diff += 24 * 60;
+    
+    if (diff <= 0) return null;
+    
+    const h = Math.floor(diff / 60);
+    const m = diff % 60;
+    return `${h}h ${m}m`;
+  } catch (e) {
+    return null;
+  }
+};
+
 const DayCell: React.FC<DayCellProps> = ({ dayData, onClick }) => {
-  if (!dayData) return <div className="h-14 bg-transparent"></div>;
+  if (!dayData) return <div className="min-h-[110px] bg-gray-50/30 rounded-xl border border-transparent"></div>;
 
   const dayNumber = parseInt(dayData.date.split('-')[2], 10);
+  const duration = getDuration(dayData.checkIn, dayData.checkOut);
   
-  let bgClass = 'bg-white border-dashed border-gray-200 text-gray-300';
-  
-  // MILD COLOR SCHEME - Pastel Backgrounds with matching borders
+  let containerClass = "bg-white border-dashed border-gray-200 hover:border-gray-300";
+  let dateClass = "text-gray-400 font-medium";
+  let statusBadge = null;
+
   switch (dayData.status) {
     case AttendanceStatus.PRESENT:
-      bgClass = 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 border-solid';
+      containerClass = "bg-white border-solid border-emerald-100 shadow-sm hover:shadow-md hover:border-emerald-300 ring-1 ring-transparent hover:ring-emerald-200";
+      dateClass = "text-gray-700 font-bold";
+      statusBadge = (
+        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${dayData.isLate ? 'bg-orange-50 text-orange-600 border-orange-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'}`}>
+          {dayData.isLate ? 'LATE' : 'P'}
+        </span>
+      );
       break;
     case AttendanceStatus.ABSENT:
-      bgClass = 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100 border-solid';
+      containerClass = "bg-red-50/30 border-solid border-red-100 hover:border-red-200 hover:bg-red-50";
+      dateClass = "text-red-800 font-bold";
+      statusBadge = <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-600 border border-red-200">A</span>;
       break;
     case AttendanceStatus.HALF_DAY:
-      bgClass = 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 border-solid';
+      containerClass = "bg-amber-50/30 border-solid border-amber-100 hover:border-amber-200 hover:bg-amber-50";
+      dateClass = "text-amber-800 font-bold";
+      statusBadge = <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200">HD</span>;
       break;
     case AttendanceStatus.PAID_LEAVE:
-      bgClass = 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 border-solid';
+      containerClass = "bg-blue-50/30 border-solid border-blue-100 hover:border-blue-200 hover:bg-blue-50";
+      dateClass = "text-blue-800 font-bold";
+      statusBadge = <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 border border-blue-200">L</span>;
       break;
     case AttendanceStatus.WEEK_OFF:
-      bgClass = 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100 border-solid';
+      containerClass = "bg-slate-50 border-solid border-slate-100 opacity-70 hover:opacity-100";
+      dateClass = "text-slate-400 font-medium";
+      statusBadge = <span className="text-[9px] font-bold text-slate-400">OFF</span>;
       break;
     case AttendanceStatus.NOT_MARKED:
-      bgClass = 'bg-white border-dashed border-gray-200 text-gray-300 hover:bg-gray-50';
+      containerClass = "bg-white border-dashed border-gray-200 hover:bg-gray-50";
+      dateClass = "text-gray-300";
       break;
   }
 
   return (
     <div 
       onClick={() => onClick && onClick(dayData)}
-      className={`relative h-14 rounded-lg border flex flex-col items-center justify-center ${bgClass} transition-all cursor-pointer group`}
-      title={dayData.status.replace('_', ' ')}
+      className={`relative min-h-[110px] rounded-xl border p-2 flex flex-col justify-between transition-all cursor-pointer group ${containerClass}`}
     >
-      <span className="text-sm font-bold">{dayNumber}</span>
-      {dayData.status === AttendanceStatus.PRESENT && dayData.isLate && (
-        <span className="absolute bottom-1 text-[7px] font-bold uppercase tracking-wider text-orange-600 bg-orange-50 px-1 rounded">LATE</span>
+      {/* Header: Date & Badge */}
+      <div className="flex justify-between items-start mb-1">
+        <span className={`text-sm ${dateClass}`}>{dayNumber}</span>
+        {statusBadge}
+      </div>
+
+      {/* Body: Times */}
+      <div className="flex flex-col gap-1.5">
+        {dayData.checkIn ? (
+            <div className="flex items-center gap-1.5">
+                <LogIn className="w-3 h-3 text-emerald-500 shrink-0" />
+                <span className="text-[10px] font-medium text-gray-700 font-mono tracking-tight">{dayData.checkIn}</span>
+            </div>
+        ) : (
+            dayData.status === AttendanceStatus.PRESENT ? <div className="h-4"></div> : null
+        )}
+        
+        {dayData.checkOut ? (
+            <div className="flex items-center gap-1.5">
+                <LogOut className="w-3 h-3 text-red-400 shrink-0" />
+                <span className="text-[10px] font-medium text-gray-700 font-mono tracking-tight">{dayData.checkOut}</span>
+            </div>
+        ) : (
+            dayData.status === AttendanceStatus.PRESENT ? <div className="h-4"></div> : null
+        )}
+      </div>
+
+      {/* Footer: Duration */}
+      {duration && (
+          <div className="mt-2 pt-1.5 border-t border-gray-100/50 flex items-center justify-center gap-1 text-[10px] font-bold text-gray-500 bg-gray-50/50 rounded-b-lg -mx-2 -mb-2 py-1">
+              <Clock className="w-2.5 h-2.5" /> {duration}
+          </div>
       )}
-      {dayData.status === AttendanceStatus.HALF_DAY && (
-        <span className="absolute bottom-1 text-[7px] font-bold uppercase tracking-wider opacity-80">HALF</span>
+      
+      {!duration && dayData.status !== AttendanceStatus.NOT_MARKED && dayData.status !== AttendanceStatus.WEEK_OFF && (
+          <div className="mt-2 h-4"></div> // Spacer
       )}
     </div>
   );
@@ -87,41 +163,44 @@ const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({ data, stats, on
   ];
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden max-w-md mx-auto">
-      {/* Header Stats */}
-      <div className="p-4 grid grid-cols-5 gap-2 border-b border-gray-100 bg-gray-50/50">
-        <div className="text-center">
-          <div className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider mb-1">Present</div>
-          <div className="font-bold text-lg text-gray-800">{stats.present}</div>
+    <div className="space-y-6">
+      {/* Stats Summary Bar */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 flex flex-col items-center justify-center text-center">
+            <span className="text-2xl font-bold text-emerald-700">{stats.present}</span>
+            <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider">Present</span>
         </div>
-        <div className="text-center border-l border-gray-200">
-          <div className="text-[10px] font-bold text-red-500 uppercase tracking-wider mb-1">Absent</div>
-          <div className="font-bold text-lg text-gray-800">{stats.absent}</div>
+        <div className="bg-red-50 border border-red-100 rounded-xl p-3 flex flex-col items-center justify-center text-center">
+            <span className="text-2xl font-bold text-red-700">{stats.absent}</span>
+            <span className="text-[10px] font-bold text-red-500 uppercase tracking-wider">Absent</span>
         </div>
-        <div className="text-center border-l border-gray-200">
-          <div className="text-[10px] font-bold text-amber-500 uppercase tracking-wider mb-1">Half</div>
-          <div className="font-bold text-lg text-gray-800">{stats.halfDay}</div>
+        <div className="bg-orange-50 border border-orange-100 rounded-xl p-3 flex flex-col items-center justify-center text-center">
+            <span className="text-2xl font-bold text-orange-700">{data.filter(d => d.isLate).length}</span>
+            <span className="text-[10px] font-bold text-orange-500 uppercase tracking-wider">Late</span>
         </div>
-        <div className="text-center border-l border-gray-200">
-          <div className="text-[10px] font-bold text-blue-500 uppercase tracking-wider mb-1">Leave</div>
-          <div className="font-bold text-lg text-gray-800">{stats.paidLeave}</div>
+        <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 flex flex-col items-center justify-center text-center">
+            <span className="text-2xl font-bold text-amber-700">{stats.halfDay}</span>
+            <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider">Half Day</span>
         </div>
-        <div className="text-center border-l border-gray-200">
-          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Off</div>
-          <div className="font-bold text-lg text-gray-800">{stats.weekOff}</div>
+        <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 flex flex-col items-center justify-center text-center">
+            <span className="text-2xl font-bold text-blue-700">{stats.paidLeave}</span>
+            <span className="text-[10px] font-bold text-blue-500 uppercase tracking-wider">Leave</span>
         </div>
       </div>
 
       {/* Calendar Grid */}
-      <div className="p-4">
-        <div className="grid grid-cols-7 gap-2 mb-3">
-          {weekDays.map(day => (
-            <div key={day} className="text-center text-xs font-bold text-gray-400 uppercase tracking-wide">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+        {/* Header */}
+        <div className="grid grid-cols-7 border-b border-gray-100 bg-gray-50">
+          {weekDays.map((day, idx) => (
+            <div key={day} className={`py-3 text-center text-xs font-bold uppercase tracking-widest ${idx === 0 ? 'text-red-400' : 'text-gray-500'}`}>
               {day}
             </div>
           ))}
         </div>
-        <div className="grid grid-cols-7 gap-2">
+        
+        {/* Body */}
+        <div className="p-4 grid grid-cols-7 gap-3 bg-white">
           {paddedData.map((day, idx) => (
             <DayCell key={idx} dayData={day} onClick={onDateClick} />
           ))}

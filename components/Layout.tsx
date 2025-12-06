@@ -272,21 +272,6 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
       if (currentEmployee?.allowedModules?.includes('expenses')) {
           baseLinks.splice(5, 0, { id: 'expenses', path: '/user/expenses', label: 'My Expenses', icon: CreditCard });
       }
-      if (currentEmployee?.allowedModules?.includes('trip_booking')) {
-          baseLinks.splice(3, 0, { id: 'trip-booking', path: '/user/trip-booking', label: 'Trip Booking', icon: Map });
-      }
-      if (currentEmployee?.allowedModules?.includes('franchisee_leads')) {
-          baseLinks.splice(3, 0, { id: 'leads', path: '/user/leads', label: 'Franchisee Leads', icon: Layers });
-      }
-      if (currentEmployee?.allowedModules?.includes('attendance_manager')) {
-          baseLinks.splice(3, 0, { id: 'attendance-admin', path: '/user/attendance-admin', label: 'Attendance (Admin)', icon: Calendar });
-      }
-      if (currentEmployee?.allowedModules?.includes('payroll')) {
-          baseLinks.splice(5, 0, { id: 'payroll', path: '/user/payroll', label: 'Payroll', icon: DollarSign });
-      }
-      if (currentEmployee?.allowedModules?.includes('live_tracking')) {
-          baseLinks.splice(3, 0, { id: 'tracking', path: '/user/tracking', label: 'Live Tracking', icon: Navigation });
-      }
 
       return baseLinks;
   }, [currentEmployee]);

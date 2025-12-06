@@ -137,7 +137,7 @@ const BranchForm: React.FC = () => {
   useEffect(() => {
     // 1. Check global failure flag
     if (window.gm_authFailure_detected) {
-      setMapError("Map API Error: Please check required APIs in Google Cloud.");
+      setMapError("Map Error: Billing not enabled or API Key invalid.");
       return;
     }
     // 2. Handle Missing API Key
@@ -150,7 +150,7 @@ const BranchForm: React.FC = () => {
     const originalAuthFailure = window.gm_authFailure;
     window.gm_authFailure = () => {
       window.gm_authFailure_detected = true;
-      setMapError("Map Load Error: API Key invalid or APIs not enabled.");
+      setMapError("Map Error: Google Cloud Billing not enabled or API Key invalid.");
       if (originalAuthFailure) originalAuthFailure();
     };
 
@@ -513,18 +513,18 @@ const BranchForm: React.FC = () => {
                   <div className="flex flex-col items-center gap-3 max-w-sm">
                     <AlertTriangle className="w-10 h-10 text-red-400" />
                     <h3 className="font-medium text-gray-900">Map Loading Failed</h3>
+                    <p className="text-sm text-gray-600">{mapError}</p>
                     {isCorporateUser ? (
-                      <p className="text-sm text-gray-600">
-                        Google Maps API Key is not configured by Super Admin.
+                      <p className="text-sm text-gray-500 mt-2">
+                        Contact Super Admin to enable Google Maps Billing.
                       </p>
                     ) : (
                       <>
-                        <p className="text-sm text-gray-600">{mapError}</p>
                         <button 
                           onClick={() => navigate('/admin/settings')} 
                           className="mt-2 text-xs flex items-center gap-1 bg-white border border-gray-300 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
                         >
-                          <Settings className="w-3 h-3" /> Configure in Settings
+                          <Settings className="w-3 h-3" /> Check Settings
                         </button>
                       </>
                     )}

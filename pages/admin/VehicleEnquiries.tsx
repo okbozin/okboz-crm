@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Settings, Loader2, ArrowRight, ArrowRightLeft, 
@@ -86,7 +87,7 @@ export const VehicleEnquiries: React.FC = () => {
   const [destCoords, setDestCoords] = useState<google.maps.LatLngLiteral | null>(null);
   const [pickupCoords, setPickupCoords] = useState<google.maps.LatLngLiteral | null>(null);
 
-  const [rentalPackages] = useState<RentalPackage[]>(DEFAULT_RENTAL_PACKAGES);
+  const [rentalPackages, setRentalPackages] = useState<RentalPackage[]>(DEFAULT_RENTAL_PACKAGES);
   const [pricing, setPricing] = useState<Record<VehicleType, PricingRules>>({
     Sedan: DEFAULT_PRICING_SEDAN,
     SUV: DEFAULT_PRICING_SUV
@@ -157,7 +158,7 @@ export const VehicleEnquiries: React.FC = () => {
   // --- Google Maps Script Loader ---
   useEffect(() => {
     if (window.gm_authFailure_detected) {
-      setMapError("Map API Error: Check required APIs (Maps JS, Places).");
+      setMapError("Map Error: Billing not enabled or API Key invalid.");
       return;
     }
     const apiKey = localStorage.getItem('maps_api_key');
@@ -168,7 +169,7 @@ export const VehicleEnquiries: React.FC = () => {
     const originalAuthFailure = window.gm_authFailure;
     window.gm_authFailure = () => {
       window.gm_authFailure_detected = true;
-      setMapError("Map Load Error: API Key invalid or APIs not enabled.");
+      setMapError("Map Error: Google Cloud Billing not enabled or API Key invalid.");
       if (originalAuthFailure) originalAuthFailure();
     };
 
@@ -444,6 +445,13 @@ Book now with OK BOZ Transport!`;
           </div>
       )}
 
+      {/* Map Error Display */}
+      {mapError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg flex items-center gap-2 mb-4">
+          <AlertTriangle className="w-5 h-5" /> {mapError}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Left Column: Input Form */}
           <div className="space-y-6">
@@ -511,7 +519,7 @@ Book now with OK BOZ Transport!`;
                                   {['Sedan', 'SUV'].map(v => (
                                       <button
                                           key={v}
-                                          onClick={() => setVehicleType(v as any)}
+                                          onClick={() => setVehicleType(v as VehicleType)}
                                           className={`px-3 py-1 text-xs rounded border transition-colors ${vehicleType === v ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-gray-600 border-gray-200'}`}
                                       >
                                           {v}
@@ -525,7 +533,7 @@ Book now with OK BOZ Transport!`;
                               {['Local', 'Rental', 'Outstation'].map(t => (
                                   <button
                                       key={t}
-                                      onClick={() => setTripType(t as any)}
+                                      onClick={() => setTripType(t as TripType)}
                                       className={`flex-1 py-2 text-sm font-medium border-b-2 transition-colors ${tripType === t ? 'border-emerald-500 text-emerald-700' : 'border-transparent text-gray-500'}`}
                                   >
                                       {t}
@@ -781,3 +789,6 @@ Book now with OK BOZ Transport!`;
     </div>
   );
 };
+
+export const VehicleEnquiriesExport = VehicleEnquiries; // Named export for compatibility if needed
+export default VehicleEnquiries;

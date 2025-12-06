@@ -98,11 +98,11 @@ const SecurityAccount: React.FC = () => {
           // Send system notification to Admin/Corporate
           // This ensures Super Admin and relevant Franchise Panel receive the alert
           await sendSystemNotification({
-              type: 'security',
+              type: 'security', // Use security type
               title: 'Password Changed',
               message: `${user.name} has updated their password.`,
               targetRoles: [UserRole.ADMIN, UserRole.CORPORATE],
-              corporateId: user.corporateId === 'admin' ? undefined : user.corporateId,
+              corporateId: user.corporateId === 'admin' ? undefined : user.corporateId, // If admin managed, send global, else to specific corporate
               employeeId: user.id,
               link: '/admin/staff'
           });

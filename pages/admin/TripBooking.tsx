@@ -1,13 +1,16 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Plus, Search, Download, X, Save,
   User, Car, MapPin, DollarSign, Trash2, Edit2, 
-  PieChart as PieChartIcon, TrendingUp, Building2, RefreshCcw, Calculator, Filter
+  PieChart as PieChartIcon, TrendingUp, Building2, RefreshCcw, Calculator, Filter,
+  Loader2, AlertTriangle
 } from 'lucide-react';
 import { 
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, 
   BarChart, Bar, XAxis, YAxis, CartesianGrid 
 } from 'recharts';
+import Autocomplete from '../../components/Autocomplete';
 
 interface Trip {
   id: string;
@@ -90,6 +93,10 @@ const TripBooking: React.FC = () => {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
 
+  // Map state for Autocomplete in Modal
+  const [isMapReady, setIsMapReady] = useState(false);
+  const [mapError, setMapError] = useState<string | null>(null);
+
   const initialFormState = {
     ownerId: isSuperAdmin ? 'admin' : sessionId, // Default owner
     branch: '',
@@ -114,6 +121,59 @@ const TripBooking: React.FC = () => {
   };
 
   const [formData, setFormData] = useState(initialFormState);
+
+  // --- Google Maps Script Loader ---
+  useEffect(() => {
+    if (window.gm_authFailure_detected) {
+      setMapError("Map Error: Billing not enabled or API Key invalid.");
+      return;
+    }
+    const apiKey = localStorage.getItem('maps_api_key');
+    if (!apiKey) {
+      setMapError("API Key missing. Add in Settings > Integrations.");
+      return;
+    }
+    const originalAuthFailure = window.gm_authFailure;
+    window.gm_authFailure = () => {
+      window.gm_authFailure_detected = true;
+      setMapError("Map Error: Google Cloud Billing not enabled or API Key invalid.");
+      if (originalAuthFailure) originalAuthFailure();
+    };
+
+    const scriptId = 'google-maps-script';
+    let script = document.getElementById(scriptId) as HTMLScriptElement;
+
+    if (window.google && window.google.maps && window.google.maps.places) {
+      setIsMapReady(true);
+      return;
+    }
+
+    if (!script) {
+        script = document.createElement('script');
+        script.id = scriptId;
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+        script.async = true;
+        script.defer = true;
+        script.onload = () => {
+            if (window.google && window.google.maps && window.google.maps.places) {
+              setIsMapReady(true);
+            } else {
+              setMapError("Google Maps 'places' library failed to load.");
+            }
+        };
+        script.onerror = () => setMapError("Network error: Failed to load Google Maps script.");
+        document.head.appendChild(script);
+    } else {
+        script.addEventListener('load', () => {
+          if (window.google && window.google.maps && window.google.maps.places) {
+            setIsMapReady(true);
+          }
+        });
+        if (window.google && window.google.maps && window.google.maps.places) {
+            setIsMapReady(true);
+        }
+    }
+  }, []);
 
   // Load Branches and Corporates
   useEffect(() => {
@@ -948,6 +1008,21 @@ const TripBooking: React.FC = () => {
                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">User Mobile *</label>
                              <input type="tel" name="userMobile" value={formData.userMobile} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="+91..." required />
                           </div>
+                          {/* Pickup Location - Added to Form */}
+                          <div>
+                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Pickup Location</label>
+                              {!isMapReady ? (
+                                <div className="p-2 bg-gray-100 text-gray-500 text-sm rounded flex items-center gap-2">
+                                    <Loader2 className="w-4 h-4 animate-spin" /> Map Loading...
+                                </div>
+                              ) : (
+                                <Autocomplete 
+                                    placeholder="Search Pickup Location"
+                                    onAddressSelect={(addr) => {}} // No direct form field for pickup in Trip model shown, but good for context
+                                    // If pickup needs to be saved, add it to Trip interface and formData
+                                />
+                              )}
+                          </div>
                        </div>
 
                        <div className="pt-2 space-y-3">
@@ -1030,6 +1105,12 @@ const TripBooking: React.FC = () => {
                        </div>
                     </div>
                  </div>
+
+                 {mapError && (
+                    <div className="bg-red-50 text-red-700 p-3 rounded-lg flex items-center gap-2 mt-4 text-sm border border-red-200">
+                        <AlertTriangle className="w-4 h-4" /> {mapError}
+                    </div>
+                 )}
 
                  <div className="pt-6 border-t border-gray-100 mt-6 flex justify-end gap-3">
                     <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-white font-medium">Cancel</button>
