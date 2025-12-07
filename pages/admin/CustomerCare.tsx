@@ -1,9 +1,10 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Settings, Loader2, ArrowRight, ArrowRightLeft, 
   MessageCircle, Copy, Mail, Car, User, Edit2,
   CheckCircle, Building2, Save, X, Phone, Truck, AlertTriangle, DollarSign,
-  Calendar, MapPin, Briefcase, Clock, PhoneMissed
+  Calendar, MapPin, Briefcase, Clock, PhoneMissed, Plus, Trash2
 } from 'lucide-react';
 import Autocomplete from '../../components/Autocomplete';
 import { Enquiry, HistoryLog, UserRole } from '../../types';
@@ -95,11 +96,39 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
   const [destCoords, setDestCoords] = useState<google.maps.LatLngLiteral | null>(null);
   const [pickupCoords, setPickupCoords] = useState<google.maps.LatLngLiteral | null>(null);
 
-  const [rentalPackages, setRentalPackages] = useState<RentalPackage[]>(DEFAULT_RENTAL_PACKAGES);
-  const [pricing, setPricing] = useState<Record<VehicleType, PricingRules>>({
-    Sedan: DEFAULT_PRICING_SEDAN,
-    SUV: DEFAULT_PRICING_SUV
+  // Helper for Session Context
+  const getSessionKey = (baseKey: string) => {
+    const sessionId = localStorage.getItem('app_session_id') || 'admin';
+    return sessionId === 'admin' ? baseKey : `${baseKey}_${sessionId}`;
+  };
+
+  const [pricing, setPricing] = useState<Record<VehicleType, PricingRules>>(() => {
+    const key = getSessionKey('transport_pricing_rules_v2'); 
+    const saved = localStorage.getItem(key);
+    if (saved) return JSON.parse(saved);
+    return { Sedan: DEFAULT_PRICING_SEDAN, SUV: DEFAULT_PRICING_SUV };
   });
+
+  const [rentalPackages, setRentalPackages] = useState<RentalPackage[]>(() => {
+    const key = getSessionKey('transport_rental_packages_v2');
+    const saved = localStorage.getItem(key);
+    if (saved) return JSON.parse(saved);
+    return DEFAULT_RENTAL_PACKAGES;
+  });
+
+  // Settings UI State
+  const [showAddPackage, setShowAddPackage] = useState(false);
+  const [editingPackageId, setEditingPackageId] = useState<string | null>(null);
+  const [newPackage, setNewPackage] = useState({ name: '', hours: '', km: '', priceSedan: '', priceSuv: '' });
+
+  // Persistence Effects
+  useEffect(() => {
+    localStorage.setItem(getSessionKey('transport_pricing_rules_v2'), JSON.stringify(pricing));
+  }, [pricing]);
+
+  useEffect(() => {
+    localStorage.setItem(getSessionKey('transport_rental_packages_v2'), JSON.stringify(rentalPackages));
+  }, [rentalPackages]);
 
   const [generatedMessage, setGeneratedMessage] = useState('');
   const [estimatedCost, setEstimatedCost] = useState(0);
@@ -283,6 +312,56 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
         [name]: parseFloat(value) || 0
       }
     }));
+  };
+
+  const handleAddPackage = () => {
+    if (!newPackage.name || !newPackage.priceSedan) return;
+    
+    if (editingPackageId) {
+        // Update existing package
+        setRentalPackages(prev => prev.map(p => p.id === editingPackageId ? {
+            ...p,
+            name: newPackage.name,
+            hours: parseFloat(newPackage.hours) || 0,
+            km: parseFloat(newPackage.km) || 0,
+            priceSedan: parseFloat(newPackage.priceSedan) || 0,
+            priceSuv: parseFloat(newPackage.priceSuv) || 0,
+        } : p));
+        setEditingPackageId(null);
+    } else {
+        // Add new package
+        const pkg: RentalPackage = {
+          id: `pkg-${Date.now()}`,
+          name: newPackage.name,
+          hours: parseFloat(newPackage.hours) || 0,
+          km: parseFloat(newPackage.km) || 0,
+          priceSedan: parseFloat(newPackage.priceSedan) || 0,
+          priceSuv: parseFloat(newPackage.priceSuv) || 0,
+        };
+        setRentalPackages([...rentalPackages, pkg]);
+    }
+    setShowAddPackage(false);
+    setNewPackage({ name: '', hours: '', km: '', priceSedan: '', priceSuv: '' });
+  };
+
+  const handleEditPackage = (pkg: RentalPackage, e: React.MouseEvent) => {
+      e.stopPropagation();
+      setNewPackage({
+          name: pkg.name,
+          hours: pkg.hours.toString(),
+          km: pkg.km.toString(),
+          priceSedan: pkg.priceSedan.toString(),
+          priceSuv: pkg.priceSuv.toString()
+      });
+      setEditingPackageId(pkg.id);
+      setShowAddPackage(true);
+  };
+
+  const removePackage = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (window.confirm('Remove this package?')) {
+      setRentalPackages(prev => prev.filter(p => p.id !== id));
+    }
   };
 
   // Calculation Logic
@@ -513,18 +592,167 @@ Book now with OK BOZ Transport!`;
         <div className="flex gap-2">
             <button 
                 onClick={() => setShowSettings(!showSettings)}
-                className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50"
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${showSettings ? 'bg-slate-800 text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}`}
             >
-                <Settings className="w-4 h-4" /> Rates
+                <Settings className="w-4 h-4" /> {showSettings ? 'Hide Rates' : 'Edit Rates'}
             </button>
         </div>
       </div>
 
       {/* Settings Panel */}
       {showSettings && (
-          <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 mb-4">
-              <p className="text-sm text-gray-600">Rate settings are managed in Transport Settings page.</p>
+        <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 animate-in fade-in slide-in-from-top-2 mb-4">
+          <div className="flex items-center justify-between mb-4">
+             <h3 className="font-bold text-slate-800 flex items-center gap-2"><Edit2 className="w-4 h-4" /> Fare Configuration</h3>
+             
+             {/* Vehicle Type Toggle for Settings */}
+             <div className="bg-white border border-gray-300 rounded-lg p-1 flex">
+                <button 
+                   onClick={() => setSettingsVehicleType('Sedan')}
+                   className={`px-4 py-1 text-xs font-bold rounded transition-colors ${settingsVehicleType === 'Sedan' ? 'bg-emerald-500 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+                >
+                   Sedan
+                </button>
+                <button 
+                   onClick={() => setSettingsVehicleType('SUV')}
+                   className={`px-4 py-1 text-xs font-bold rounded transition-colors ${settingsVehicleType === 'SUV' ? 'bg-emerald-500 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+                >
+                   SUV
+                </button>
+             </div>
           </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Local Settings */}
+            <div className="space-y-3 bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+              <h4 className="text-sm font-bold text-emerald-600 uppercase tracking-wide border-b border-gray-100 pb-2 mb-2">Local Rules ({settingsVehicleType})</h4>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Base Fare (₹)</label>
+                <input type="number" name="localBaseFare" value={pricing[settingsVehicleType].localBaseFare} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Base Km Included</label>
+                <input type="number" name="localBaseKm" value={pricing[settingsVehicleType].localBaseKm} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Extra Km Rate (₹/km)</label>
+                <input type="number" name="localPerKmRate" value={pricing[settingsVehicleType].localPerKmRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Waiting Charge (₹/min)</label>
+                <input type="number" name="localWaitingRate" value={pricing[settingsVehicleType].localWaitingRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
+              </div>
+            </div>
+
+            {/* Outstation Settings */}
+            <div className="space-y-3 bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+              <h4 className="text-sm font-bold text-orange-600 uppercase tracking-wide border-b border-gray-100 pb-2 mb-2">Outstation Rules ({settingsVehicleType})</h4>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Min Km / Day</label>
+                <input type="number" name="outstationMinKmPerDay" value={pricing[settingsVehicleType].outstationMinKmPerDay} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Per Km Rate (₹/km)</label>
+                <input type="number" name="outstationExtraKmRate" value={pricing[settingsVehicleType].outstationExtraKmRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Base Rate (One Way Only)</label>
+                <input type="number" name="outstationBaseRate" value={pricing[settingsVehicleType].outstationBaseRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" placeholder="Not used for Round Trip" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Driver Allowance (₹/day)</label>
+                <input type="number" name="outstationDriverAllowance" value={pricing[settingsVehicleType].outstationDriverAllowance} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Driver Night Allowance (₹/night)</label>
+                <input type="number" name="outstationNightAllowance" value={pricing[settingsVehicleType].outstationNightAllowance} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
+              </div>
+            </div>
+
+            {/* Rental Settings */}
+            <div className="space-y-3 bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+              <h4 className="text-sm font-bold text-blue-600 uppercase tracking-wide border-b border-gray-100 pb-2 mb-2">Rental Rules ({settingsVehicleType})</h4>
+              
+              {/* Extra Rates */}
+              <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">Extra Hr (₹)</label>
+                    <input type="number" name="rentalExtraHrRate" value={pricing[settingsVehicleType].rentalExtraHrRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">Extra Km (₹)</label>
+                    <input type="number" name="rentalExtraKmRate" value={pricing[settingsVehicleType].rentalExtraKmRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm" />
+                  </div>
+              </div>
+
+              {/* Package List Management */}
+              <div className="mt-4 border-t border-gray-100 pt-2">
+                  <div className="flex justify-between items-center mb-2">
+                      <label className="text-xs font-bold text-gray-700">Packages</label>
+                      <button 
+                        onClick={() => {
+                            setShowAddPackage(!showAddPackage);
+                            setEditingPackageId(null);
+                            setNewPackage({ name: '', hours: '', km: '', priceSedan: '', priceSuv: '' });
+                        }}
+                        className="text-[10px] bg-blue-50 text-blue-600 px-2 py-1 rounded border border-blue-100 hover:bg-blue-100 flex items-center gap-1 font-bold"
+                      >
+                        <Plus className="w-3 h-3" /> New
+                      </button>
+                  </div>
+                  
+                  {showAddPackage && (
+                      <div className="bg-blue-50 p-2 rounded border border-blue-100 mb-2 space-y-2 animate-in fade-in slide-in-from-top-1">
+                          <input placeholder="Pkg Name (e.g. 10hr/100km)" className="w-full p-1.5 text-xs border rounded outline-none focus:ring-1 focus:ring-blue-500" value={newPackage.name} onChange={e => setNewPackage({...newPackage, name: e.target.value})} />
+                          <div className="flex gap-2">
+                              <input placeholder="Hrs" type="number" className="w-full p-1.5 text-xs border rounded outline-none" value={newPackage.hours} onChange={e => setNewPackage({...newPackage, hours: e.target.value})} />
+                              <input placeholder="Km" type="number" className="w-full p-1.5 text-xs border rounded outline-none" value={newPackage.km} onChange={e => setNewPackage({...newPackage, km: e.target.value})} />
+                          </div>
+                          <div className="flex gap-2">
+                              <input placeholder="Sedan ₹" type="number" className="w-full p-1.5 text-xs border rounded outline-none" value={newPackage.priceSedan} onChange={e => setNewPackage({...newPackage, priceSedan: e.target.value})} />
+                              <input placeholder="SUV ₹" type="number" className="w-full p-1.5 text-xs border rounded outline-none" value={newPackage.priceSuv} onChange={e => setNewPackage({...newPackage, priceSuv: e.target.value})} />
+                          </div>
+                          <div className="flex gap-2">
+                              <button onClick={() => setShowAddPackage(false)} className="flex-1 text-xs text-gray-500 border border-gray-300 bg-white py-1.5 rounded">Cancel</button>
+                              <button onClick={handleAddPackage} className="flex-1 bg-blue-600 text-white text-xs font-bold py-1.5 rounded hover:bg-blue-700 transition-colors">
+                                  {editingPackageId ? 'Update' : 'Add'}
+                              </button>
+                          </div>
+                      </div>
+                  )}
+
+                  <div className="space-y-1 max-h-40 overflow-y-auto custom-scrollbar">
+                      {rentalPackages.map(pkg => (
+                          <div key={pkg.id} className="flex justify-between items-center p-2 hover:bg-gray-50 rounded border border-transparent hover:border-gray-200 group transition-colors">
+                              <div>
+                                  <div className="text-xs font-bold text-gray-800">{pkg.name}</div>
+                                  <div className="text-[10px] text-gray-500">{pkg.hours}hr / {pkg.km}km</div>
+                              </div>
+                              <div className="text-right flex items-center gap-2">
+                                  <div className="text-[10px] text-gray-600 font-mono text-right">
+                                      <div>S: {pkg.priceSedan}</div>
+                                      <div>X: {pkg.priceSuv}</div>
+                                  </div>
+                                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <button onClick={(e) => handleEditPackage(pkg, e)} className="text-gray-300 hover:text-blue-500 p-1">
+                                          <Edit2 className="w-3 h-3" />
+                                      </button>
+                                      <button onClick={(e) => removePackage(pkg.id, e)} className="text-gray-300 hover:text-red-500 p-1">
+                                          <Trash2 className="w-3 h-3" />
+                                      </button>
+                                  </div>
+                              </div>
+                          </div>
+                      ))}
+                  </div>
+              </div>
+
+              <div className="pt-4 mt-auto">
+                 <button onClick={() => setShowSettings(false)} className="w-full bg-slate-800 text-white py-2 rounded text-sm font-medium hover:bg-slate-900 transition-colors">Close</button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Map Error Display */}

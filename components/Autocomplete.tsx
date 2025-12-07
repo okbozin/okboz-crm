@@ -1,6 +1,6 @@
 
 import React, { useEffect, useRef, useState } from "react";
-import { Search as SearchIcon, X } from "lucide-react";
+import { Search as SearchIcon, X, MapPin, AlertTriangle } from "lucide-react";
 import usePlacesAutocomplete, {
   getGeocode,
   getLatLng,
@@ -19,6 +19,39 @@ const Autocomplete: React.FC<AutocompleteProps> = ({
   placeholder = "Search for a location",
   defaultValue = ""
 }) => {
+  // Safe check: If google maps script is not loaded at all, render a simple input
+  const isMapsLoaded = typeof window !== "undefined" && window.google && window.google.maps && window.google.maps.places;
+
+  if (!isMapsLoaded) {
+      return (
+        <div className="relative flex-grow w-full">
+            <input
+                type="text"
+                defaultValue={defaultValue}
+                placeholder={placeholder}
+                className="w-full pl-10 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none text-sm transition-all"
+                onChange={(e) => onAddressSelect && onAddressSelect(e.target.value)}
+            />
+            <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+        </div>
+      );
+  }
+
+  return <MapsAutocomplete 
+            setNewPlace={setNewPlace} 
+            onAddressSelect={onAddressSelect} 
+            placeholder={placeholder} 
+            defaultValue={defaultValue} 
+         />;
+};
+
+// Internal component that uses the hook (isolated to prevent crash if maps missing)
+const MapsAutocomplete: React.FC<AutocompleteProps> = ({
+  setNewPlace,
+  onAddressSelect,
+  placeholder,
+  defaultValue
+}) => {
   const {
     ready,
     value,
@@ -33,9 +66,16 @@ const Autocomplete: React.FC<AutocompleteProps> = ({
     defaultValue: defaultValue
   });
 
-  // Local state to handle list visibility
   const [showSuggestions, setShowSuggestions] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const [globalError, setGlobalError] = useState(false);
+
+  // Check for global auth failure (Billing error)
+  useEffect(() => {
+    if (window.gm_authFailure_detected) {
+      setGlobalError(true);
+    }
+  }, []);
 
   // Sync local value if defaultValue changes externally
   useEffect(() => {
@@ -59,6 +99,10 @@ const Autocomplete: React.FC<AutocompleteProps> = ({
 
   const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     setValue(e.target.value);
+    // CRITICAL FIX: Allow manual typing to propagate even if no prediction is selected
+    if (onAddressSelect) {
+        onAddressSelect(e.target.value);
+    }
     setShowSuggestions(true);
   };
 
@@ -77,10 +121,13 @@ const Autocomplete: React.FC<AutocompleteProps> = ({
         const { lat, lng } = await getLatLng(results[0]);
         setNewPlace({ lat, lng });
       } catch (error) {
-        console.log("Error selecting place: ", error);
+        console.log("Error selecting place (Billing or Network): ", error);
+        // Fail silently for coordinates, but address string is already set
       }
     }
   };
+
+  const hasError = status === "REQUEST_DENIED" || status === "OVER_QUERY_LIMIT" || globalError;
 
   return (
     <div ref={wrapperRef} className="relative flex-grow w-full"> 
@@ -88,16 +135,23 @@ const Autocomplete: React.FC<AutocompleteProps> = ({
         <input
           value={value}
           onChange={handleInput}
-          disabled={!ready}
+          // Fix: Do not disable input if ready is false, allow manual fallback
+          // disabled={!ready} 
           placeholder={placeholder}
-          className="w-full pl-10 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none text-sm disabled:bg-gray-50 transition-all"
+          title={hasError ? "Google Maps API Error: Billing not enabled. Manual entry mode." : ""}
+          className={`w-full pl-10 pr-8 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none text-sm transition-all ${hasError ? 'border-amber-300 bg-amber-50 text-amber-900' : 'border-gray-300'}`}
           onFocus={() => { if(value) setShowSuggestions(true); }}
         />
-        <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+        {hasError ? (
+            <AlertTriangle className="absolute left-3 top-1/2 -translate-y-1/2 text-amber-500 w-4 h-4" />
+        ) : (
+            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+        )}
+        
         {value && (
             <button 
                 type="button"
-                onClick={() => { setValue("", false); clearSuggestions(); }}
+                onClick={() => { setValue("", false); clearSuggestions(); if(onAddressSelect) onAddressSelect(""); }}
                 className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
             >
                 <X className="w-3 h-3" />

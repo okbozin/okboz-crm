@@ -1,6 +1,6 @@
 
 import React, { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, Loader2, Settings, Users, RefreshCw } from 'lucide-react';
+import { AlertTriangle, Loader2, Settings, Users, RefreshCw, Map as MapIcon, ExternalLink } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 declare global {
@@ -82,14 +82,14 @@ const LiveTracking: React.FC = () => {
     refreshLocations();
     // 1. Check global failure flag
     if (window.gm_authFailure_detected) {
-      setMapError("Map Error: Billing not enabled OR API Key Invalid. Check Google Cloud Console.");
+      setMapError("Google Cloud Billing is disabled. Maps cannot load.");
       return;
     }
 
     // 2. Handle Missing API Key - Explicitly check LocalStorage only
     const apiKey = localStorage.getItem('maps_api_key');
     if (!apiKey) {
-      setMapError("API Key is missing. Please add it in Settings > Integrations.");
+      setMapError("API Key is missing. Please add it in Settings.");
       return;
     }
 
@@ -97,7 +97,7 @@ const LiveTracking: React.FC = () => {
     const originalAuthFailure = window.gm_authFailure;
     window.gm_authFailure = () => {
       window.gm_authFailure_detected = true;
-      setMapError("Map Error: Billing not enabled OR API Key Invalid. Check Google Cloud Console.");
+      setMapError("Google Cloud Billing is disabled. Maps cannot load.");
       if (originalAuthFailure) originalAuthFailure();
     };
 
@@ -130,7 +130,7 @@ const LiveTracking: React.FC = () => {
         script.async = true;
         script.defer = true;
         script.onload = () => setIsMapReady(true);
-        script.onerror = () => setMapError("Failed to load Google Maps script.");
+        script.onerror = () => setMapError("Failed to load Google Maps script (Network error).");
         document.head.appendChild(script);
     } else {
         script.addEventListener('load', () => setIsMapReady(true));
@@ -196,9 +196,9 @@ const LiveTracking: React.FC = () => {
     } catch (e: any) {
       console.error(e);
       if (e.name === 'BillingNotEnabledMapError' || e.message?.includes('Billing')) {
-         setMapError("Billing Not Enabled: Please enable billing in Google Cloud Console.");
+         setMapError("Google Cloud Billing is disabled.");
       } else {
-         setMapError("Error initializing map.");
+         setMapError("Error initializing map interface.");
       }
     }
   }, [isMapReady, mapError, staffLocations]);
@@ -227,16 +227,33 @@ const LiveTracking: React.FC = () => {
       <div className="flex-1 bg-gray-100 rounded-xl overflow-hidden border border-gray-200 relative shadow-sm">
          {mapError ? (
             <div className="absolute inset-0 flex items-center justify-center text-gray-500 bg-gray-50 p-6 text-center z-10">
-              <div className="flex flex-col items-center gap-3 max-w-sm">
-                <AlertTriangle className="w-10 h-10 text-red-400" />
-                <h3 className="font-medium text-gray-900">Map Unavailable</h3>
-                <p className="text-sm text-gray-600">{mapError}</p>
-                <button 
-                  onClick={() => navigate('/admin/settings')} 
-                  className="mt-2 text-xs flex items-center gap-1 bg-white border border-gray-300 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <Settings className="w-3 h-3" /> Check Settings
-                </button>
+              <div className="flex flex-col items-center gap-3 max-w-md bg-white p-8 rounded-2xl shadow-lg border border-gray-200">
+                <div className="p-3 bg-red-50 rounded-full">
+                    <AlertTriangle className="w-8 h-8 text-red-500" />
+                </div>
+                <h3 className="font-bold text-gray-900 text-lg">Map Unavailable</h3>
+                <p className="text-sm text-gray-600 leading-relaxed">
+                    {mapError}<br/>
+                    <span className="text-xs mt-2 block opacity-75">
+                        Google Maps requires a billing account to be linked in the Cloud Console, even for the free tier.
+                    </span>
+                </p>
+                <div className="flex gap-2 w-full">
+                    <a 
+                      href="https://console.cloud.google.com/project/_/billing/enable"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 mt-2 text-sm font-medium flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      <ExternalLink className="w-4 h-4" /> Enable Billing
+                    </a>
+                    <button 
+                      onClick={() => navigate('/admin/settings')} 
+                      className="flex-1 mt-2 text-sm font-medium flex items-center justify-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg hover:bg-slate-800 transition-colors"
+                    >
+                      <Settings className="w-4 h-4" /> Settings
+                    </button>
+                </div>
               </div>
             </div>
          ) : (
