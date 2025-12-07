@@ -147,21 +147,24 @@ const Settings: React.FC = () => {
       }
 
       setIsSavingKey(true);
+      // 1. Save locally immediately
       localStorage.setItem('maps_api_key', mapsKey);
       
-      // CRITICAL FIX: Sync to cloud BEFORE reload.
-      // This prevents the app from downloading the old empty key from the cloud 
-      // when it re-initializes, which would overwrite the user's input.
+      // 2. Try to sync to cloud, but don't block heavily on error
       try {
           await syncToCloud();
       } catch (e) {
-          console.error("Failed to sync key to cloud:", e);
+          console.warn("Cloud sync failed for map key, but saved locally.", e);
       }
 
       setShowMapsInput(false);
-      setIsSavingKey(false);
-      // Reload to apply the new script with the new key
-      window.location.reload();
+      
+      // 3. Provide visual feedback before reload
+      setTimeout(() => {
+          setIsSavingKey(false);
+          alert("Maps Key Saved! The page will now reload to apply changes.");
+          window.location.reload();
+      }, 500);
   };
 
   const handleBackup = async () => {
@@ -344,22 +347,24 @@ const Settings: React.FC = () => {
                {showMapsInput && (
                    <div className="mt-4 pt-4 border-t border-gray-100 animate-in fade-in slide-in-from-top-2">
                        <div className="mb-4 p-4 bg-blue-50 border border-blue-100 rounded-lg text-sm text-blue-800">
-                          <h5 className="font-bold flex items-center gap-2 mb-2">
-                            <Info className="w-4 h-4"/> How to get your API Key:
+                          <h5 className="font-bold flex items-center gap-2 mb-2 text-blue-900">
+                            <Info className="w-4 h-4"/> Steps to Enable Google Maps:
                           </h5>
-                          <ol className="list-decimal pl-5 space-y-1 text-xs">
-                            <li>Go to the <a href="https://console.cloud.google.com/" target="_blank" rel="noopener noreferrer" className="underline font-bold flex-inline items-center gap-1">Google Cloud Console <ExternalLink className="w-3 h-3 inline"/></a>.</li>
-                            <li>Create a new project (or select existing).</li>
-                            <li><strong>Important:</strong> Enable Billing for the project (Maps won't work without it).</li>
-                            <li>Go to "APIs & Services" > "Library" and enable these 3 APIs:
-                                <ul className="list-disc pl-5 mt-1 font-mono text-blue-700">
+                          <ol className="list-decimal pl-5 space-y-1.5 text-xs text-blue-800">
+                            <li>Go to the <a href="https://console.cloud.google.com/" target="_blank" rel="noopener noreferrer" className="underline font-bold inline-flex items-center gap-1">Google Cloud Console <ExternalLink className="w-3 h-3"/></a>.</li>
+                            <li>Create a new project (or select an existing one).</li>
+                            <li><strong className="text-red-600">Crucial:</strong> Enable Billing for your project (Maps API requires a billing account, though there is a free tier).</li>
+                            <li>Go to <strong>APIs & Services {'>'} Library</strong> and enable these 4 APIs:
+                                <ul className="list-disc pl-5 mt-1 font-semibold">
                                     <li>Maps JavaScript API</li>
                                     <li>Places API (New)</li>
                                     <li>Distance Matrix API</li>
+                                    <li>Directions API</li>
                                 </ul>
                             </li>
-                            <li>Go to "Credentials" and create an <strong>API Key</strong>.</li>
-                            <li>Paste the key below and click Save.</li>
+                            <li>Go to <strong>APIs & Services {'>'} Credentials</strong>.</li>
+                            <li>Click <strong>Create Credentials {'>'} API Key</strong>.</li>
+                            <li>Copy the generated key and paste it below.</li>
                           </ol>
                        </div>
 
@@ -375,10 +380,10 @@ const Settings: React.FC = () => {
                            <button 
                                onClick={handleSaveMapsKey}
                                disabled={isSavingKey}
-                               className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 flex items-center gap-1 shadow-sm disabled:opacity-50"
+                               className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 flex items-center gap-1 shadow-sm disabled:opacity-50 transition-colors"
                            >
                                {isSavingKey ? <Loader2 className="w-4 h-4 animate-spin"/> : <Check className="w-4 h-4" />}
-                               Save
+                               Save & Apply
                            </button>
                        </div>
                    </div>

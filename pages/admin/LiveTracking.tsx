@@ -28,7 +28,8 @@ const LiveTracking: React.FC = () => {
 
   // Staff Locations state
   const [staffLocations, setStaffLocations] = useState<any[]>([]);
-  const [isDemoMode, setIsDemoMode] = useState(false);
+  
+  // No "isDemoMode" state needed anymore as requested by user
 
   // Function to load staff data
   const refreshLocations = () => {
@@ -63,7 +64,7 @@ const LiveTracking: React.FC = () => {
           lastUpdate: 'Live'
       }));
       
-      setIsDemoMode(false);
+      // STRICTLY NO MOCK DATA. If empty, it's empty.
       setStaffLocations(activeStaff);
   };
 
@@ -262,7 +263,6 @@ const LiveTracking: React.FC = () => {
                  <div className="absolute bottom-6 left-6 bg-white p-3 rounded-lg shadow-lg max-w-xs border border-gray-100 hidden md:block z-10">
                     <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 flex justify-between items-center">
                         Active Staff
-                        {isDemoMode && <span className="text-[9px] bg-orange-100 text-orange-700 px-1.5 rounded">DEMO MODE</span>}
                     </h4>
                     <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
                        {staffLocations.map((emp, idx) => (
