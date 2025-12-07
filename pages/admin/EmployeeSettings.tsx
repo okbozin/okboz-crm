@@ -4,11 +4,17 @@ import {
   Building2, Users, FileText, UserX, Clock, 
   Settings2, Plane, Calendar, Zap, DollarSign, 
   RotateCcw, Download, Award, File, Bell, 
-  MessageSquare, Plus, Trash2, Edit2, CheckCircle, 
+  MessageCircle, Plus, Trash2, Edit2, CheckCircle, 
   MapPin as MapPinIcon, Briefcase as BriefcaseIcon,
   ToggleLeft, ToggleRight, Save, UploadCloud, Search,
-  AlertCircle, Shield, Smartphone, TrendingUp as TrendingUpIcon, RotateCw, CalendarCheck, X
+  AlertCircle, Shield, Smartphone, TrendingUp as TrendingUpIcon, RotateCw, CalendarCheck, X, MessageSquare, Briefcase
 } from 'lucide-react';
+import { MOCK_EMPLOYEES } from '../../constants';
+
+// --- Helper for Session-Based Storage Keys ---
+const getSessionId = () => localStorage.getItem('app_session_id') || 'admin';
+const isSuperAdmin = () => getSessionId() === 'admin';
+const getStorageKey = (baseKey: string) => isSuperAdmin() ? baseKey : `${baseKey}_${getSessionId()}`;
 
 // --- Types ---
 type SettingCategory = 
@@ -33,69 +39,106 @@ const SectionHeader = ({ title, icon: Icon, desc }: { title: string, icon: any, 
   </div>
 );
 
-const ToggleSwitch = ({ label, checked, onChange }: { label: string, checked: boolean, onChange: () => void }) => (
-  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-100">
-    <span className="font-medium text-gray-700">{label}</span>
-    <button 
-      onClick={onChange}
-      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${checked ? 'bg-emerald-500' : 'bg-gray-300'}`}
-    >
+const ToggleSwitch = ({ label, checked, onChange, disabled }: { label: string, checked: boolean, onChange: () => void, disabled?: boolean }) => (
+  <div 
+    onClick={!disabled ? onChange : undefined}
+    className={`flex items-center justify-between p-4 bg-white rounded-lg border transition-all cursor-pointer ${checked ? 'border-emerald-200 bg-emerald-50' : 'border-gray-200 hover:border-gray-300'} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+  >
+    <span className={`font-medium text-sm ${checked ? 'text-emerald-800' : 'text-gray-700'}`}>{label}</span>
+    <div className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${checked ? 'bg-emerald-500' : 'bg-gray-300'}`}>
       <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
-    </button>
-  </div>
-);
-
-// --- Sub-Components for Each Section ---
-
-// 1. My Company Report
-const MyCompanyReport = () => (
-  <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-    <SectionHeader title="My Company Report" icon={FileText} desc="Overview of company health and statistics." />
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-      <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-        <p className="text-gray-500 text-sm mb-1">Total Employees</p>
-        <h3 className="text-3xl font-bold text-gray-800">142</h3>
-        <p className="text-emerald-600 text-xs font-medium mt-2 flex items-center gap-1">
-          <TrendingUpIcon className="w-3 h-3" /> +12% this month
-        </p>
-      </div>
-      <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-        <p className="text-gray-500 text-sm mb-1">Attendance Rate</p>
-        <h3 className="text-3xl font-bold text-gray-800">94%</h3>
-        <p className="text-emerald-600 text-xs font-medium mt-2">Consistent Performance</p>
-      </div>
-      <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-        <p className="text-gray-500 text-sm mb-1">Total Payroll (Est)</p>
-        <h3 className="text-3xl font-bold text-gray-800">₹42.5L</h3>
-        <p className="text-gray-400 text-xs font-medium mt-2">Next cycle: Dec 01</p>
-      </div>
-    </div>
-    <div className="bg-gray-50 rounded-xl p-8 text-center border border-dashed border-gray-300">
-       <Download className="w-10 h-10 text-gray-400 mx-auto mb-3" />
-       <h4 className="text-gray-900 font-medium">Download Full Report</h4>
-       <p className="text-gray-500 text-sm mb-4">Get a detailed PDF analysis of your company stats.</p>
-       <button className="bg-emerald-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-emerald-700 transition-colors">
-         Download PDF
-       </button>
     </div>
   </div>
 );
 
-// 2. My Team (Admins)
-const MyTeamAdmins = () => {
-  const [admins, setAdmins] = useState([
-    { id: 1, name: 'Senthil Kumar', role: 'Super Admin', email: 'senthil@okboz.com', active: true },
-    { id: 2, name: 'Priya Sharma', role: 'HR Manager', email: 'priya@okboz.com', active: true },
-  ]);
+// --- Sub-Components ---
+
+// 1. My Company Report (Real Calculation)
+const MyCompanyReport = () => {
+  const [stats, setStats] = useState({ total: 0, active: 0, payroll: 0 });
+
+  useEffect(() => {
+    // Load staff to calculate stats
+    const key = getStorageKey('staff_data');
+    let staff = [];
+    try {
+      staff = JSON.parse(localStorage.getItem(key) || '[]');
+    } catch(e) { staff = isSuperAdmin() ? [] : MOCK_EMPLOYEES; } // Fallback for demo if empty
+
+    const activeStaff = staff.filter((e: any) => e.status !== 'Inactive');
+    const totalPayroll = activeStaff.reduce((sum: number, e: any) => sum + (parseFloat(e.salary || '0') || 0), 0);
+
+    setStats({
+      total: staff.length,
+      active: activeStaff.length,
+      payroll: totalPayroll
+    });
+  }, []);
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-      <SectionHeader title="My Team (Admins)" icon={Shield} desc="Manage access levels and administrative staff." />
+      <SectionHeader title="My Company Report" icon={FileText} desc="Overview of company health and statistics." />
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+          <p className="text-gray-500 text-sm mb-1">Total Active Employees</p>
+          <h3 className="text-3xl font-bold text-gray-800">{stats.active}</h3>
+          <p className="text-emerald-600 text-xs font-medium mt-2 flex items-center gap-1">
+            <Users className="w-3 h-3" /> Total Database: {stats.total}
+          </p>
+        </div>
+        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+          <p className="text-gray-500 text-sm mb-1">Attendance Rate (Avg)</p>
+          <h3 className="text-3xl font-bold text-gray-800">--%</h3>
+          <p className="text-gray-400 text-xs font-medium mt-2">Calculated monthly</p>
+        </div>
+        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+          <p className="text-gray-500 text-sm mb-1">Est. Monthly Payroll</p>
+          <h3 className="text-3xl font-bold text-gray-800">₹{(stats.payroll/100000).toFixed(2)}L</h3>
+          <p className="text-gray-400 text-xs font-medium mt-2">Based on CTC</p>
+        </div>
+      </div>
+      <div className="bg-gray-50 rounded-xl p-8 text-center border border-dashed border-gray-300">
+         <Download className="w-10 h-10 text-gray-400 mx-auto mb-3" />
+         <h4 className="text-gray-900 font-medium">Download Full Report</h4>
+         <p className="text-gray-500 text-sm mb-4">Get a detailed PDF analysis of your company stats.</p>
+         <button className="bg-emerald-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-emerald-700 transition-colors shadow-sm">
+           Download PDF
+         </button>
+      </div>
+    </div>
+  );
+};
+
+// 2. My Team (Admins)
+const MyTeamAdmins = () => {
+  const [admins, setAdmins] = useState<any[]>(() => {
+    const saved = localStorage.getItem(getStorageKey('sub_admins'));
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [newAdmin, setNewAdmin] = useState({ name: '', email: '', role: 'Admin' });
+
+  useEffect(() => {
+    localStorage.setItem(getStorageKey('sub_admins'), JSON.stringify(admins));
+  }, [admins]);
+
+  const handleAdd = () => {
+    if(newAdmin.name && newAdmin.email) {
+      setAdmins([...admins, { ...newAdmin, id: Date.now(), status: 'Active' }]);
+      setNewAdmin({ name: '', email: '', role: 'Admin' });
+    }
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+      <SectionHeader title="My Team (Admins)" icon={Shield} desc="Manage sub-admins and HR managers." />
       
-      <div className="flex justify-end">
-        <button className="bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-emerald-600">
-          <Plus className="w-4 h-4" /> Add Admin
-        </button>
+      <div className="bg-white p-4 rounded-xl border border-gray-200 mb-6">
+         <h4 className="text-sm font-bold text-gray-700 mb-3">Add New Admin</h4>
+         <div className="flex gap-2">
+            <input placeholder="Name" value={newAdmin.name} onChange={e=>setNewAdmin({...newAdmin, name: e.target.value})} className="flex-1 p-2 border rounded text-sm"/>
+            <input placeholder="Email" value={newAdmin.email} onChange={e=>setNewAdmin({...newAdmin, email: e.target.value})} className="flex-1 p-2 border rounded text-sm"/>
+            <button onClick={handleAdd} className="bg-emerald-500 text-white px-4 rounded text-sm font-bold">Add</button>
+         </div>
       </div>
 
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
@@ -104,11 +147,11 @@ const MyTeamAdmins = () => {
             <tr>
               <th className="px-6 py-4">Name</th>
               <th className="px-6 py-4">Role</th>
-              <th className="px-6 py-4">Status</th>
               <th className="px-6 py-4 text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
+            {admins.length === 0 && <tr><td colSpan={3} className="p-6 text-center text-gray-500">No sub-admins added.</td></tr>}
             {admins.map((admin) => (
               <tr key={admin.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4">
@@ -116,12 +159,9 @@ const MyTeamAdmins = () => {
                   <div className="text-gray-500 text-xs">{admin.email}</div>
                 </td>
                 <td className="px-6 py-4 text-gray-600">{admin.role}</td>
-                <td className="px-6 py-4">
-                  <span className="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs font-bold">Active</span>
-                </td>
                 <td className="px-6 py-4 text-right">
-                  <button className="text-gray-400 hover:text-emerald-600 p-1">
-                    <Edit2 className="w-4 h-4" />
+                  <button onClick={() => setAdmins(admins.filter(a => a.id !== admin.id))} className="text-red-500 hover:text-red-700 p-1">
+                    <Trash2 className="w-4 h-4" />
                   </button>
                 </td>
               </tr>
@@ -133,77 +173,108 @@ const MyTeamAdmins = () => {
   );
 };
 
-// 3. Departments & Roles (Updated for Persistence)
+// 3. Departments & Roles
 const DepartmentsAndRoles = () => {
-  // Load initial state from local storage or defaults
   const [departments, setDepartments] = useState<string[]>(() => {
-    const saved = localStorage.getItem('company_departments');
+    const saved = localStorage.getItem(getStorageKey('company_departments'));
     return saved ? JSON.parse(saved) : ['Sales', 'Marketing', 'Development', 'HR', 'Operations', 'Finance'];
   });
 
   const [roles, setRoles] = useState<string[]>(() => {
-    const saved = localStorage.getItem('company_roles');
-    return saved ? JSON.parse(saved) : ['Manager', 'Team Lead', 'Executive', 'Intern', 'Director', 'Associate'];
+    const saved = localStorage.getItem(getStorageKey('company_roles'));
+    return saved ? JSON.parse(saved) : ['Manager', 'Team Lead', 'Executive', 'Intern', 'Director', 'Driver'];
   });
 
-  const [newDept, setNewDept] = useState('');
-  const [newRole, setNewRole] = useState('');
+  const [inputVal, setInputVal] = useState('');
+  const [editingIdx, setEditingIdx] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState<'Departments' | 'Roles'>('Departments');
 
-  // Persist changes
   useEffect(() => {
-    localStorage.setItem('company_departments', JSON.stringify(departments));
+    localStorage.setItem(getStorageKey('company_departments'), JSON.stringify(departments));
   }, [departments]);
 
   useEffect(() => {
-    localStorage.setItem('company_roles', JSON.stringify(roles));
+    localStorage.setItem(getStorageKey('company_roles'), JSON.stringify(roles));
   }, [roles]);
 
+  const handleSave = () => {
+    if (!inputVal.trim()) return;
+    const currentList = activeTab === 'Departments' ? departments : roles;
+    const setList = activeTab === 'Departments' ? setDepartments : setRoles;
+
+    if (editingIdx !== null) {
+        const updated = [...currentList];
+        updated[editingIdx] = inputVal.trim();
+        setList(updated);
+        setEditingIdx(null);
+    } else {
+        setList([...currentList, inputVal.trim()]);
+    }
+    setInputVal('');
+  };
+
+  const handleEdit = (idx: number) => {
+      const currentList = activeTab === 'Departments' ? departments : roles;
+      setInputVal(currentList[idx]);
+      setEditingIdx(idx);
+  };
+
+  const handleDelete = (idx: number) => {
+      const currentList = activeTab === 'Departments' ? departments : roles;
+      const setList = activeTab === 'Departments' ? setDepartments : setRoles;
+      setList(currentList.filter((_, i) => i !== idx));
+      if (editingIdx === idx) { setEditingIdx(null); setInputVal(''); }
+  };
+
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
-      <SectionHeader title="Departments & Roles" icon={Building2} desc="Define the organizational structure for your company." />
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Depts */}
-        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-          <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Building2 className="w-4 h-4 text-emerald-500" /> Departments</h3>
-          <div className="flex gap-2 mb-4">
-            <input 
-              value={newDept} 
-              onChange={(e) => setNewDept(e.target.value)} 
-              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-              placeholder="e.g. Logistics"
-            />
-            <button onClick={() => {if(newDept.trim()) {setDepartments([...departments, newDept.trim()]); setNewDept('')}}} className="bg-emerald-500 hover:bg-emerald-600 text-white p-2 rounded-lg transition-colors"><Plus className="w-4 h-4"/></button>
+    <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+      <SectionHeader title="Departments & Roles" icon={Building2} desc="Define organization structure." />
+      
+      <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+          <div className="flex border-b border-gray-200">
+              <button 
+                onClick={() => { setActiveTab('Departments'); setInputVal(''); setEditingIdx(null); }}
+                className={`flex-1 py-3 text-sm font-bold ${activeTab === 'Departments' ? 'bg-emerald-50 text-emerald-600 border-b-2 border-emerald-500' : 'text-gray-500 hover:bg-gray-50'}`}
+              >
+                  Departments
+              </button>
+              <button 
+                onClick={() => { setActiveTab('Roles'); setInputVal(''); setEditingIdx(null); }}
+                className={`flex-1 py-3 text-sm font-bold ${activeTab === 'Roles' ? 'bg-emerald-50 text-emerald-600 border-b-2 border-emerald-500' : 'text-gray-500 hover:bg-gray-50'}`}
+              >
+                  Roles
+              </button>
           </div>
-          <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
-            {departments.map((d, i) => (
-              <div key={i} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-100 group hover:border-emerald-200 transition-colors">
-                <span className="text-sm font-medium text-gray-700">{d}</span>
-                <button onClick={() => setDepartments(departments.filter((_, idx) => idx !== i))} className="text-gray-300 hover:text-red-500 transition-colors"><Trash2 className="w-4 h-4"/></button>
+          
+          <div className="p-6">
+              <div className="flex gap-2 mb-6">
+                  <input 
+                    value={inputVal} 
+                    onChange={(e) => setInputVal(e.target.value)} 
+                    className="flex-1 border rounded-lg px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500" 
+                    placeholder={editingIdx !== null ? `Edit ${activeTab.slice(0,-1)}` : `Add New ${activeTab.slice(0,-1)}`}
+                  />
+                  <button onClick={handleSave} className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2">
+                      {editingIdx !== null ? <Save className="w-4 h-4"/> : <Plus className="w-4 h-4"/>}
+                      {editingIdx !== null ? 'Save' : 'Add'}
+                  </button>
+                  {editingIdx !== null && (
+                      <button onClick={() => { setEditingIdx(null); setInputVal(''); }} className="text-gray-500 px-3 hover:bg-gray-100 rounded-lg">Cancel</button>
+                  )}
               </div>
-            ))}
-          </div>
-        </div>
-        {/* Roles */}
-        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-          <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><BriefcaseIcon className="w-4 h-4 text-blue-500" /> Job Roles</h3>
-          <div className="flex gap-2 mb-4">
-            <input 
-              value={newRole} 
-              onChange={(e) => setNewRole(e.target.value)} 
-              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-              placeholder="e.g. Driver"
-            />
-            <button onClick={() => {if(newRole.trim()) {setRoles([...roles, newRole.trim()]); setNewRole('')}}} className="bg-emerald-500 hover:bg-emerald-600 text-white p-2 rounded-lg transition-colors"><Plus className="w-4 h-4"/></button>
-          </div>
-          <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
-            {roles.map((r, i) => (
-              <div key={i} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-100 group hover:border-blue-200 transition-colors">
-                <span className="text-sm font-medium text-gray-700">{r}</span>
-                <button onClick={() => setRoles(roles.filter((_, idx) => idx !== i))} className="text-gray-300 hover:text-red-500 transition-colors"><Trash2 className="w-4 h-4"/></button>
+
+              <div className="space-y-2 max-h-80 overflow-y-auto custom-scrollbar">
+                  {(activeTab === 'Departments' ? departments : roles).map((item, i) => (
+                      <div key={i} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-100 hover:border-emerald-200 transition-colors group">
+                          <span className="text-sm font-medium text-gray-700">{item}</span>
+                          <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button onClick={() => handleEdit(i)} className="text-blue-500 hover:bg-blue-50 p-1 rounded"><Edit2 className="w-3.5 h-3.5"/></button>
+                              <button onClick={() => handleDelete(i)} className="text-red-500 hover:bg-red-50 p-1 rounded"><Trash2 className="w-3.5 h-3.5"/></button>
+                          </div>
+                      </div>
+                  ))}
               </div>
-            ))}
           </div>
-        </div>
       </div>
     </div>
   );
@@ -214,11 +285,9 @@ const CustomFields = () => (
   <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
     <SectionHeader title="Custom Fields" icon={Settings2} desc="Add extra fields to employee profiles." />
     <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm text-center">
-       <div className="mb-4 text-gray-500">
-         Currently no custom fields configured.
-       </div>
-       <button className="bg-emerald-50 text-emerald-600 px-4 py-2 rounded-lg font-medium hover:bg-emerald-100 transition-colors border border-emerald-200 flex items-center gap-2 mx-auto">
-         <Plus className="w-4 h-4" /> Add Custom Field
+       <p className="text-gray-500 mb-4">No custom fields defined.</p>
+       <button className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 flex items-center gap-2 mx-auto">
+         <Plus className="w-4 h-4" /> Add Field
        </button>
     </div>
   </div>
@@ -227,50 +296,31 @@ const CustomFields = () => (
 // 5. Inactive Employees
 const InactiveEmployees = () => {
   const [inactiveStaff, setInactiveStaff] = useState<any[]>([]);
-  const isSuperAdmin = (localStorage.getItem('app_session_id') || 'admin') === 'admin';
 
   const loadInactive = () => {
-      let all: any[] = [];
-      // 1. Head Office / Current User Data
-      // For Super Admin in StaffList, they only save to 'staff_data'.
-      // For normal users/corporate, they save to 'staff_data_{id}'.
-      const sessionId = localStorage.getItem('app_session_id') || 'admin';
-      const key = isSuperAdmin ? 'staff_data' : `staff_data_${sessionId}`;
-      
+      const key = getStorageKey('staff_data');
       try {
         const localData = JSON.parse(localStorage.getItem(key) || '[]');
-        // We tag them with the storage key so we know where to save them back
-        all = [...localData.map((e:any) => ({...e, storageKey: key}))];
-      } catch(e) {
-        console.error("Error loading staff data for inactive list", e);
-      }
-
-      setInactiveStaff(all.filter(e => e.status === 'Inactive'));
+        setInactiveStaff(localData.filter((e: any) => e.status === 'Inactive'));
+      } catch(e) { console.error(e); }
   };
 
-  useEffect(() => {
-      loadInactive();
-  }, []);
+  useEffect(() => { loadInactive(); }, []);
 
-  const handleRestore = (employee: any) => {
-      if(!window.confirm(`Restore ${employee.name} to Active status?`)) return;
-
-      const key = employee.storageKey;
+  const handleRestore = (id: string) => {
+      if(!window.confirm(`Restore employee to Active status?`)) return;
+      const key = getStorageKey('staff_data');
       try {
         const stored = JSON.parse(localStorage.getItem(key) || '[]');
-        const updated = stored.map((e: any) => e.id === employee.id ? { ...e, status: 'Active' } : e);
+        const updated = stored.map((e: any) => e.id === id ? { ...e, status: 'Active' } : e);
         localStorage.setItem(key, JSON.stringify(updated));
-        loadInactive(); // Refresh list
-      } catch (e) {
-        console.error("Failed to restore employee", e);
-        alert("Error restoring employee data.");
-      }
+        loadInactive();
+      } catch (e) { alert("Error restoring."); }
   };
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
       <SectionHeader title="Inactive Employees" icon={UserX} desc="View and restore former employees." />
-      
       {inactiveStaff.length > 0 ? (
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
           <table className="w-full text-left text-sm">
@@ -278,30 +328,16 @@ const InactiveEmployees = () => {
               <tr>
                 <th className="px-6 py-4">Employee</th>
                 <th className="px-6 py-4">Role</th>
-                <th className="px-6 py-4">Left On (Est.)</th>
                 <th className="px-6 py-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {inactiveStaff.map((emp) => (
-                <tr key={emp.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <img src={emp.avatar} alt="" className="w-8 h-8 rounded-full opacity-60" />
-                      <div>
-                        <div className="font-medium text-gray-900">{emp.name}</div>
-                        <div className="text-gray-500 text-xs">{emp.email}</div>
-                      </div>
-                    </div>
-                  </td>
+                <tr key={emp.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 font-medium">{emp.name}</td>
                   <td className="px-6 py-4 text-gray-600">{emp.role}</td>
-                  <td className="px-6 py-4 text-gray-500">
-                    {emp.joiningDate ? new Date(new Date(emp.joiningDate).setMonth(new Date(emp.joiningDate).getMonth() + 12)).toLocaleDateString() : 'N/A'}
-                  </td>
                   <td className="px-6 py-4 text-right">
-                    <button onClick={() => handleRestore(emp)} className="bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors">
-                      Restore
-                    </button>
+                    <button onClick={() => handleRestore(emp.id)} className="bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-100">Restore</button>
                   </td>
                 </tr>
               ))}
@@ -309,78 +345,169 @@ const InactiveEmployees = () => {
           </table>
         </div>
       ) : (
-        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm text-center text-gray-500">
-          No inactive employees found.
-        </div>
+        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm text-center text-gray-500">No inactive employees.</div>
       )}
     </div>
   );
 };
 
-// 6. Shifts & Breaks (Updated for Persistence)
+// 6. Shifts & Breaks (Updated to 12-hour format with Edit)
 const ShiftsAndBreaks = () => {
-  const isSuperAdmin = (localStorage.getItem('app_session_id') || 'admin') === 'admin';
-  const sessionId = localStorage.getItem('app_session_id') || 'admin';
-  const getSessionKey = (baseKey: string) => isSuperAdmin ? baseKey : `${baseKey}_${sessionId}`;
-
   const [shifts, setShifts] = useState<any[]>(() => {
-    const saved = localStorage.getItem(getSessionKey('company_shifts'));
-    return saved ? JSON.parse(saved) : [{ id: 1, name: 'General Shift', start: '09:30', end: '18:30' }];
+    const saved = localStorage.getItem(getStorageKey('company_shifts'));
+    return saved ? JSON.parse(saved) : [{ id: 1, name: 'General Shift', start: '09:30 AM', end: '06:30 PM' }];
   });
+  
+  const [shiftForm, setShiftForm] = useState({ 
+    name: '', 
+    startHour: '09', startMin: '00', startAmPm: 'AM',
+    endHour: '06', endMin: '00', endAmPm: 'PM' 
+  });
+  const [editingId, setEditingId] = useState<number | null>(null);
 
-  const [newShift, setNewShift] = useState({ name: '', start: '', end: '' });
+  const hours = Array.from({length: 12}, (_, i) => (i + 1).toString().padStart(2, '0'));
+  const minutes = ['00', '15', '30', '45'];
 
   useEffect(() => {
-    localStorage.setItem(getSessionKey('company_shifts'), JSON.stringify(shifts));
-  }, [shifts, sessionId]);
+    localStorage.setItem(getStorageKey('company_shifts'), JSON.stringify(shifts));
+  }, [shifts]);
 
-  const handleAddShift = () => {
-    if (newShift.name.trim() && newShift.start.trim() && newShift.end.trim()) {
-      setShifts([...shifts, { id: Date.now(), ...newShift }]);
-      setNewShift({ name: '', start: '', end: '' });
+  const handleSave = () => {
+    if (!shiftForm.name) return;
+    
+    const start = `${shiftForm.startHour}:${shiftForm.startMin} ${shiftForm.startAmPm}`;
+    const end = `${shiftForm.endHour}:${shiftForm.endMin} ${shiftForm.endAmPm}`;
+    
+    if (editingId) {
+        setShifts(shifts.map(s => s.id === editingId ? { ...s, name: shiftForm.name, start, end } : s));
+        setEditingId(null);
+    } else {
+        setShifts([...shifts, { id: Date.now(), name: shiftForm.name, start, end }]);
     }
+    
+    // Reset Form
+    setShiftForm({ 
+        name: '', 
+        startHour: '09', startMin: '00', startAmPm: 'AM',
+        endHour: '06', endMin: '00', endAmPm: 'PM' 
+    });
   };
 
-  const handleDeleteShift = (id: number) => {
-    if (window.confirm("Delete this shift?")) {
-      setShifts(shifts.filter(s => s.id !== id));
-    }
+  const handleEdit = (shift: any) => {
+      // Parse "09:30 AM" -> hour, min, ampm
+      const parseTime = (timeStr: string) => {
+          const [time, period] = timeStr.split(' ');
+          const [hour, min] = time.split(':');
+          return { hour, min, period };
+      };
+      
+      const s = parseTime(shift.start);
+      const e = parseTime(shift.end);
+
+      setShiftForm({
+          name: shift.name,
+          startHour: s.hour, startMin: s.min, startAmPm: s.period,
+          endHour: e.hour, endMin: e.min, endAmPm: e.period
+      });
+      setEditingId(shift.id);
   };
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-      <SectionHeader title="Shifts & Breaks" icon={Clock} desc="Configure working hours and break schedules." />
+      <SectionHeader title="Shifts & Breaks" icon={Clock} desc="Configure working hours (12-hour AM/PM)." />
       <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-        <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Clock className="w-4 h-4 text-emerald-500" /> Working Shifts</h3>
-        <div className="flex gap-2 mb-4">
-          <input 
-            value={newShift.name} 
-            onChange={(e) => setNewShift({...newShift, name: e.target.value})} 
-            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
-            placeholder="Shift Name"
-          />
-          <input 
-            type="time" 
-            value={newShift.start} 
-            onChange={(e) => setNewShift({...newShift, start: e.target.value})} 
-            className="w-28 border border-gray-300 rounded-lg px-3 py-2 text-sm"
-          />
-          <span className="text-gray-500 text-sm flex items-center">to</span>
-          <input 
-            type="time" 
-            value={newShift.end} 
-            onChange={(e) => setNewShift({...newShift, end: e.target.value})} 
-            className="w-28 border border-gray-300 rounded-lg px-3 py-2 text-sm"
-          />
-          <button onClick={handleAddShift} className="bg-emerald-500 text-white p-2 rounded-lg"><Plus className="w-4 h-4"/></button>
+        
+        {/* Editor */}
+        <div className={`flex flex-col gap-4 mb-6 p-4 rounded-xl border transition-colors ${editingId ? 'bg-blue-50 border-blue-100' : 'bg-gray-50 border-gray-100'}`}>
+            <div className="flex-1">
+                <label className="text-xs font-bold text-gray-500 mb-1 block uppercase">Shift Name</label>
+                <input 
+                  value={shiftForm.name} 
+                  onChange={(e) => setShiftForm({...shiftForm, name: e.target.value})} 
+                  className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none" 
+                  placeholder="e.g. Morning Shift" 
+                />
+            </div>
+            
+            <div className="flex gap-6 items-end">
+                {/* Start Time */}
+                <div>
+                    <label className="text-xs font-bold text-gray-500 mb-1 block uppercase">Start Time</label>
+                    <div className="flex border border-gray-300 rounded-lg overflow-hidden bg-white">
+                        <select value={shiftForm.startHour} onChange={e => setShiftForm({...shiftForm, startHour: e.target.value})} className="p-2 text-sm outline-none bg-transparent appearance-none text-center w-12 cursor-pointer hover:bg-gray-50">
+                            {hours.map(h => <option key={h} value={h}>{h}</option>)}
+                        </select>
+                        <span className="py-2 text-sm text-gray-400">:</span>
+                        <select value={shiftForm.startMin} onChange={e => setShiftForm({...shiftForm, startMin: e.target.value})} className="p-2 text-sm outline-none bg-transparent appearance-none text-center w-12 cursor-pointer hover:bg-gray-50">
+                            {minutes.map(m => <option key={m} value={m}>{m}</option>)}
+                        </select>
+                        <select value={shiftForm.startAmPm} onChange={e => setShiftForm({...shiftForm, startAmPm: e.target.value})} className="p-2 text-sm outline-none bg-gray-100 font-bold text-gray-700 border-l border-gray-300 cursor-pointer hover:bg-gray-200">
+                            <option>AM</option><option>PM</option>
+                        </select>
+                    </div>
+                </div>
+
+                {/* End Time */}
+                <div>
+                    <label className="text-xs font-bold text-gray-500 mb-1 block uppercase">End Time</label>
+                    <div className="flex border border-gray-300 rounded-lg overflow-hidden bg-white">
+                        <select value={shiftForm.endHour} onChange={e => setShiftForm({...shiftForm, endHour: e.target.value})} className="p-2 text-sm outline-none bg-transparent appearance-none text-center w-12 cursor-pointer hover:bg-gray-50">
+                            {hours.map(h => <option key={h} value={h}>{h}</option>)}
+                        </select>
+                        <span className="py-2 text-sm text-gray-400">:</span>
+                        <select value={shiftForm.endMin} onChange={e => setShiftForm({...shiftForm, endMin: e.target.value})} className="p-2 text-sm outline-none bg-transparent appearance-none text-center w-12 cursor-pointer hover:bg-gray-50">
+                            {minutes.map(m => <option key={m} value={m}>{m}</option>)}
+                        </select>
+                        <select value={shiftForm.endAmPm} onChange={e => setShiftForm({...shiftForm, endAmPm: e.target.value})} className="p-2 text-sm outline-none bg-gray-100 font-bold text-gray-700 border-l border-gray-300 cursor-pointer hover:bg-gray-200">
+                            <option>AM</option><option>PM</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div className="flex gap-2">
+                    <button onClick={handleSave} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm">
+                        {editingId ? 'Update' : 'Add Shift'}
+                    </button>
+                    {editingId && (
+                        <button 
+                            onClick={() => {
+                                setEditingId(null);
+                                setShiftForm({ name: '', startHour: '09', startMin: '00', startAmPm: 'AM', endHour: '06', endMin: '00', endAmPm: 'PM' });
+                            }} 
+                            className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg font-bold text-sm"
+                        >
+                            Cancel
+                        </button>
+                    )}
+                </div>
+            </div>
         </div>
-        <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
+
+        <div className="space-y-2">
           {shifts.map((s) => (
-            <div key={s.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-100 group hover:border-emerald-200 transition-colors">
-              <span className="text-sm font-medium text-gray-700">{s.name} ({s.start} - {s.end})</span>
-              <button onClick={() => handleDeleteShift(s.id)} className="text-gray-300 hover:text-red-500 transition-colors"><Trash2 className="w-4 h-4"/></button>
+            <div key={s.id} className="flex justify-between items-center p-3 bg-white hover:bg-gray-50 rounded-lg border border-gray-200 transition-colors group">
+              <div className="flex items-center gap-3">
+                 <div className="p-2 bg-emerald-50 text-emerald-600 rounded-md">
+                    <Clock className="w-4 h-4" />
+                 </div>
+                 <div>
+                     <span className="block text-sm font-bold text-gray-800">{s.name}</span>
+                     <span className="text-xs text-gray-500 font-mono">
+                        {s.start} - {s.end}
+                     </span>
+                 </div>
+              </div>
+              <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button onClick={() => handleEdit(s)} className="text-blue-500 hover:bg-blue-50 p-2 rounded-lg">
+                    <Edit2 className="w-4 h-4"/>
+                  </button>
+                  <button onClick={() => setShifts(shifts.filter(x => x.id !== s.id))} className="text-red-500 hover:bg-red-50 p-2 rounded-lg">
+                    <Trash2 className="w-4 h-4"/>
+                  </button>
+              </div>
             </div>
           ))}
+          {shifts.length === 0 && <div className="text-center text-gray-400 text-sm py-4">No shifts configured.</div>}
         </div>
       </div>
     </div>
@@ -389,477 +516,330 @@ const ShiftsAndBreaks = () => {
 
 // 7. Attendance Modes
 const AttendanceModes = () => {
-  const isSuperAdmin = (localStorage.getItem('app_session_id') || 'admin') === 'admin';
-  const sessionId = localStorage.getItem('app_session_id') || 'admin';
-  const getSessionKey = (baseKey: string) => isSuperAdmin ? baseKey : `${baseKey}_${sessionId}`;
-
   const [modes, setModes] = useState(() => {
-    const saved = localStorage.getItem(getSessionKey('company_attendance_modes'));
+    const saved = localStorage.getItem(getStorageKey('company_attendance_modes'));
     return saved ? JSON.parse(saved) : { gpsGeofencing: false, qrScan: false, manualPunch: true };
   });
 
   useEffect(() => {
-    localStorage.setItem(getSessionKey('company_attendance_modes'), JSON.stringify(modes));
-  }, [modes, sessionId]);
+    localStorage.setItem(getStorageKey('company_attendance_modes'), JSON.stringify(modes));
+  }, [modes]);
 
-  const handleToggle = (mode: keyof typeof modes) => {
-    const isCurrentlyEnabled = modes[mode];
-
-    if (isCurrentlyEnabled) {
-        // Trying to disable. Check if others are enabled.
-        const otherEnabled = Object.keys(modes).some(key =>
-            key !== mode && modes[key as keyof typeof modes] === true
-        );
-        if (!otherEnabled) {
-            alert("At least one attendance method must be enabled.");
-            return;
-        }
-    }
-    setModes(prev => ({ ...prev, [mode]: !prev[mode] }));
+  const handleToggle = (m: string) => {
+      setModes((prev: any) => ({ ...prev, [m]: !prev[m] }));
   };
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-      <SectionHeader title="Attendance Modes" icon={Smartphone} desc="Configure allowed methods for staff attendance." />
+      <SectionHeader title="Attendance Modes" icon={Smartphone} desc="Configure default allowed methods for staff." />
       <div className="space-y-3">
-        <ToggleSwitch 
-            label="Enable GPS Geofencing for punch-in" 
-            checked={modes.gpsGeofencing} 
-            onChange={() => handleToggle('gpsGeofencing')} 
-        />
-        <p className="text-xs text-gray-500 pl-4 -mt-2">Geofencing requires Branch locations with set radius.</p>
-        <ToggleSwitch 
-            label="Enable QR Scan for punch-in" 
-            checked={modes.qrScan} 
-            onChange={() => handleToggle('qrScan')} 
-        />
-        <p className="text-xs text-gray-500 pl-4 -mt-2">QR Scan requires Camera permissions.</p>
-        <ToggleSwitch 
-            label="Allow Manual Punch (Web/Desktop)" 
-            checked={modes.manualPunch} 
-            onChange={() => handleToggle('manualPunch')} 
-        />
-        <p className="text-xs text-red-500 pl-4 -mt-2">At least one attendance method should be enabled.</p>
+        <ToggleSwitch label="Enable GPS Geofencing" checked={modes.gpsGeofencing} onChange={() => handleToggle('gpsGeofencing')} />
+        <ToggleSwitch label="Enable QR Scan" checked={modes.qrScan} onChange={() => handleToggle('qrScan')} />
+        <ToggleSwitch label="Allow Manual Punch" checked={modes.manualPunch} onChange={() => handleToggle('manualPunch')} />
       </div>
     </div>
   );
 };
 
-
-// 8. Custom Paid Leaves (Updated for Persistence)
+// 8. Custom Paid Leaves
 const CustomPaidLeaves = () => {
-  const isSuperAdmin = (localStorage.getItem('app_session_id') || 'admin') === 'admin';
-  const sessionId = localStorage.getItem('app_session_id') || 'admin';
-  const getSessionKey = (baseKey: string) => isSuperAdmin ? baseKey : `${baseKey}_${sessionId}`;
-
-  interface LeaveType {
-    id: string;
-    name: string;
-    quota: number;
-    period: 'Year' | 'Month';
-  }
-
-  const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>(() => {
-    const saved = localStorage.getItem(getSessionKey('company_leave_types'));
+  const [leaveTypes, setLeaveTypes] = useState<any[]>(() => {
+    const saved = localStorage.getItem(getStorageKey('company_leave_types'));
     return saved ? JSON.parse(saved) : [
-      { id: 'cl', name: 'Casual Leave', quota: 12, period: 'Year' },
-      { id: 'sl', name: 'Sick Leave', quota: 8, period: 'Year' },
-      { id: 'pl', name: 'Privilege Leave', quota: 15, period: 'Year' },
+      { id: 'cl', name: 'Casual Leave', quota: 12 },
+      { id: 'sl', name: 'Sick Leave', quota: 8 },
+      { id: 'pl', name: 'Privilege Leave', quota: 15 },
     ];
   });
-
-  const [newLeave, setNewLeave] = useState({ name: '', quota: '', period: 'Year' as 'Year' | 'Month' });
-  const [editingLeaveId, setEditingLeaveId] = useState<string | null>(null);
+  const [leaveForm, setLeaveForm] = useState({ name: '', quota: '' });
+  const [editingId, setEditingId] = useState<number | null>(null);
 
   useEffect(() => {
-    localStorage.setItem(getSessionKey('company_leave_types'), JSON.stringify(leaveTypes));
-  }, [leaveTypes, sessionId]);
+    localStorage.setItem(getStorageKey('company_leave_types'), JSON.stringify(leaveTypes));
+  }, [leaveTypes]);
 
-  const handleAddOrUpdateLeave = () => {
-    if (newLeave.name.trim() && newLeave.quota) {
-      if (editingLeaveId) {
-        setLeaveTypes(prev => prev.map(lt => lt.id === editingLeaveId ? { ...lt, name: newLeave.name, quota: parseFloat(newLeave.quota), period: newLeave.period } : lt));
-        setEditingLeaveId(null);
-      } else {
-        setLeaveTypes([...leaveTypes, { id: `lt-${Date.now()}`, name: newLeave.name, quota: parseFloat(newLeave.quota), period: newLeave.period }]);
+  const handleSave = () => {
+      if(leaveForm.name && leaveForm.quota) {
+          if (editingId) {
+              setLeaveTypes(leaveTypes.map(l => l.id === editingId ? { ...l, name: leaveForm.name, quota: parseInt(leaveForm.quota) } : l));
+              setEditingId(null);
+          } else {
+              setLeaveTypes([...leaveTypes, { id: Date.now(), name: leaveForm.name, quota: parseInt(leaveForm.quota) }]);
+          }
+          setLeaveForm({ name: '', quota: '' });
       }
-      setNewLeave({ name: '', quota: '', period: 'Year' });
-    }
   };
 
-  const handleEditLeave = (leave: LeaveType) => {
-    setEditingLeaveId(leave.id);
-    setNewLeave({ name: leave.name, quota: leave.quota.toString(), period: leave.period });
-  };
-
-  const handleDeleteLeave = (id: string) => {
-    if (window.confirm("Delete this leave type?")) {
-      setLeaveTypes(leaveTypes.filter(lt => lt.id !== id));
-    }
+  const handleEdit = (leave: any) => {
+      setLeaveForm({ name: leave.name, quota: leave.quota.toString() });
+      setEditingId(leave.id);
   };
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-      <SectionHeader title="Custom Paid Leaves" icon={Plane} desc="Define custom leave types and their annual quotas." />
+      <SectionHeader title="Custom Paid Leaves" icon={Plane} desc="Define leave types and annual quotas." />
       <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-        <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Plane className="w-4 h-4 text-emerald-500" /> Leave Types</h3>
-        <div className="flex flex-wrap gap-2 mb-4">
-          <input 
-            value={newLeave.name} 
-            onChange={(e) => setNewLeave({...newLeave, name: e.target.value})} 
-            className="flex-1 min-w-[120px] border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-            placeholder="Leave Name"
-          />
-          <input 
-            type="number"
-            value={newLeave.quota} 
-            onChange={(e) => setNewLeave({...newLeave, quota: e.target.value})} 
-            className="w-20 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-            placeholder="Quota"
-          />
-          <select 
-            value={newLeave.period} 
-            onChange={(e) => setNewLeave({...newLeave, period: e.target.value as 'Year' | 'Month'})} 
-            className="w-24 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
-          >
-            <option>Year</option>
-            <option>Month</option>
-          </select>
-          <button onClick={handleAddOrUpdateLeave} className="bg-emerald-500 text-white p-2 rounded-lg transition-colors flex items-center justify-center gap-1">
-            {editingLeaveId ? <Save className="w-4 h-4" /> : <Plus className="w-4 h-4" />} {editingLeaveId ? 'Update' : 'Add'}
-          </button>
-          {editingLeaveId && <button onClick={() => {setEditingLeaveId(null); setNewLeave({ name: '', quota: '', period: 'Year' });}} className="p-2 text-gray-500 hover:text-red-500"><X className="w-4 h-4"/></button>}
-        </div>
-        <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
-          {leaveTypes.map((lt) => (
-            <div key={lt.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-100 group hover:border-emerald-200 transition-colors">
-              <span className="text-sm font-medium text-gray-700">{lt.name} ({lt.quota} per {lt.period})</span>
-              <div className="flex gap-1">
-                <button onClick={() => handleEditLeave(lt)} className="text-gray-400 hover:text-blue-500 transition-colors"><Edit2 className="w-4 h-4"/></button>
-                <button onClick={() => handleDeleteLeave(lt.id)} className="text-gray-400 hover:text-red-500 transition-colors"><Trash2 className="w-4 h-4"/></button>
-              </div>
-            </div>
-          ))}
-        </div>
+         <div className="flex gap-2 mb-4">
+            <input value={leaveForm.name} onChange={e=>setLeaveForm({...leaveForm, name: e.target.value})} className="flex-1 border rounded p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="Leave Name" />
+            <input type="number" value={leaveForm.quota} onChange={e=>setLeaveForm({...leaveForm, quota: e.target.value})} className="w-24 border rounded p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="Quota" />
+            <button onClick={handleSave} className="bg-emerald-500 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2">
+                {editingId ? <Save className="w-4 h-4"/> : <Plus className="w-4 h-4"/>}
+                {editingId ? 'Save' : 'Add'}
+            </button>
+            {editingId && (
+                <button onClick={() => { setEditingId(null); setLeaveForm({name:'', quota:''}); }} className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-bold">Cancel</button>
+            )}
+         </div>
+         <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
+            {leaveTypes.map(l => (
+                <div key={l.id} className="flex justify-between items-center p-3 bg-gray-50 rounded border border-gray-100 group hover:border-emerald-200 transition-colors">
+                    <span className="text-sm font-medium">{l.name} <span className="text-emerald-600 font-bold ml-2">({l.quota} Days)</span></span>
+                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => handleEdit(l)} className="text-blue-500 hover:bg-blue-50 p-1 rounded"><Edit2 className="w-4 h-4"/></button>
+                        <button onClick={() => setLeaveTypes(leaveTypes.filter(x => x.id !== l.id))} className="text-red-500 hover:bg-red-50 p-1 rounded"><Trash2 className="w-4 h-4"/></button>
+                    </div>
+                </div>
+            ))}
+         </div>
       </div>
     </div>
   );
 };
 
-// 9. Holiday List (Updated for Persistence)
+// 9. Holiday List
 const HolidayList = () => {
-  const isSuperAdmin = (localStorage.getItem('app_session_id') || 'admin') === 'admin';
-  const sessionId = localStorage.getItem('app_session_id') || 'admin';
-  const getSessionKey = (baseKey: string) => isSuperAdmin ? baseKey : `${baseKey}_${sessionId}`;
-
-  interface Holiday {
-    id: string;
-    name: string;
-    date: string; // YYYY-MM-DD
-  }
-
-  const [holidays, setHolidays] = useState<Holiday[]>(() => {
-    const saved = localStorage.getItem(getSessionKey('company_holidays'));
+  const [holidays, setHolidays] = useState<any[]>(() => {
+    const saved = localStorage.getItem(getStorageKey('company_holidays'));
     return saved ? JSON.parse(saved) : [
-      { id: 'h1', name: 'New Year Day', date: '2025-01-01' },
-      { id: 'h2', name: 'Republic Day', date: '2025-01-26' },
-      { id: 'h3', name: 'Independence Day', date: '2025-08-15' },
-      { id: 'h4', name: 'Gandhi Jayanti', date: '2025-10-02' },
-      { id: 'h5', name: 'Diwali', date: '2025-10-20' },
-      { id: 'h6', name: 'Christmas Day', date: '2025-12-25' },
-    ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        { id: 'h1', name: 'New Year', date: '2025-01-01' },
+        { id: 'h2', name: 'Republic Day', date: '2025-01-26' },
+        { id: 'h3', name: 'Independence Day', date: '2025-08-15' },
+    ];
   });
-
-  const [newHoliday, setNewHoliday] = useState({ name: '', date: '' });
-  const [editingHolidayId, setEditingHolidayId] = useState<string | null>(null);
+  const [form, setForm] = useState({ name: '', date: '' });
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   useEffect(() => {
-    localStorage.setItem(getSessionKey('company_holidays'), JSON.stringify(holidays));
-  }, [holidays, sessionId]);
+    localStorage.setItem(getStorageKey('company_holidays'), JSON.stringify(holidays));
+  }, [holidays]);
 
-  const handleAddOrUpdateHoliday = () => {
-    if (newHoliday.name.trim() && newHoliday.date) {
-      if (editingHolidayId) {
-        setHolidays(prev => prev.map(h => h.id === editingHolidayId ? { ...h, name: newHoliday.name, date: newHoliday.date } : h).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
-        setEditingHolidayId(null);
-      } else {
-        setHolidays([...holidays, { id: `h-${Date.now()}`, name: newHoliday.name, date: newHoliday.date }].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
+  const handleSave = () => {
+      if(form.name && form.date) {
+          if (editingId) {
+              setHolidays(holidays.map(h => h.id === editingId ? { ...h, ...form } : h).sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
+              setEditingId(null);
+          } else {
+              setHolidays([...holidays, { id: Date.now().toString(), ...form }].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
+          }
+          setForm({ name: '', date: '' });
       }
-      setNewHoliday({ name: '', date: '' });
-    }
   };
 
-  const handleEditHoliday = (holiday: Holiday) => {
-    setEditingHolidayId(holiday.id);
-    setNewHoliday({ name: holiday.name, date: holiday.date });
-  };
-
-  const handleDeleteHoliday = (id: string) => {
-    if (window.confirm("Delete this holiday?")) {
-      setHolidays(holidays.filter(h => h.id !== id));
-    }
-  };
-
-  const handleUploadList = () => {
-    alert("Upload Holiday List feature is not implemented in this demo.");
+  const handleEdit = (h: any) => {
+      setForm({ name: h.name, date: h.date });
+      setEditingId(h.id);
   };
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-      <SectionHeader title="Holiday List" icon={CalendarCheck} desc="Manage company-wide holidays and observances." />
+      <SectionHeader title="Holiday List" icon={CalendarCheck} desc="Manage company holidays." />
       <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-        <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><CalendarCheck className="w-4 h-4 text-emerald-500" /> Company Holidays</h3>
-        <div className="flex flex-wrap gap-2 mb-4">
-          <input 
-            value={newHoliday.name} 
-            onChange={(e) => setNewHoliday({...newHoliday, name: e.target.value})} 
-            className="flex-1 min-w-[120px] border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-            placeholder="Holiday Name"
-          />
-          <input 
-            type="date"
-            value={newHoliday.date} 
-            onChange={(e) => setNewHoliday({...newHoliday, date: e.target.value})} 
-            className="w-32 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-          />
-          <button onClick={handleAddOrUpdateHoliday} className="bg-emerald-500 text-white p-2 rounded-lg transition-colors flex items-center justify-center gap-1">
-            {editingHolidayId ? <Save className="w-4 h-4" /> : <Plus className="w-4 h-4" />} {editingHolidayId ? 'Update' : 'Add'}
-          </button>
-          {editingHolidayId && <button onClick={() => {setEditingHolidayId(null); setNewHoliday({ name: '', date: '' });}} className="p-2 text-gray-500 hover:text-red-500"><X className="w-4 h-4"/></button>}
-          <button onClick={handleUploadList} className="bg-gray-100 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors flex items-center gap-1">
-            <UploadCloud className="w-4 h-4" /> Upload List
-          </button>
-        </div>
-        <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
-          {holidays.map((h) => (
-            <div key={h.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-100 group hover:border-emerald-200 transition-colors">
-              <span className="text-sm font-medium text-gray-700">{h.name}</span>
-              <span className="text-sm text-gray-600">{new Date(h.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-              <div className="flex gap-1">
-                <button onClick={() => handleEditHoliday(h)} className="text-gray-400 hover:text-blue-500 transition-colors"><Edit2 className="w-4 h-4"/></button>
-                <button onClick={() => handleDeleteHoliday(h.id)} className="text-gray-400 hover:text-red-500 transition-colors"><Trash2 className="w-4 h-4"/></button>
-              </div>
-            </div>
-          ))}
-        </div>
+         <div className="flex gap-2 mb-4">
+            <input value={form.name} onChange={e=>setForm({...form, name: e.target.value})} className="flex-1 border rounded p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="Holiday Name" />
+            <input type="date" value={form.date} onChange={e=>setForm({...form, date: e.target.value})} className="w-36 border rounded p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none" />
+            <button onClick={handleSave} className="bg-emerald-500 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2">
+                {editingId ? <Save className="w-4 h-4"/> : <Plus className="w-4 h-4"/>}
+                {editingId ? 'Save' : 'Add'}
+            </button>
+            {editingId && (
+                <button onClick={() => { setEditingId(null); setForm({name:'', date:''}); }} className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-bold">Cancel</button>
+            )}
+         </div>
+         <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
+            {holidays.map(h => (
+                <div key={h.id} className="flex justify-between items-center p-3 bg-gray-50 rounded border border-gray-100 group hover:border-emerald-200 transition-colors">
+                    <div>
+                        <span className="text-sm font-bold text-gray-800">{h.name}</span>
+                        <span className="text-xs text-gray-500 ml-2">{h.date}</span>
+                    </div>
+                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => handleEdit(h)} className="text-blue-500 hover:bg-blue-50 p-1 rounded"><Edit2 className="w-4 h-4"/></button>
+                        <button onClick={() => setHolidays(holidays.filter(x => x.id !== h.id))} className="text-red-500 hover:bg-red-50 p-1 rounded"><Trash2 className="w-4 h-4"/></button>
+                    </div>
+                </div>
+            ))}
+         </div>
       </div>
     </div>
   );
 };
-
 
 // 10. Auto Live Track
-const AutoLiveTrack = () => (
-  <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-    <SectionHeader title="Auto Live Track" icon={MapPinIcon} desc="Configure automatic GPS tracking for field employees." />
-    <ToggleSwitch label="Enable Live Tracking for Field Staff" checked={true} onChange={() => alert("Feature toggle not implemented.")} />
-    <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 text-sm text-gray-700">
-      <AlertCircle className="w-4 h-4 inline-block mr-2 text-orange-500" />
-      Live tracking consumes battery. Advise staff to enable power-saving mode.
-    </div>
-  </div>
-);
+const AutoLiveTrack = () => {
+    const [enabled, setEnabled] = useState(() => localStorage.getItem(getStorageKey('company_settings_autotrack')) === 'true');
+    useEffect(() => { localStorage.setItem(getStorageKey('company_settings_autotrack'), String(enabled)); }, [enabled]);
+    
+    return (
+        <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+            <SectionHeader title="Auto Live Track" icon={MapPinIcon} desc="Enable automatic GPS tracking for field staff." />
+            <ToggleSwitch label="Enable Live Tracking" checked={enabled} onChange={() => setEnabled(!enabled)} />
+            <div className="bg-blue-50 p-4 rounded-lg text-sm text-blue-700 mt-4 border border-blue-100">
+                <AlertCircle className="w-4 h-4 inline mr-2" />
+                This will request location access from staff devices during working hours.
+            </div>
+        </div>
+    );
+};
 
 // 11. Calendar Month
-const CalendarMonth = () => (
-  <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-    <SectionHeader title="Calendar Month" icon={Calendar} desc="Configure the starting month for attendance and payroll cycles." />
-    <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-      <label className="block text-sm font-medium text-gray-700 mb-2">Financial Year Start Month</label>
-      <select className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-white">
-        <option>January</option>
-        <option>April (Common for India)</option>
-        <option>July</option>
-        <option>October</option>
-      </select>
-      <p className="text-xs text-gray-500 mt-2">Changing this will reset some attendance calculations for reports.</p>
-    </div>
-  </div>
-);
+const CalendarMonth = () => {
+    const [startMonth, setStartMonth] = useState(() => localStorage.getItem(getStorageKey('company_settings_financial_year')) || 'April');
+    useEffect(() => { localStorage.setItem(getStorageKey('company_settings_financial_year'), startMonth); }, [startMonth]);
+
+    return (
+        <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+            <SectionHeader title="Calendar Month" icon={Calendar} desc="Set financial year start." />
+            <div className="bg-white p-6 rounded-xl border border-gray-200">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Financial Year Start</label>
+                <select value={startMonth} onChange={(e) => setStartMonth(e.target.value)} className="w-full p-2 border rounded-lg bg-white">
+                    <option>January</option><option>April</option><option>July</option><option>October</option>
+                </select>
+            </div>
+        </div>
+    );
+};
 
 // 12. Attendance Cycle
-const AttendanceCycle = () => (
-  <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-    <SectionHeader title="Attendance Cycle" icon={RotateCw} desc="Define how attendance periods are calculated." />
-    <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-      <label className="block text-sm font-medium text-gray-700 mb-2">Attendance Calculation Period</label>
-      <select className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-white">
-        <option>Calendar Month (1st to 30/31st)</option>
-        <option>Custom Cycle (e.g., 26th to 25th)</option>
-      </select>
-      <p className="text-xs text-gray-500 mt-2">Custom cycle allows more flexible payroll periods.</p>
-    </div>
-  </div>
-);
+const AttendanceCycle = () => {
+    const [cycle, setCycle] = useState(() => localStorage.getItem(getStorageKey('company_settings_attendance_cycle')) || 'Calendar Month');
+    useEffect(() => { localStorage.setItem(getStorageKey('company_settings_attendance_cycle'), cycle); }, [cycle]);
 
-// 13. Payout Date (Updated for Persistence)
-const PayoutDate = () => {
-  const isSuperAdmin = (localStorage.getItem('app_session_id') || 'admin') === 'admin';
-  const sessionId = localStorage.getItem('app_session_id') || 'admin';
-  const getSessionKey = (baseKey: string) => isSuperAdmin ? baseKey : `${baseKey}_${sessionId}`;
-
-  const [departments, setDepartments] = useState<string[]>(() => {
-    const saved = localStorage.getItem(getSessionKey('company_departments'));
-    return saved ? JSON.parse(saved) : ['Sales', 'Marketing', 'Development', 'HR', 'Operations', 'Finance'];
-  });
-
-  const [payoutDates, setPayoutDates] = useState<Record<string, string>>(() => {
-    const saved = localStorage.getItem(getSessionKey('company_payout_dates'));
-    return saved ? JSON.parse(saved) : {};
-  });
-
-  const [globalPayoutDay, setGlobalPayoutDay] = useState<string>(() => {
-    const saved = localStorage.getItem(getSessionKey('company_global_payout_day'));
-    return saved || '5'; // Default to 5th
-  });
-
-  useEffect(() => {
-    localStorage.setItem(getSessionKey('company_payout_dates'), JSON.stringify(payoutDates));
-  }, [payoutDates, sessionId]);
-
-  useEffect(() => {
-    localStorage.setItem(getSessionKey('company_global_payout_day'), globalPayoutDay);
-  }, [globalPayoutDay, sessionId]);
-
-  const handleDeptPayoutChange = (dept: string, day: string) => {
-    setPayoutDates(prev => ({ ...prev, [dept]: day }));
-  };
-
-  return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-      <SectionHeader title="Payout Date" icon={DollarSign} desc="Set monthly payroll payout dates for different departments." />
-      <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-        <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Calendar className="w-4 h-4 text-emerald-500" /> Payout Day</h3>
-        
-        <div className="mb-6">
-           <label className="block text-sm font-medium text-gray-700 mb-1">Global Payout Day (if not set per department)</label>
-           <input 
-             type="number" 
-             min="1" 
-             max="28" // To avoid month end issues
-             value={globalPayoutDay} 
-             onChange={(e) => setGlobalPayoutDay(e.target.value)} 
-             className="w-20 p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-           />
-           <span className="ml-2 text-sm text-gray-600">of each month</span>
-        </div>
-
-        <h4 className="font-bold text-gray-700 mb-3">Department Specific Payout Days</h4>
-        <div className="space-y-3 max-h-60 overflow-y-auto custom-scrollbar">
-          {departments.map((dept) => (
-            <div key={dept} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-100">
-              <span className="text-sm font-medium text-gray-700">{dept}</span>
-              <div className="flex items-center gap-2">
-                <select 
-                  value={payoutDates[dept] || ''} 
-                  onChange={(e) => handleDeptPayoutChange(dept, e.target.value)} 
-                  className="w-24 p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
-                >
-                  <option value="">Global ({globalPayoutDay})</option>
-                  {[...Array(28)].map((_, i) => (
-                    <option key={i + 1} value={i + 1}>{i + 1}</option>
-                  ))}
+    return (
+        <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+            <SectionHeader title="Attendance Cycle" icon={RotateCw} desc="Define attendance calculation period." />
+            <div className="bg-white p-6 rounded-xl border border-gray-200">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Cycle Period</label>
+                <select value={cycle} onChange={(e) => setCycle(e.target.value)} className="w-full p-2 border rounded-lg bg-white">
+                    <option>Calendar Month (1st to End)</option>
+                    <option>Wage Cycle (26th to 25th)</option>
                 </select>
-                <span className="text-sm text-gray-600">th</span>
-              </div>
             </div>
-          ))}
         </div>
-      </div>
-    </div>
-  );
+    );
+};
+
+// 13. Payout Date
+const PayoutDate = () => {
+    const [payoutDate, setPayoutDate] = useState(() => localStorage.getItem(getStorageKey('company_global_payout_day')) || '5');
+    useEffect(() => { localStorage.setItem(getStorageKey('company_global_payout_day'), payoutDate); }, [payoutDate]);
+
+    return (
+        <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+            <SectionHeader title="Payout Date" icon={DollarSign} desc="Set monthly salary payout day." />
+            <div className="bg-white p-6 rounded-xl border border-gray-200">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Day of Month</label>
+                <input type="number" min="1" max="28" value={payoutDate} onChange={(e) => setPayoutDate(e.target.value)} className="w-full p-2 border rounded-lg" />
+            </div>
+        </div>
+    );
 };
 
 // 14. Import Settings
 const ImportSettings = () => (
-  <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-    <SectionHeader title="Import Settings" icon={UploadCloud} desc="Configure data import options for various modules." />
-    <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm text-center">
-       <div className="mb-4 text-gray-500">
-         Data import for Staff, Leads, etc. can be configured here.
-       </div>
-       <button className="bg-blue-50 text-blue-600 px-4 py-2 rounded-lg font-medium hover:bg-blue-100 transition-colors border border-blue-200 flex items-center gap-2 mx-auto">
-         <Search className="w-4 h-4" /> View Import Logs
-       </button>
+    <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+        <SectionHeader title="Import Settings" icon={UploadCloud} desc="Configure data import defaults." />
+        <div className="bg-white p-6 rounded-xl border border-gray-200 text-center text-gray-500">
+            Import configurations are managed automatically based on CSV headers.
+        </div>
     </div>
-  </div>
 );
 
 // 15. Incentive Types
-const IncentiveTypes = () => (
-  <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-    <SectionHeader title="Incentive Types" icon={Award} desc="Define different types of incentives for employees." />
-    <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm text-center">
-       <div className="mb-4 text-gray-500">
-         No incentive types configured.
-       </div>
-       <button className="bg-emerald-50 text-emerald-600 px-4 py-2 rounded-lg font-medium hover:bg-emerald-100 transition-colors border border-emerald-200 flex items-center gap-2 mx-auto">
-         <Plus className="w-4 h-4" /> Add Incentive Type
-       </button>
-    </div>
-  </div>
-);
+const IncentiveTypes = () => {
+    const [types, setTypes] = useState<string[]>(() => {
+        const saved = localStorage.getItem(getStorageKey('company_incentive_types'));
+        return saved ? JSON.parse(saved) : ['Performance', 'Sales Commission', 'Referral'];
+    });
+    const [newType, setNewType] = useState('');
+
+    useEffect(() => { localStorage.setItem(getStorageKey('company_incentive_types'), JSON.stringify(types)); }, [types]);
+
+    return (
+        <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+            <SectionHeader title="Incentive Types" icon={Award} desc="Define incentive categories." />
+            <div className="bg-white border border-gray-200 rounded-xl p-6">
+                <div className="flex gap-2 mb-4">
+                    <input value={newType} onChange={e=>setNewType(e.target.value)} className="flex-1 border rounded p-2 text-sm" placeholder="Incentive Name" />
+                    <button onClick={()=>{if(newType) {setTypes([...types, newType]); setNewType('')}}} className="bg-emerald-500 text-white p-2 rounded"><Plus className="w-4 h-4"/></button>
+                </div>
+                <div className="space-y-2 max-h-40 overflow-y-auto">
+                    {types.map((t, i) => (
+                        <div key={i} className="flex justify-between p-2 bg-gray-50 rounded border border-gray-100">
+                            <span className="text-sm">{t}</span>
+                            <button onClick={()=>setTypes(types.filter((_, idx)=>idx!==i))} className="text-red-400"><Trash2 className="w-3 h-3"/></button>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+};
 
 // 16. Salary Templates
 const SalaryTemplates = () => (
-  <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-    <SectionHeader title="Salary Templates" icon={File} desc="Create and manage salary templates for different roles." />
-    <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm text-center">
-       <div className="mb-4 text-gray-500">
-         No salary templates available.
-       </div>
-       <button className="bg-emerald-50 text-emerald-600 px-4 py-2 rounded-lg font-medium hover:bg-emerald-100 transition-colors border border-emerald-200 flex items-center gap-2 mx-auto">
-         <Plus className="w-4 h-4" /> Create Template
-       </button>
+    <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+        <SectionHeader title="Salary Templates" icon={File} desc="Manage salary structures." />
+        <div className="bg-white p-6 rounded-xl border border-gray-200 text-center text-gray-500">
+            Standard Template: Basic (50%), HRA (30%), Allowance (20%) is currently active.
+        </div>
     </div>
-  </div>
 );
 
 // 17. Round Off
-const RoundOff = () => (
-  <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-    <SectionHeader title="Round Off" icon={RotateCcw} desc="Configure rules for rounding off attendance and payroll figures." />
-    <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-      <label className="block text-sm font-medium text-gray-700 mb-2">Round Off Attendance (e.g., 15 mins)</label>
-      <select className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-white">
-        <option>No Round Off</option>
-        <option>Nearest 15 minutes</option>
-        <option>Nearest 30 minutes</option>
-        <option>Nearest Hour</option>
-      </select>
-      <p className="text-xs text-gray-500 mt-2">Applies to check-in/check-out times.</p>
-    </div>
-  </div>
-);
+const RoundOff = () => {
+    const [round, setRound] = useState(() => localStorage.getItem(getStorageKey('company_settings_round_off')) || 'None');
+    useEffect(() => { localStorage.setItem(getStorageKey('company_settings_round_off'), round); }, [round]);
+
+    return (
+        <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+            <SectionHeader title="Round Off" icon={RotateCcw} desc="Round off attendance times." />
+            <div className="bg-white p-6 rounded-xl border border-gray-200">
+                <select value={round} onChange={(e) => setRound(e.target.value)} className="w-full p-2 border rounded-lg bg-white">
+                    <option>None</option><option>Nearest 15 Mins</option><option>Nearest 30 Mins</option>
+                </select>
+            </div>
+        </div>
+    );
+};
 
 // 18. App Notifications
-const AppNotifications = () => (
-  <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-    <SectionHeader title="App Notifications" icon={Bell} desc="Manage in-app notifications and alerts." />
-    <ToggleSwitch label="Enable Real-time Notifications" checked={true} onChange={() => alert("Feature toggle not implemented.")} />
-    <ToggleSwitch label="Send Email for Critical Alerts" checked={true} onChange={() => alert("Feature toggle not implemented.")} />
-  </div>
-);
+const AppNotifications = () => {
+    const [enabled, setEnabled] = useState(() => localStorage.getItem(getStorageKey('company_settings_notifications')) === 'true');
+    useEffect(() => { localStorage.setItem(getStorageKey('company_settings_notifications'), String(enabled)); }, [enabled]);
+
+    return (
+        <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+            <SectionHeader title="App Notifications" icon={Bell} desc="Enable system notifications." />
+            <ToggleSwitch label="Enable In-App Alerts" checked={enabled} onChange={() => setEnabled(!enabled)} />
+        </div>
+    );
+};
 
 // 19. Request A Feature
 const RequestAFeature = () => (
-  <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-    <SectionHeader title="Request A Feature" icon={MessageSquare} desc="Submit your ideas and suggestions to the development team." />
-    <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm text-center">
-       <div className="mb-4 text-gray-500">
-         Have an idea to improve OK BOZ? Let us know!
-       </div>
-       <button className="bg-blue-50 text-blue-600 px-4 py-2 rounded-lg font-medium hover:bg-blue-100 transition-colors border border-blue-200 flex items-center gap-2 mx-auto">
-         <MessageSquare className="w-4 h-4" /> Submit Idea
-       </button>
+    <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+        <SectionHeader title="Request A Feature" icon={MessageSquare} desc="Feedback and suggestions." />
+        <div className="bg-white p-6 rounded-xl border border-gray-200 text-center">
+            <textarea className="w-full border rounded-lg p-3 mb-3 text-sm" rows={4} placeholder="Describe your idea..."></textarea>
+            <button className="bg-blue-600 text-white px-6 py-2 rounded-lg text-sm font-bold">Submit</button>
+        </div>
     </div>
-  </div>
 );
 
 
-// --- Main EmployeeSettings Component ---
-const EmployeeSettings: React.FC = () => { // Changed to const declaration
-  const [activeSetting, setActiveSetting] = useState<SettingCategory>('Departments & Roles'); // Default to a populated section
+// --- Main Component ---
+const EmployeeSettings: React.FC = () => {
+  const [activeSetting, setActiveSetting] = useState<SettingCategory>('My Company Report');
 
   const renderActiveSetting = () => {
     switch (activeSetting) {
@@ -882,7 +862,7 @@ const EmployeeSettings: React.FC = () => { // Changed to const declaration
       case 'Round Off': return <RoundOff />;
       case 'App Notifications': return <AppNotifications />;
       case 'Request A Feature': return <RequestAFeature />;
-      default: return <div className="p-6 text-gray-500">Select a setting from the sidebar.</div>;
+      default: return null;
     }
   };
 
@@ -910,7 +890,7 @@ const EmployeeSettings: React.FC = () => { // Changed to const declaration
 
   return (
     <div className="flex h-[calc(100vh-6rem)] overflow-hidden">
-      {/* Sidebar Navigation */}
+      {/* Sidebar */}
       <div className="w-72 flex-shrink-0 border-r border-gray-200 bg-white p-6 overflow-y-auto custom-scrollbar">
         <h3 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
           <Settings2 className="w-5 h-5 text-gray-500" /> Employee Settings
@@ -933,12 +913,12 @@ const EmployeeSettings: React.FC = () => { // Changed to const declaration
         </nav>
       </div>
 
-      {/* Content Area */}
+      {/* Content */}
       <div className="flex-1 p-8 bg-gray-50 overflow-y-auto custom-scrollbar">
         {renderActiveSetting()}
       </div>
     </div>
   );
-}
+};
 
 export default EmployeeSettings;

@@ -7,7 +7,7 @@ import {
   ScanLine, MousePointerClick, Heart, Baby, BookUser, Home, Truck, 
   Files, Car, RefreshCcw, Edit2, Save, AlertCircle, CheckCircle, 
   Loader2, ExternalLink, Clock, Shield, Users, Check, LayoutGrid, Hash, Sparkles,
-  ArrowRight, ArrowLeft
+  ArrowRight, ArrowLeft, Filter
 } from 'lucide-react';
 import { Employee, Branch } from '../../types';
 import { uploadFileToCloud } from '../../services/cloudService';
@@ -74,25 +74,29 @@ const StaffList: React.FC = () => {
   // Session Context
   const sessionId = localStorage.getItem('app_session_id') || 'admin';
   const isSuperAdmin = sessionId === 'admin';
+  // Helper to get storage key based on session context (matching EmployeeSettings logic)
+  const getStorageKey = (baseKey: string) => isSuperAdmin ? baseKey : `${baseKey}_${sessionId}`;
 
   // --- Initial Data Loading ---
   useEffect(() => {
     // 1. Load Settings (Roles, Shifts, Depts, Global Attendance)
-    const savedRoles = localStorage.getItem('company_roles');
+    const rolesKey = getStorageKey('company_roles');
+    const savedRoles = localStorage.getItem(rolesKey);
     if (savedRoles) setRolesList(JSON.parse(savedRoles));
     else setRolesList(['Manager', 'Team Lead', 'Driver', 'Sales Executive', 'HR', 'Admin']);
 
-    const savedDepts = localStorage.getItem('company_departments'); 
+    const deptsKey = getStorageKey('company_departments');
+    const savedDepts = localStorage.getItem(deptsKey); 
     if (savedDepts) setDepartmentsList(JSON.parse(savedDepts));
     else setDepartmentsList(['Sales', 'Marketing', 'Development', 'HR', 'Operations', 'Finance']);
 
-    const shiftsKey = isSuperAdmin ? 'company_shifts' : `company_shifts_${sessionId}`;
+    const shiftsKey = getStorageKey('company_shifts');
     const savedShifts = localStorage.getItem(shiftsKey);
     if (savedShifts) setShiftsList(JSON.parse(savedShifts));
-    else setShiftsList([{ id: 1, name: 'General Shift', start: '09:30', end: '18:30' }]);
+    else setShiftsList([{ id: 1, name: 'General Shift', start: '09:30 AM', end: '06:30 PM' }]);
 
     // Load Global Attendance Modes
-    const attendanceKey = isSuperAdmin ? 'company_attendance_modes' : `company_attendance_modes_${sessionId}`;
+    const attendanceKey = getStorageKey('company_attendance_modes');
     const savedAttendanceModes = localStorage.getItem(attendanceKey);
     if (savedAttendanceModes) {
         setDefaultAttendanceSettings(JSON.parse(savedAttendanceModes));
@@ -171,7 +175,7 @@ const StaffList: React.FC = () => {
     phone: '',
     password: 'user123', // Default
     status: 'Active',
-    workingHours: 'General Shift',
+    workingHours: '', // Will default to first available shift on open if empty
     weekOff: 'Sunday',
     // Permissions (Will be overridden by defaults in resetForm)
     liveTracking: false,
@@ -223,6 +227,9 @@ const StaffList: React.FC = () => {
   const resetForm = () => {
       setFormData({
           ...initialFormState,
+          workingHours: shiftsList.length > 0 ? shiftsList[0].name : 'General Shift',
+          role: rolesList.length > 0 ? rolesList[0] : '',
+          department: departmentsList.length > 0 ? departmentsList[0] : '',
           // Sync with Global Settings Defaults
           gpsGeofencing: defaultAttendanceSettings.gpsGeofencing,
           qrScan: defaultAttendanceSettings.qrScan,
@@ -515,7 +522,7 @@ const StaffList: React.FC = () => {
                              <div>
                                  <label className="block text-sm font-medium text-gray-700 mb-1">Working Shift</label>
                                  <select name="workingHours" value={formData.workingHours} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none bg-white">
-                                     <option value="General Shift">General Shift</option>
+                                     <option value="">Select Shift</option>
                                      {shiftsList.map(s => <option key={s.id} value={s.name}>{s.name} ({s.start}-{s.end})</option>)}
                                  </select>
                              </div>

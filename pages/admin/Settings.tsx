@@ -147,24 +147,23 @@ const Settings: React.FC = () => {
       }
 
       setIsSavingKey(true);
-      // 1. Save locally immediately
+      
+      // 1. Save locally immediately to ensure it works offline
       localStorage.setItem('maps_api_key', mapsKey);
       
-      // 2. Try to sync to cloud, but don't block heavily on error
       try {
+          // 2. Try to sync to cloud
           await syncToCloud();
+          alert("Maps Key Saved! The page will now reload.");
       } catch (e) {
-          console.warn("Cloud sync failed for map key, but saved locally.", e);
-      }
-
-      setShowMapsInput(false);
-      
-      // 3. Provide visual feedback before reload
-      setTimeout(() => {
+          console.warn("Cloud sync failed:", e);
+          // Don't show error page, just warn
+          alert("Key saved locally (Offline Mode). The page will reload to apply changes.");
+      } finally {
           setIsSavingKey(false);
-          alert("Maps Key Saved! The page will now reload to apply changes.");
+          setShowMapsInput(false);
           window.location.reload();
-      }, 500);
+      }
   };
 
   const handleBackup = async () => {
@@ -346,6 +345,7 @@ const Settings: React.FC = () => {
                
                {showMapsInput && (
                    <div className="mt-4 pt-4 border-t border-gray-100 animate-in fade-in slide-in-from-top-2">
+                       {/* INSTRUCTIONS BLOCK */}
                        <div className="mb-4 p-4 bg-blue-50 border border-blue-100 rounded-lg text-sm text-blue-800">
                           <h5 className="font-bold flex items-center gap-2 mb-2 text-blue-900">
                             <Info className="w-4 h-4"/> Steps to Enable Google Maps:
@@ -354,12 +354,11 @@ const Settings: React.FC = () => {
                             <li>Go to the <a href="https://console.cloud.google.com/" target="_blank" rel="noopener noreferrer" className="underline font-bold inline-flex items-center gap-1">Google Cloud Console <ExternalLink className="w-3 h-3"/></a>.</li>
                             <li>Create a new project (or select an existing one).</li>
                             <li><strong className="text-red-600">Crucial:</strong> Enable Billing for your project (Maps API requires a billing account, though there is a free tier).</li>
-                            <li>Go to <strong>APIs & Services {'>'} Library</strong> and enable these 4 APIs:
+                            <li>Go to <strong>APIs & Services {'>'} Library</strong> and enable these 3 APIs:
                                 <ul className="list-disc pl-5 mt-1 font-semibold">
                                     <li>Maps JavaScript API</li>
                                     <li>Places API (New)</li>
                                     <li>Distance Matrix API</li>
-                                    <li>Directions API</li>
                                 </ul>
                             </li>
                             <li>Go to <strong>APIs & Services {'>'} Credentials</strong>.</li>
