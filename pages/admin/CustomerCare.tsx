@@ -169,8 +169,6 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
 
   // Load Settings whenever the Config Target ID Changes
   useEffect(() => {
-      // Determine the storage keys suffix based on target
-      // If admin is selected (or default), key is base. If corporate selected, key has suffix.
       const suffix = configTargetId === 'admin' ? '' : `_${configTargetId}`;
       
       const savedPricing = localStorage.getItem(`transport_pricing_rules_v2${suffix}`);
@@ -179,7 +177,6 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
       if (savedPricing) {
           setPricing(JSON.parse(savedPricing));
       } else {
-          // If no specific settings found, fall back to defaults (or global defaults if you prefer)
           setPricing({ Sedan: DEFAULT_PRICING_SEDAN, SUV: DEFAULT_PRICING_SUV });
       }
 
@@ -528,15 +525,17 @@ Fast, reliable, and just a tap away. Download the app now and book your first tr
           </h2>
           <p className="text-gray-500">Manage transport requests, estimates, and general enquiries</p>
         </div>
-        <button 
-            onClick={() => setShowRates(!showRates)}
-            className="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-900 transition-colors flex items-center gap-2"
-        >
-            <Settings className="w-4 h-4" /> {showRates ? 'Hide Rates' : 'Fare Configuration'}
-        </button>
+        {role !== UserRole.EMPLOYEE && (
+            <button 
+                onClick={() => setShowRates(!showRates)}
+                className="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-900 transition-colors flex items-center gap-2"
+            >
+                <Settings className="w-4 h-4" /> {showRates ? 'Hide Rates' : 'Fare Configuration'}
+            </button>
+        )}
       </div>
 
-      {showRates && (
+      {showRates && role !== UserRole.EMPLOYEE && (
         <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm animate-in fade-in slide-in-from-top-2">
             {/* Header: Title and Profile Selector */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 border-b border-gray-100 pb-4 gap-4">
