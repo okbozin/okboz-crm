@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Users, Plus, Search, Filter, Trash2, Edit2, 
   MapPin, Phone, Mail, Building2, Briefcase, 
-  MoreVertical, CheckCircle, XCircle, X, Shield, Lock, Save
+  MoreVertical, CheckCircle, XCircle, X, Shield, Lock, Save, Eye, EyeOff
 } from 'lucide-react';
 import { Employee, CorporateAccount, UserRole } from '../../types';
 import { MOCK_EMPLOYEES } from '../../constants';
@@ -62,6 +62,7 @@ const StaffList: React.FC = () => {
   };
   
   const [formData, setFormData] = useState(initialFormState);
+  const [showPassword, setShowPassword] = useState(false); // State for password visibility
 
   // --- Load Data ---
   useEffect(() => {
@@ -148,6 +149,7 @@ const StaffList: React.FC = () => {
   const handleOpenAdd = () => {
     setEditingId(null);
     setFormData(initialFormState);
+    setShowPassword(false); // Reset password visibility
     setIsModalOpen(true);
   };
 
@@ -170,6 +172,7 @@ const StaffList: React.FC = () => {
         manualPunch: emp.attendanceConfig?.manualPunch ?? true,
         status: emp.status || 'Active'
     });
+    setShowPassword(false); // Reset password visibility
     setIsModalOpen(true);
   };
 
@@ -416,7 +419,23 @@ const StaffList: React.FC = () => {
                     </div>
                     <div>
                         <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Password</label>
-                        <input type="text" name="password" value={formData.password} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Default: 123456" />
+                        <div className="relative">
+                            <input 
+                                type={showPassword ? "text" : "password"} 
+                                name="password" 
+                                value={formData.password} 
+                                onChange={handleInputChange} 
+                                className="w-full p-2 pr-10 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500" 
+                                placeholder="Default: 123456" 
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                            >
+                                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                        </div>
                     </div>
                     <div>
                         <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Role *</label>
@@ -463,8 +482,8 @@ const StaffList: React.FC = () => {
                  </div>
 
                  <div className="mt-6 pt-4 border-t border-gray-100 flex justify-end gap-3">
-                    <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-white font-medium">Cancel</button>
-                    <button type="submit" className="px-6 py-2 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 shadow-sm transition-colors flex items-center gap-2">
+                    <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 border border-gray-300 rounded-lg font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
+                    <button type="submit" className="px-6 py-2 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 shadow-md transition-colors flex items-center gap-2">
                        <Save className="w-4 h-4" /> Save Employee
                     </button>
                  </div>
