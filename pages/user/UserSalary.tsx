@@ -1,5 +1,4 @@
 
-
 import React, { useMemo, useState, useEffect } from 'react';
 import { Download, TrendingUp, DollarSign, FileText, CheckCircle, Clock, Plus, AlertCircle, X, Send } from 'lucide-react';
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
@@ -126,9 +125,17 @@ const UserSalary: React.FC = () => {
   const salaryData = useMemo(() => {
     if (!user) return null;
 
-    const monthlyCtc = parseFloat(user.salary || '65000');
-    const attendance = getEmployeeAttendance(user, 2025, 10); // Using Nov 2025 mock context
-    const daysInMonth = 30;
+    const today = new Date();
+    const currentYear = today.getFullYear();
+    const currentMonth = today.getMonth();
+
+    // Sanitize salary string (remove commas, currency symbols)
+    const rawSalary = user.salary ? user.salary.toString().replace(/[^0-9.]/g, '') : '0';
+    const monthlyCtc = parseFloat(rawSalary) || 25000; // Default fallback if parsing fails
+
+    // Use current real date context instead of hardcoded future date
+    const attendance = getEmployeeAttendance(user, currentYear, currentMonth); 
+    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
     
     let payableDays = 0;
     attendance.forEach(day => {
@@ -141,19 +148,21 @@ const UserSalary: React.FC = () => {
         }
     });
 
-    const perDaySalary = monthlyCtc / daysInMonth;
-    const grossEarned = Math.round(perDaySalary * payableDays);
+    // 1. Calculate Full Month Structure (For Display)
+    const breakdownBasic = Math.round(monthlyCtc * 0.5);
+    const breakdownHra = Math.round(monthlyCtc * 0.3);
+    const breakdownAllowances = Math.round(monthlyCtc * 0.2);
 
-    const basicSalary = Math.round(grossEarned * 0.5);
-    const hra = Math.round(grossEarned * 0.3);
-    const allowances = Math.round(grossEarned * 0.2);
+    // 2. Calculate Earned Amount (For Payout)
+    const perDaySalary = monthlyCtc / daysInMonth;
+    const earnedGross = Math.round(perDaySalary * payableDays);
     
     // Auto-Deduct Paid Advances for this month
     const paidAdvances = advanceHistory
         .filter(a => a.status === 'Paid')
         .reduce((sum, item) => sum + (item.amountApproved || 0), 0);
 
-    const netPay = grossEarned - paidAdvances;
+    const netPay = Math.max(0, earnedGross - paidAdvances);
 
     // Determine Payout Date from Admin Settings
     let payoutDay = parseInt(payoutSettings.globalDay) || 5;
@@ -161,24 +170,24 @@ const UserSalary: React.FC = () => {
         payoutDay = parseInt(payoutSettings.dates[user.department]) || payoutDay;
     }
     
-    // Context is Salary Month Nov 2025 -> Payout Month Dec 2025
-    // Safe date calculation (e.g., if Payout is 31st, Dec has 31, so it works. 
-    // If it was Feb, getSafePayoutDate handles it)
-    const payoutDateObj = getSafePayoutDate(2025, 11, payoutDay); // 11 is December
+    // Payout is typically next month
+    const payoutDateObj = getSafePayoutDate(currentYear, currentMonth + 1, payoutDay);
     const payoutDateStr = payoutDateObj.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
+    const currentMonthName = today.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
     return {
-        month: 'November 2025',
+        month: currentMonthName,
         netPay,
-        grossEarned,
+        grossEarned: earnedGross,
+        monthlyCtc: monthlyCtc, // Passed for UI
         workingDays: daysInMonth,
         paidDays: payableDays,
         payoutDate: payoutDateStr,
         status: 'Pending',
         earnings: [
-            { label: 'Basic Salary', amount: basicSalary },
-            { label: 'HRA', amount: hra },
-            { label: 'Special Allowance', amount: allowances },
+            { label: 'Basic Salary', amount: breakdownBasic },
+            { label: 'HRA', amount: breakdownHra },
+            { label: 'Special Allowance', amount: breakdownAllowances },
         ],
         deductions: paidAdvances > 0 ? [{ label: 'Salary Advance Rec.', amount: paidAdvances }] : []
     };
@@ -199,9 +208,9 @@ const UserSalary: React.FC = () => {
     // Start of the joining month
     const joinMonthStart = new Date(joinDate.getFullYear(), joinDate.getMonth(), 1); 
     
-    // Assuming "Today" in app context is Nov 2025 for consistency with dashboard
-    const contextToday = new Date(2025, 10, 15); // Nov 15, 2025
-    let iteratorDate = new Date(contextToday.getFullYear(), contextToday.getMonth() - 1, 1); // Start from previous month (Oct 2025)
+    // Use current real date for history context
+    const contextToday = new Date(); 
+    let iteratorDate = new Date(contextToday.getFullYear(), contextToday.getMonth() - 1, 1); // Start from previous month
 
     // Generate up to 6 months of history
     for (let i = 0; i < 6; i++) {
@@ -209,7 +218,8 @@ const UserSalary: React.FC = () => {
         if (iteratorDate < joinMonthStart) break;
 
         const monthStr = iteratorDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-        const baseAmount = parseFloat(user.salary || '0');
+        const rawSalary = user.salary ? user.salary.toString().replace(/[^0-9.]/g, '') : '0';
+        const baseAmount = parseFloat(rawSalary) || 0;
         
         let amount = baseAmount;
         
@@ -218,7 +228,7 @@ const UserSalary: React.FC = () => {
              // Pro-rate for joining month
              const daysInMonth = new Date(iteratorDate.getFullYear(), iteratorDate.getMonth() + 1, 0).getDate();
              const daysWorked = daysInMonth - joinDate.getDate() + 1;
-             if (daysWorked < daysInMonth) {
+             if (daysWorked < daysInMonth && daysWorked > 0) {
                  amount = Math.round((baseAmount / daysInMonth) * daysWorked);
              }
         }
@@ -250,7 +260,9 @@ const UserSalary: React.FC = () => {
       return <div className="p-8 text-center text-gray-500">Loading salary details...</div>;
   }
 
-  const totalEarnings = salaryData.earnings.reduce((acc, curr) => acc + curr.amount, 0);
+  // Use Monthly CTC for the Breakdown Visual (so users see their package), 
+  // but show Net Pay as calculated based on attendance.
+  const totalStructureEarnings = salaryData.earnings.reduce((acc, curr) => acc + curr.amount, 0);
   const totalDeductions = salaryData.deductions.reduce((acc, curr) => acc + curr.amount, 0);
 
   const chartData = [...salaryHistory].reverse().map(item => ({
@@ -359,7 +371,7 @@ const UserSalary: React.FC = () => {
             <div className="flex justify-between items-start mb-8">
               <div>
                 <p className="text-emerald-100 font-medium mb-1 flex items-center gap-2">
-                   Net Pay for {salaryData.month}
+                   Accumulated Pay ({salaryData.month})
                    {salaryData.status === 'Paid' ? (
                        <CheckCircle className="w-4 h-4 text-emerald-200" />
                    ) : (
@@ -367,6 +379,9 @@ const UserSalary: React.FC = () => {
                    )}
                 </p>
                 <h3 className="text-5xl font-bold tracking-tight">₹{salaryData.netPay.toLocaleString()}</h3>
+                <p className="text-emerald-100 text-xs mt-1 opacity-80">
+                    Pro-rated based on {salaryData.paidDays} payable days so far.
+                </p>
               </div>
               <div className="bg-white/20 backdrop-blur-sm px-4 py-2 rounded-xl text-sm font-bold shadow-sm border border-white/10">
                 {salaryData.status}
@@ -383,8 +398,8 @@ const UserSalary: React.FC = () => {
                 <p className="font-semibold text-lg">{salaryData.paidDays} / {salaryData.workingDays}</p>
               </div>
               <div className="bg-black/10 rounded-lg p-3 backdrop-blur-sm border border-white/5">
-                 <p className="text-emerald-100 text-xs mb-1 opacity-80">Deductions</p>
-                 <p className="font-semibold text-lg text-white">₹{totalDeductions}</p>
+                 <p className="text-emerald-100 text-xs mb-1 opacity-80">Monthly CTC</p>
+                 <p className="font-semibold text-lg text-white">₹{salaryData.monthlyCtc.toLocaleString()}</p>
               </div>
             </div>
           </div>
@@ -431,14 +446,14 @@ const UserSalary: React.FC = () => {
         {/* Salary Structure */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
-            <h3 className="font-bold text-gray-800">Salary Breakdown</h3>
-            <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded">Monthly</span>
+            <h3 className="font-bold text-gray-800">Salary Structure</h3>
+            <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded">Full Month Package</span>
           </div>
           
           <div className="p-5 space-y-6">
             <div>
               <div className="flex items-center justify-between mb-3">
-                 <h4 className="text-xs font-bold text-emerald-600 uppercase tracking-wider">Earnings</h4>
+                 <h4 className="text-xs font-bold text-emerald-600 uppercase tracking-wider">Components</h4>
                  <span className="text-xs text-gray-400">Amount (₹)</span>
               </div>
               <div className="space-y-3">
@@ -449,15 +464,15 @@ const UserSalary: React.FC = () => {
                   </div>
                 ))}
                 <div className="flex justify-between text-sm pt-3 border-t border-dashed border-gray-200 mt-2">
-                  <span className="font-semibold text-gray-700">Gross Earnings</span>
-                  <span className="font-bold text-gray-900">₹{totalEarnings.toLocaleString()}</span>
+                  <span className="font-semibold text-gray-700">Gross Monthly Salary</span>
+                  <span className="font-bold text-gray-900">₹{totalStructureEarnings.toLocaleString()}</span>
                 </div>
               </div>
             </div>
 
             <div>
               <div className="flex items-center justify-between mb-3">
-                 <h4 className="text-xs font-bold text-red-500 uppercase tracking-wider">Deductions</h4>
+                 <h4 className="text-xs font-bold text-red-500 uppercase tracking-wider">Active Deductions</h4>
                  <span className="text-xs text-gray-400">Amount (₹)</span>
               </div>
               <div className="space-y-3">
@@ -469,21 +484,23 @@ const UserSalary: React.FC = () => {
                     </div>
                     ))
                 ) : (
-                    <div className="text-sm text-gray-400 italic text-center py-2">No deductions applied</div>
+                    <div className="text-sm text-gray-400 italic text-center py-2">No active deductions</div>
                 )}
-                <div className="flex justify-between text-sm pt-3 border-t border-dashed border-gray-200 mt-2">
-                  <span className="font-semibold text-gray-700">Total Deductions</span>
-                  <span className="font-bold text-red-600">-₹{totalDeductions.toLocaleString()}</span>
-                </div>
+                {totalDeductions > 0 && (
+                    <div className="flex justify-between text-sm pt-3 border-t border-dashed border-gray-200 mt-2">
+                    <span className="font-semibold text-gray-700">Total Deductions</span>
+                    <span className="font-bold text-red-600">-₹{totalDeductions.toLocaleString()}</span>
+                    </div>
+                )}
               </div>
             </div>
             
             <div className="bg-emerald-50 rounded-xl p-4 flex justify-between items-center border border-emerald-100">
                <div className="flex flex-col">
-                  <span className="text-sm text-emerald-800 font-medium">Total Net Payable</span>
-                  <span className="text-xs text-emerald-600">Calculated after all deductions</span>
+                  <span className="text-sm text-emerald-800 font-medium">Estimated Take Home</span>
+                  <span className="text-xs text-emerald-600">(If full attendance)</span>
                </div>
-               <span className="font-bold text-2xl text-emerald-700">₹{salaryData.netPay.toLocaleString()}</span>
+               <span className="font-bold text-2xl text-emerald-700">₹{(totalStructureEarnings - totalDeductions).toLocaleString()}</span>
             </div>
           </div>
         </div>

@@ -1,21 +1,15 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Calendar, Clock, CheckCircle, XCircle, AlertCircle, Send, FileText, PieChart } from 'lucide-react';
-
-interface LeaveRequest {
-  id: number;
-  type: string;
-  from: string;
-  to: string;
-  days: number;
-  status: string;
-  reason: string;
-  appliedOn: string;
-}
+import { Employee, LeaveRequest } from '../../types';
+import { MOCK_EMPLOYEES } from '../../constants';
 
 const ApplyLeave: React.FC = () => {
+  const [user, setUser] = useState<Employee | null>(null);
+  const [leaveTypes, setLeaveTypes] = useState<any[]>([]);
+  
   const [formData, setFormData] = useState({
-    type: 'Casual Leave (CL)',
+    type: '',
     startDate: '',
     endDate: '',
     reason: ''
@@ -34,16 +28,121 @@ const ApplyLeave: React.FC = () => {
     return [];
   });
 
+  // Helper to find employee by ID across all storage locations and inject corporateId
+  const findEmployeeById = (id: string): Employee | undefined => {
+      // 1. Check Admin Staff
+      try {
+        const adminStaff = JSON.parse(localStorage.getItem('staff_data') || '[]');
+        let found = adminStaff.find((e: any) => e.id === id);
+        if (found) return { ...found, corporateId: 'admin' }; // Explicitly set admin corporateId
+      } catch(e) {}
+
+      // 2. Check Corporate Staff
+      try {
+        const corporates = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
+        for (const corp of corporates) {
+            const cStaff = JSON.parse(localStorage.getItem(`staff_data_${corp.email}`) || '[]');
+            const found = cStaff.find((e: any) => e.id === id);
+            if (found) return { ...found, corporateId: corp.email }; // Explicitly inject corporateId
+        }
+      } catch(e) {}
+
+      // 3. Check Mocks
+      return MOCK_EMPLOYEES.find(e => e.id === id);
+  };
+
+  // 1. Load User
+  useEffect(() => {
+      const storedSessionId = localStorage.getItem('app_session_id');
+      if (storedSessionId) {
+          const found = findEmployeeById(storedSessionId);
+          setUser(found || MOCK_EMPLOYEES[0]);
+      } else {
+          setUser(MOCK_EMPLOYEES[0]);
+      }
+  }, []);
+
+  // 2. Load Leave Settings based on User's Corporate ID (Strict Match)
+  useEffect(() => {
+      if (user) {
+          // Determine the correct key for leave settings
+          // If the user belongs to a corporate, fetch THAT corporate's settings.
+          // Fallback to admin ONLY if explicitly admin or undefined.
+          const corpId = user.corporateId || 'admin';
+          const key = corpId === 'admin' ? 'company_leave_types' : `company_leave_types_${corpId}`;
+          
+          console.log(`Loading leave settings for: ${corpId} (Key: ${key})`);
+
+          let loadedTypes = [];
+          const saved = localStorage.getItem(key);
+          
+          if (saved) {
+              try {
+                  loadedTypes = JSON.parse(saved);
+              } catch(e) { console.error("Error parsing leave types", e); }
+          }
+
+          // Fallback if no specific settings found, verify if global defaults exist
+          if (loadedTypes.length === 0) {
+              // Try loading global defaults if not found for specific corp
+              const globalSaved = localStorage.getItem('company_leave_types');
+              if (globalSaved) {
+                 try { loadedTypes = JSON.parse(globalSaved); } catch(e) {}
+              }
+          }
+
+          // Ultimate Fallback
+          if (loadedTypes.length === 0) {
+              loadedTypes = [
+                  { id: 'cl', name: 'Casual Leave', quota: 12 },
+                  { id: 'sl', name: 'Sick Leave', quota: 8 },
+                  { id: 'pl', name: 'Privilege Leave', quota: 15 }
+              ];
+          }
+          
+          setLeaveTypes(loadedTypes);
+          
+          // Set default type for form
+          if (loadedTypes.length > 0) {
+              setFormData(prev => ({ ...prev, type: loadedTypes[0].name }));
+          }
+      }
+  }, [user]);
+
   // Persist history to localStorage whenever it changes
   useEffect(() => {
     localStorage.setItem('leave_history', JSON.stringify(history));
   }, [history]);
 
-  const balances = [
-    { type: 'Casual Leave', code: 'CL', available: 8, total: 12, color: 'text-blue-600', bg: 'bg-blue-50', bar: 'bg-blue-500' },
-    { type: 'Sick Leave', code: 'SL', available: 8, total: 10, color: 'text-red-600', bg: 'bg-red-50', bar: 'bg-red-500' },
-    { type: 'Privilege Leave', code: 'PL', available: 9, total: 15, color: 'text-emerald-600', bg: 'bg-emerald-50', bar: 'bg-emerald-500' },
-  ];
+  // 3. Calculate Balances Dynamically
+  const balances = useMemo(() => {
+      const colors = [
+          { text: 'text-blue-600', bg: 'bg-blue-50', bar: 'bg-blue-500' },
+          { text: 'text-red-600', bg: 'bg-red-50', bar: 'bg-red-500' },
+          { text: 'text-emerald-600', bg: 'bg-emerald-50', bar: 'bg-emerald-500' },
+          { text: 'text-purple-600', bg: 'bg-purple-50', bar: 'bg-purple-500' },
+          { text: 'text-orange-600', bg: 'bg-orange-50', bar: 'bg-orange-500' },
+      ];
+
+      return leaveTypes.map((lt, index) => {
+          // Calculate used days for this leave type (Approved only) for THIS user
+          // Filter history by current user ID to avoid mixup if using shared storage
+          const used = history
+              .filter(h => h.status === 'Approved' && h.type === lt.name && (!user || h.employeeId === user.id)) // Added employeeId check if available
+              .reduce((sum, h) => sum + h.days, 0);
+          
+          const style = colors[index % colors.length];
+
+          return {
+              type: lt.name,
+              available: Math.max(0, lt.quota - used),
+              total: lt.quota,
+              color: style.text,
+              bg: style.bg,
+              bar: style.bar
+          };
+      });
+  }, [leaveTypes, history, user]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -62,23 +161,20 @@ const ApplyLeave: React.FC = () => {
     const today = new Date();
     today.setHours(0,0,0,0);
     
-    // Validation: Start date cannot be in the past
     if (start < today) {
        alert("You cannot apply for leave in the past.");
        return;
     }
 
-    // Validation: End date cannot be before start date
     if (end < start) {
       alert("End date cannot be earlier than start date.");
       return;
     }
     
-    // Simple day calculation (inclusive)
     const diffTime = Math.abs(end.getTime() - start.getTime());
     const days = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
 
-    const newLeave: LeaveRequest = {
+    const newLeave: LeaveRequest & { employeeId?: string } = {
       id: Date.now(),
       type: formData.type,
       from: formData.startDate,
@@ -86,16 +182,19 @@ const ApplyLeave: React.FC = () => {
       days: isNaN(days) ? 1 : days,
       status: 'Pending',
       reason: formData.reason,
-      appliedOn: new Date().toISOString().split('T')[0]
+      appliedOn: new Date().toISOString().split('T')[0],
+      corporateId: user?.corporateId, // Store corporate context
+      employeeId: user?.id // Tag with user ID
     };
 
     setHistory([newLeave, ...history]);
-    setFormData({ type: 'Casual Leave (CL)', startDate: '', endDate: '', reason: '' });
+    setFormData({ type: leaveTypes[0]?.name || '', startDate: '', endDate: '', reason: '' });
     alert("Leave request submitted successfully!");
   };
 
-  // Get today's date in YYYY-MM-DD format for the min attribute
   const todayDate = new Date().toISOString().split('T')[0];
+
+  if (!user) return <div className="p-8 text-center text-gray-500">Loading profile...</div>;
 
   return (
     <div className="max-w-5xl mx-auto space-y-8">
@@ -131,6 +230,11 @@ const ApplyLeave: React.FC = () => {
             </div>
           </div>
         ))}
+        {balances.length === 0 && (
+            <div className="col-span-full p-6 text-center bg-gray-50 rounded-xl border border-gray-200 border-dashed text-gray-500">
+                No leave types configured. Contact Admin.
+            </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -151,10 +255,10 @@ const ApplyLeave: React.FC = () => {
                   onChange={handleInputChange}
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
                 >
-                  <option>Casual Leave (CL)</option>
-                  <option>Sick Leave (SL)</option>
-                  <option>Privilege Leave (PL)</option>
-                  <option>Loss of Pay (LWP)</option>
+                  {leaveTypes.map(lt => (
+                      <option key={lt.id} value={lt.name}>{lt.name}</option>
+                  ))}
+                  {leaveTypes.length === 0 && <option>Casual Leave</option>}
                 </select>
               </div>
 
@@ -220,7 +324,7 @@ const ApplyLeave: React.FC = () => {
                <button className="text-sm text-emerald-600 font-medium hover:underline">View All</button>
             </div>
             
-            <div className="divide-y divide-gray-100">
+            <div className="divide-y divide-gray-100 max-h-[500px] overflow-y-auto">
               {history.map((item) => (
                 <div key={item.id} className="p-6 hover:bg-gray-50 transition-colors group">
                    <div className="flex justify-between items-start mb-3">
