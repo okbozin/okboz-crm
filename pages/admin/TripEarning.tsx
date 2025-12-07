@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Plus, Search, Download, X, Save,
@@ -27,6 +26,7 @@ interface Trip {
   userMobile?: string;
   driverName?: string;
   driverMobile?: string;
+  pickup?: string;
   tripPrice: number;
   adminCommission: number;
   tax: number;
@@ -78,7 +78,13 @@ const TripEarning: React.FC = () => {
   });
 
   const [allBranches, setAllBranches] = useState<any[]>([]); 
-  const [corporates, setCorporates] = useState<any[]>([]); 
+  // Initialize from storage directly to ensure it is available for the sync effect immediately
+  const [corporates, setCorporates] = useState<any[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
+    } catch (e) { return []; }
+  });
+  
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   
@@ -112,7 +118,11 @@ const TripEarning: React.FC = () => {
     tripCategory: 'Local',
     bookingStatus: 'Confirmed',
     cancelBy: '',
-    // Removed People fields
+    userName: '',
+    userMobile: '',
+    driverName: '',
+    driverMobile: '',
+    pickup: '',
     tripPrice: 0,
     adminCommission: 0,
     tax: 0,
@@ -173,18 +183,15 @@ const TripEarning: React.FC = () => {
     }
   }, []);
 
-  // Load Branches and Corporates
+  // Load Branches
   useEffect(() => {
     try {
-      const corps = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
-      setCorporates(corps);
-
       let loadedBranches: any[] = [];
       if (isSuperAdmin) {
           const adminBranches = JSON.parse(localStorage.getItem('branches_data') || '[]');
           loadedBranches = [...adminBranches.map((b: any) => ({...b, owner: 'admin', ownerName: 'Head Office'}))]; 
           
-          corps.forEach((c: any) => {
+          corporates.forEach((c: any) => {
              const cBranches = JSON.parse(localStorage.getItem(`branches_data_${c.email}`) || '[]');
              loadedBranches = [...loadedBranches, ...cBranches.map((b: any) => ({...b, owner: c.email, ownerName: c.companyName}))];
           });
@@ -201,9 +208,9 @@ const TripEarning: React.FC = () => {
       }
       setAllBranches(loadedBranches);
     } catch (e) {}
-  }, [isSuperAdmin, sessionId]);
+  }, [isSuperAdmin, sessionId, corporates]);
 
-  // Sync Trips to Storage (FIXED PERSISTENCE FOR DELETE)
+  // Sync Trips to Storage
   useEffect(() => {
     if (isSuperAdmin) {
         // 1. Save Head Office Trips
@@ -212,8 +219,14 @@ const TripEarning: React.FC = () => {
         localStorage.setItem('trips_data', JSON.stringify(cleanAdminTrips));
 
         // 2. Save Corporate Trips (Distribute updates/deletes)
-        if (corporates.length > 0) {
-            corporates.forEach((corp: any) => {
+        // Fallback: Read directly from LS if state is empty to prevent data loss
+        let currentCorporates = corporates;
+        if (currentCorporates.length === 0) {
+             try { currentCorporates = JSON.parse(localStorage.getItem('corporate_accounts') || '[]'); } catch(e) {}
+        }
+
+        if (currentCorporates.length > 0) {
+            currentCorporates.forEach((corp: any) => {
                 const corpTrips = trips.filter(t => t.ownerId === corp.email);
                 const cleanCorpTrips = corpTrips.map(({ownerId, ownerName, ...rest}) => rest);
                 localStorage.setItem(`trips_data_${corp.email}`, JSON.stringify(cleanCorpTrips));
@@ -317,14 +330,6 @@ const TripEarning: React.FC = () => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleTripPriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    const price = parseFloat(val) || 0;
-    const percent = parseFloat(taxPercentage) || 0;
-    const taxAmt = (price * percent) / 100;
-    setFormData(prev => ({ ...prev, tripPrice: price, tax: taxAmt }));
-  };
-
   const formAvailableBranches = useMemo(() => {
       const targetOwner = formData.ownerId;
       return allBranches.filter(b => b.owner === targetOwner);
@@ -394,6 +399,11 @@ const TripEarning: React.FC = () => {
       tripCategory: trip.tripCategory,
       bookingStatus: trip.bookingStatus,
       cancelBy: trip.cancelBy || '',
+      userName: trip.userName || '',
+      userMobile: trip.userMobile || '',
+      driverName: trip.driverName || '',
+      driverMobile: trip.driverMobile || '',
+      pickup: trip.pickup || '',
       tripPrice: trip.tripPrice,
       adminCommission: trip.adminCommission,
       tax: trip.tax,
@@ -405,7 +415,8 @@ const TripEarning: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
     if (window.confirm("Delete this trip record?")) {
       setTrips(prev => prev.filter(t => t.id !== id));
     }
@@ -820,7 +831,7 @@ const TripEarning: React.FC = () => {
                        <td className="px-6 py-4 text-right">
                           <div className="flex items-center justify-end gap-2">
                              <button onClick={() => handleEdit(trip)} className="text-gray-400 hover:text-emerald-600 p-1 rounded hover:bg-emerald-50"><Edit2 className="w-4 h-4"/></button>
-                             <button onClick={() => handleDelete(trip.id)} className="text-gray-400 hover:text-red-600 p-1 rounded hover:bg-red-50"><Trash2 className="w-4 h-4"/></button>
+                             <button onClick={(e) => handleDelete(trip.id, e)} className="text-gray-400 hover:text-red-600 p-1 rounded hover:bg-red-50"><Trash2 className="w-4 h-4"/></button>
                           </div>
                        </td>
                     </tr>
@@ -964,6 +975,49 @@ const TripEarning: React.FC = () => {
                              </select>
                           </div>
                        </div>
+                    </div>
+
+                    {/* Column 2: People Info */}
+                    <div className="space-y-4">
+                       <h4 className="text-sm font-bold text-gray-900 border-b pb-2 flex items-center gap-2"><User className="w-4 h-4 text-blue-500"/> People</h4>
+                       
+                       <div className="space-y-3">
+                          <div>
+                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">User Name *</label>
+                             <input type="text" name="userName" value={formData.userName} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="Customer Name" required />
+                          </div>
+                          <div>
+                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">User Mobile *</label>
+                             <input type="tel" name="userMobile" value={formData.userMobile} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="+91..." required />
+                          </div>
+                          {/* Pickup Location - Added to Form */}
+                          <div>
+                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Pickup Location</label>
+                              {!isMapReady ? (
+                                <div className="p-2 bg-gray-100 text-gray-500 text-sm rounded flex items-center gap-2">
+                                    <Loader2 className="w-4 h-4 animate-spin" /> Map Loading...
+                                </div>
+                              ) : (
+                                <Autocomplete 
+                                    placeholder="Search Pickup Location"
+                                    onAddressSelect={(addr) => setFormData(prev => ({ ...prev, pickup: addr }))}
+                                    defaultValue={formData.pickup}
+                                />
+                              )}
+                              {mapError && <p className="text-xs text-red-500 mt-1">{mapError}</p>}
+                          </div>
+                       </div>
+
+                       <div className="pt-2 space-y-3">
+                          <div>
+                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Driver Name</label>
+                             <input type="text" name="driverName" value={formData.driverName} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="Driver Name" />
+                          </div>
+                          <div>
+                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Driver Mobile</label>
+                             <input type="tel" name="driverMobile" value={formData.driverMobile} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="+91..." />
+                          </div>
+                       </div>
 
                        <div>
                           <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Remarks</label>
@@ -971,80 +1025,81 @@ const TripEarning: React.FC = () => {
                        </div>
                     </div>
 
-                    {/* Column 2: Financials */}
-                    <div className="space-y-4">
+                    {/* Column 3: Financials */}
+                    <div className="space-y-4 md:col-span-2">
                        <h4 className="text-sm font-bold text-gray-900 border-b pb-2 flex items-center gap-2"><Calculator className="w-4 h-4 text-purple-500"/> Financials</h4>
                        
-                       <div>
-                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">{formData.bookingStatus === 'Cancelled' ? 'Cancellation Fee (Trip Price Field)' : 'Trip Price (₹) *'}</label>
-                          <input type="number" name="tripPrice" value={formData.tripPrice || ''} onChange={(e) => {
-                              const price = parseFloat(e.target.value) || 0;
-                              // Only auto-calc tax if NOT cancelled
-                              const taxAmt = formData.bookingStatus !== 'Cancelled' ? (price * parseFloat(taxPercentage)) / 100 : 0;
-                              setFormData(prev => ({ ...prev, tripPrice: price, tax: taxAmt }));
-                          }} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm font-medium" placeholder="0" />
-                       </div>
-
-                       {/* Conditional Rendering based on Status */}
-                       {formData.bookingStatus !== 'Cancelled' && (
-                           <>
-                           <div className="grid grid-cols-2 gap-2">
-                              <div>
-                                 <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Tax %</label>
-                                 <input 
-                                     type="number" 
-                                     value={taxPercentage} 
-                                     onChange={(e) => {
-                                         const percent = parseFloat(e.target.value) || 0;
-                                         setTaxPercentage(e.target.value);
-                                         const taxAmt = (formData.tripPrice * percent) / 100;
-                                         setFormData(prev => ({ ...prev, tax: taxAmt }));
-                                     }}
-                                     className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm focus:ring-2 focus:ring-emerald-500" 
-                                     placeholder="%" 
-                                 />
-                              </div>
-                              <div>
-                                 <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Tax Amt</label>
-                                 <div className="relative">
-                                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">₹</span>
-                                    <input 
-                                        type="number" 
-                                        name="tax" 
-                                        value={formData.tax || ''} 
-                                        readOnly 
-                                        className="w-full pl-5 p-2 border border-gray-300 rounded-lg outline-none text-sm bg-gray-50 focus:ring-2 focus:ring-emerald-500" 
-                                        placeholder="0" 
-                                    />
-                                 </div>
-                              </div>
+                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                           <div>
+                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">{formData.bookingStatus === 'Cancelled' ? 'Cancellation Fee (Trip Price Field)' : 'Trip Price (₹) *'}</label>
+                              <input type="number" name="tripPrice" value={formData.tripPrice || ''} onChange={(e) => {
+                                  const price = parseFloat(e.target.value) || 0;
+                                  // Only auto-calc tax if NOT cancelled
+                                  const taxAmt = formData.bookingStatus !== 'Cancelled' ? (price * parseFloat(taxPercentage)) / 100 : 0;
+                                  setFormData(prev => ({ ...prev, tripPrice: price, tax: taxAmt }));
+                              }} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm font-medium" placeholder="0" />
                            </div>
 
-                           <div className="grid grid-cols-2 gap-2">
-                              <div>
+                           {/* Conditional Rendering based on Status */}
+                           {formData.bookingStatus !== 'Cancelled' && (
+                               <>
+                               <div>
+                                     <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Tax %</label>
+                                     <input 
+                                         type="number" 
+                                         value={taxPercentage} 
+                                         onChange={(e) => {
+                                             const percent = parseFloat(e.target.value) || 0;
+                                             setTaxPercentage(e.target.value);
+                                             const taxAmt = (formData.tripPrice * percent) / 100;
+                                             setFormData(prev => ({ ...prev, tax: taxAmt }));
+                                         }}
+                                         className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm focus:ring-2 focus:ring-emerald-500" 
+                                         placeholder="%" 
+                                     />
+                                  </div>
+                                  <div>
+                                     <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Tax Amt</label>
+                                     <div className="relative">
+                                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">₹</span>
+                                        <input 
+                                            type="number" 
+                                            name="tax" 
+                                            value={formData.tax || ''} 
+                                            readOnly 
+                                            className="w-full pl-5 p-2 border border-gray-300 rounded-lg outline-none text-sm bg-gray-50 focus:ring-2 focus:ring-emerald-500" 
+                                            placeholder="0" 
+                                        />
+                                     </div>
+                                  </div>
+                               </>
+                           )}
+                           
+                           {/* Fields visible when Cancelled */}
+                           {formData.bookingStatus === 'Cancelled' && (
+                               <div>
+                                   <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cancellation Charge (Addt'l)</label>
+                                   <input type="number" name="cancellationCharge" value={formData.cancellationCharge || ''} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="0" />
+                               </div>
+                           )}
+
+                           {formData.bookingStatus !== 'Cancelled' && (
+                               <>
+                               <div>
                                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Waiting Chg.</label>
                                  <input type="number" name="waitingCharge" value={formData.waitingCharge || ''} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="0" />
-                              </div>
-                              <div>
+                               </div>
+                               <div>
                                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cancel Chg.</label>
                                  <input type="number" name="cancellationCharge" value={formData.cancellationCharge || ''} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="0" />
-                              </div>
-                           </div>
-
-                           <div>
-                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Discount</label>
-                              <input type="number" name="discount" value={formData.discount || ''} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm text-red-600" placeholder="0" />
-                           </div>
-                           </>
-                       )}
-                       
-                       {/* Fields visible when Cancelled */}
-                       {formData.bookingStatus === 'Cancelled' && (
-                           <div>
-                               <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cancellation Charge (Addt'l)</label>
-                               <input type="number" name="cancellationCharge" value={formData.cancellationCharge || ''} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="0" />
-                           </div>
-                       )}
+                               </div>
+                               <div>
+                                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Discount</label>
+                                  <input type="number" name="discount" value={formData.discount || ''} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm text-red-600" placeholder="0" />
+                               </div>
+                               </>
+                           )}
+                       </div>
 
                        <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 mt-2">
                           <label className="block text-xs font-bold text-emerald-800 uppercase mb-1">Total Price</label>
