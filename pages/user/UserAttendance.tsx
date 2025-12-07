@@ -7,7 +7,8 @@ import {
   ChevronLeft, ChevronRight, Calendar, List, CheckCircle, XCircle, 
   User, MapPin, Clock, Fingerprint, Download, X, 
   PieChart as PieChartIcon, Activity, ScanLine, Loader2, Navigation,
-  Phone, DollarSign, Plane, Briefcase, Camera, AlertCircle, Building2, RefreshCcw, Users, Coffee
+  Phone, DollarSign, Plane, Briefcase, Camera, AlertCircle, Building2, RefreshCcw, Users, Coffee,
+  Search, Filter
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useBranding } from '../../context/BrandingContext';
@@ -167,11 +168,9 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
     if (filterBranch !== 'All') {
       list = list.filter(emp => emp.branch === filterBranch);
     }
-    if (filterStaffId !== 'All') {
-      list = list.filter(emp => emp.id === filterStaffId);
-    }
+    // Filter by search/ID if needed, though usually handled by dropdown
     return list;
-  }, [employees, filterCorporate, filterBranch, filterStaffId, isSuperAdmin]);
+  }, [employees, filterCorporate, filterBranch, isSuperAdmin]);
 
 
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null); 
@@ -179,19 +178,22 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
   
   useEffect(() => {
     if (isAdmin) {
-      if (filteredEmployeesForDisplay.length > 0 && !selectedEmployee) {
-        setSelectedEmployee(filteredEmployeesForDisplay[0]);
-      } else if (filteredEmployeesForDisplay.length === 0) {
+      // For admin view, select the first employee from filtered list if none selected
+      if (filteredEmployeesForDisplay.length > 0) {
+        if (!selectedEmployee || !filteredEmployeesForDisplay.some(e => e.id === selectedEmployee.id)) {
+            setSelectedEmployee(filteredEmployeesForDisplay[0]);
+            setFilterStaffId(filteredEmployeesForDisplay[0].id); // Sync filter
+        }
+      } else {
         setSelectedEmployee(null);
-      } else if (selectedEmployee && !filteredEmployeesForDisplay.some(e => e.id === selectedEmployee.id)) {
-        setSelectedEmployee(filteredEmployeesForDisplay[0]);
+        setFilterStaffId('All');
       }
     } else {
       if (loggedInUser) {
           setSelectedEmployee(loggedInUser);
       }
     }
-  }, [isAdmin, filteredEmployeesForDisplay, loggedInUser, selectedEmployee]);
+  }, [isAdmin, filteredEmployeesForDisplay, loggedInUser]); // Removed selectedEmployee from dependency to prevent loop
 
 
   useEffect(() => {
@@ -253,7 +255,7 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
     return () => clearInterval(timer);
   }, []);
 
-  // --- Permission & Geolocation logic ---
+  // --- Permission & Geolocation logic (Only for Employee) ---
   useEffect(() => {
     if (!isAdmin && selectedEmployee) {
       const requestPermissions = async () => {
@@ -547,8 +549,93 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
   const monthLabel = currentDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
   const fullMonthLabel = currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
+  // ----------------------------------------------------------
+  // ADMIN VIEW RENDER
+  // ----------------------------------------------------------
+  if (isAdmin) {
+      return (
+          <div className="space-y-6 max-w-7xl mx-auto">
+             {/* Admin Filters */}
+             <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-wrap gap-4 items-center">
+                <h3 className="text-sm font-bold text-gray-700 flex items-center gap-2 mr-2">
+                    <Filter className="w-4 h-4" /> Filters
+                </h3>
+                
+                {isSuperAdmin && (
+                    <select 
+                        value={filterCorporate}
+                        onChange={(e) => { setFilterCorporate(e.target.value); setFilterBranch('All'); setFilterStaffId('All'); }}
+                        className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 min-w-[150px]"
+                    >
+                        <option value="All">All Corporates</option>
+                        <option value="admin">Head Office</option>
+                        {corporatesList.map(c => <option key={c.id} value={c.email}>{c.companyName}</option>)}
+                    </select>
+                )}
+
+                <select 
+                    value={filterBranch}
+                    onChange={(e) => { setFilterBranch(e.target.value); setFilterStaffId('All'); }}
+                    className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 min-w-[150px]"
+                >
+                    <option value="All">All Branches</option>
+                    {allBranchesList
+                        .filter(b => isSuperAdmin ? (filterCorporate === 'All' || b.owner === filterCorporate) : true)
+                        .map((b, i) => <option key={i} value={b.name}>{b.name}</option>)
+                    }
+                </select>
+
+                <select 
+                    value={filterStaffId}
+                    onChange={(e) => { 
+                        setFilterStaffId(e.target.value); 
+                        const emp = employees.find(ep => ep.id === e.target.value);
+                        if (emp) setSelectedEmployee(emp);
+                    }}
+                    className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 min-w-[180px]"
+                >
+                    <option value="All">Select Employee</option>
+                    {filteredEmployeesForDisplay.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                </select>
+             </div>
+
+             {!selectedEmployee ? (
+                  <div className="flex flex-col items-center justify-center min-h-[400px] text-gray-500 bg-white rounded-xl border border-dashed border-gray-300">
+                      <Users className="w-12 h-12 mb-3 opacity-20" />
+                      <p>Select an employee using the filters above to view their attendance.</p>
+                  </div>
+             ) : (
+                 <>
+                     {/* Header with Name */}
+                     <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                         <div className="flex items-center gap-4">
+                             <img src={selectedEmployee.avatar} alt={selectedEmployee.name} className="w-12 h-12 rounded-full border border-gray-100" />
+                             <div>
+                                 <h3 className="font-bold text-gray-800 text-lg">{selectedEmployee.name}</h3>
+                                 <p className="text-xs text-gray-500">{selectedEmployee.role} • {selectedEmployee.branch}</p>
+                             </div>
+                         </div>
+                         <div className="flex items-center gap-2">
+                             <button onClick={handlePrevMonth} className="p-1 hover:bg-gray-100 rounded-full"><ChevronLeft className="w-5 h-5"/></button>
+                             <span className="font-bold text-gray-700 min-w-[120px] text-center">{fullMonthLabel}</span>
+                             <button onClick={handleNextMonth} className="p-1 hover:bg-gray-100 rounded-full"><ChevronRight className="w-5 h-5"/></button>
+                         </div>
+                     </div>
+
+                     {/* Stats & Calendar */}
+                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                         <AttendanceCalendar data={attendanceData} stats={stats} />
+                     </div>
+                 </>
+             )}
+          </div>
+      );
+  }
+
+  // ----------------------------------------------------------
   // EMPLOYEE VIEW RENDER
-  if (!isAdmin && selectedEmployee) {
+  // ----------------------------------------------------------
+  if (selectedEmployee) {
     const config = selectedEmployee.attendanceConfig || { gpsGeofencing: false, qrScan: false, manualPunch: true };
     
     let locationDisplay = "Location Unavailable";
@@ -757,10 +844,10 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
     );
   }
 
-  // Fallback for Admin View (unchanged logic for admin panel)
+  // Fallback if no employee selected (should rarely happen with auto-select)
   return (
     <div className="text-center p-8 text-gray-500">
-        Admin Attendance View (Use the filters above to view staff attendance).
+        Loading...
     </div>
   );
 };

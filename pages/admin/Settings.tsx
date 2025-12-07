@@ -6,7 +6,7 @@ import {
   UploadCloud, DownloadCloud, Loader2, Map as MapIcon, Check,
   Users, Target, Building2, Car, Wallet, MapPin, Truck, Layers, RefreshCw, Eye,
   Phone, DollarSign, Plane, Briefcase as BriefcaseIcon, Clock, Calendar, X,
-  EyeOff, AlertCircle
+  EyeOff, AlertCircle, Info, ExternalLink
 } from 'lucide-react';
 import { 
   HARDCODED_FIREBASE_CONFIG, getCloudDatabaseStats,
@@ -20,7 +20,7 @@ const Settings: React.FC = () => {
   const [dbStatus, setDbStatus] = useState<'Connected' | 'Disconnected' | 'Error'>('Disconnected');
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
-  // Fix: Corrected corrupted useState initialization
+  
   const [collectionStats, setCollectionStats] = useState<any[]>([]);
 
   // Local state for branding form
@@ -30,8 +30,9 @@ const Settings: React.FC = () => {
   // Maps API Key State
   const [mapsKey, setMapsKey] = useState(localStorage.getItem('maps_api_key') || '');
   const [showMapsInput, setShowMapsInput] = useState(false);
+  const [isSavingKey, setIsSavingKey] = useState(false);
 
-  // Password Change State (NEW)
+  // Password Change State
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
@@ -85,32 +86,32 @@ const Settings: React.FC = () => {
 
     return collections.map(col => {
         // Get Local Count
-        let localCount: string | number = 0; // Initialize with compatible type
+        let localCount: string | number = 0; 
         let localContent: any = null;
-        let localStr: string | null = null; // Declare localStr outside try block
+        let localStr: string | null = null;
         try {
             localStr = localStorage.getItem(col.key);
             if (localStr) {
                 localContent = JSON.parse(localStr);
-                localCount = Array.isArray(localContent) ? localContent.length : 1; // Count 1 for non-array settings
+                localCount = Array.isArray(localContent) ? localContent.length : 1; 
             }
         } catch(e) {
-            localCount = 'Err'; // Indicate parsing error
-            localContent = localStr; // Store raw string if error
+            localCount = 'Err'; 
+            localContent = localStr; 
         }
 
         // Get Cloud Count
         let cloudCount: string | number = '-';
         if (cloudData && cloudData[col.key]) {
-            cloudCount = cloudData[col.key].count as string | number; // Explicitly cast to resolve type issue if any
+            cloudCount = cloudData[col.key].count as string | number;
         }
 
         return {
             ...col,
             local: localCount,
-            localContent: localContent, // Store content for viewer
+            localContent: localContent,
             cloud: cloudCount,
-            status: 'Synced' // Assuming synced if connected for UI demo
+            status: 'Synced' 
         };
     });
   };
@@ -119,7 +120,6 @@ const Settings: React.FC = () => {
     try {
       const s = await getCloudDatabaseStats();
       
-      // Generate stats regardless of connection, cloud will just be '-' if not connected
       const statsList = generateCollectionStats(s);
       setCollectionStats(statsList);
 
@@ -140,10 +140,27 @@ const Settings: React.FC = () => {
     alert("Site settings saved!");
   };
 
-  const handleSaveMapsKey = () => {
+  const handleSaveMapsKey = async () => {
+      if (!mapsKey.trim()) {
+          alert("Please enter a valid API Key.");
+          return;
+      }
+
+      setIsSavingKey(true);
       localStorage.setItem('maps_api_key', mapsKey);
+      
+      // CRITICAL FIX: Sync to cloud BEFORE reload.
+      // This prevents the app from downloading the old empty key from the cloud 
+      // when it re-initializes, which would overwrite the user's input.
+      try {
+          await syncToCloud();
+      } catch (e) {
+          console.error("Failed to sync key to cloud:", e);
+      }
+
       setShowMapsInput(false);
-      alert("Google Maps API Key saved. Please refresh the page to apply changes.");
+      setIsSavingKey(false);
+      // Reload to apply the new script with the new key
       window.location.reload();
   };
 
@@ -186,7 +203,7 @@ const Settings: React.FC = () => {
             const parsed = JSON.parse(content);
             setCollectionContent(parsed);
         } catch (e) {
-            setCollectionContent(content); // Fallback to raw string if not valid JSON
+            setCollectionContent(content); 
             setCollectionError("Content is not valid JSON.");
         }
     } else {
@@ -202,10 +219,9 @@ const Settings: React.FC = () => {
     setCollectionError(null);
   };
 
-  // NEW: Handle Admin Password Change
   const handleChangeAdminPassword = (e: React.FormEvent) => {
       e.preventDefault();
-      setPasswordMessage(null); // Clear previous messages
+      setPasswordMessage(null); 
 
       const storedAdminPass = localStorage.getItem('admin_password') || '123456';
 
@@ -225,13 +241,12 @@ const Settings: React.FC = () => {
       localStorage.setItem('admin_password', newPassword);
       setPasswordMessage({ type: 'success', text: 'Admin password updated successfully!' });
       
-      // Clear form
       setCurrentPassword('');
       setNewPassword('');
       setConfirmNewPassword('');
       setShowPasswords({ current: false, new: false, confirm: false });
 
-      setTimeout(() => setPasswordMessage(null), 3000); // Clear message after 3 seconds
+      setTimeout(() => setPasswordMessage(null), 3000); 
   };
 
 
@@ -328,7 +343,27 @@ const Settings: React.FC = () => {
                
                {showMapsInput && (
                    <div className="mt-4 pt-4 border-t border-gray-100 animate-in fade-in slide-in-from-top-2">
-                       <label className="block text-xs font-bold text-gray-500 uppercase mb-1">API Key</label>
+                       <div className="mb-4 p-4 bg-blue-50 border border-blue-100 rounded-lg text-sm text-blue-800">
+                          <h5 className="font-bold flex items-center gap-2 mb-2">
+                            <Info className="w-4 h-4"/> How to get your API Key:
+                          </h5>
+                          <ol className="list-decimal pl-5 space-y-1 text-xs">
+                            <li>Go to the <a href="https://console.cloud.google.com/" target="_blank" rel="noopener noreferrer" className="underline font-bold flex-inline items-center gap-1">Google Cloud Console <ExternalLink className="w-3 h-3 inline"/></a>.</li>
+                            <li>Create a new project (or select existing).</li>
+                            <li><strong>Important:</strong> Enable Billing for the project (Maps won't work without it).</li>
+                            <li>Go to "APIs & Services" > "Library" and enable these 3 APIs:
+                                <ul className="list-disc pl-5 mt-1 font-mono text-blue-700">
+                                    <li>Maps JavaScript API</li>
+                                    <li>Places API (New)</li>
+                                    <li>Distance Matrix API</li>
+                                </ul>
+                            </li>
+                            <li>Go to "Credentials" and create an <strong>API Key</strong>.</li>
+                            <li>Paste the key below and click Save.</li>
+                          </ol>
+                       </div>
+
+                       <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Enter API Key</label>
                        <div className="flex gap-2">
                            <input 
                                type="text" 
@@ -339,12 +374,13 @@ const Settings: React.FC = () => {
                            />
                            <button 
                                onClick={handleSaveMapsKey}
-                               className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 flex items-center gap-1 shadow-sm"
+                               disabled={isSavingKey}
+                               className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 flex items-center gap-1 shadow-sm disabled:opacity-50"
                            >
-                               <Check className="w-4 h-4" /> Save
+                               {isSavingKey ? <Loader2 className="w-4 h-4 animate-spin"/> : <Check className="w-4 h-4" />}
+                               Save
                            </button>
                        </div>
-                       <p className="text-[10px] text-gray-400 mt-1">Get this key from Google Cloud Console (Maps JavaScript API & Places API)</p>
                    </div>
                )}
             </div>
@@ -358,12 +394,10 @@ const Settings: React.FC = () => {
             <Cloud className="w-5 h-5 text-blue-500" /> Cloud Database
           </h3>
           <div className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 ${
-            // Fix: Using correct types for dbStatus comparison
             dbStatus === 'Connected' ? 'bg-green-100 text-green-700' : 
             dbStatus === 'Error' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'
           }`}>
             <div className={`w-2 h-2 rounded-full ${
-              // Fix: Using correct types for dbStatus comparison
               dbStatus === 'Connected' ? 'bg-green-500' : dbStatus === 'Error' ? 'bg-red-500' : 'bg-gray-500'}`}></div>
             {dbStatus}
           </div>
@@ -393,7 +427,6 @@ const Settings: React.FC = () => {
                    <div className="space-y-2 text-sm">
                       <div className="flex justify-between text-gray-600">
                          <span>Collections:</span>
-                         {/* Fix: Directly accessing stats.length is incorrect, should check if stats is an object before Object.keys */}
                          <span className="font-bold text-gray-900">{stats ? Object.keys(stats).length : 0}</span>
                       </div>
                       <div className="flex justify-between text-gray-600">
@@ -506,7 +539,7 @@ const Settings: React.FC = () => {
           </div>
       </div>
       
-      {/* NEW: Security & Account Section */}
+      {/* Security & Account Section */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
           <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
               <LockIcon className="w-5 h-5 text-red-500" /> Security & Account

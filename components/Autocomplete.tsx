@@ -19,20 +19,40 @@ const Autocomplete: React.FC<AutocompleteProps> = ({
   placeholder = "Search for a location",
   defaultValue = ""
 }) => {
-  // Safe check: If google maps script is not loaded at all, render a simple input
+  const [mapError, setMapError] = useState(false);
+
+  useEffect(() => {
+    // Check global failure flag
+    if (window.gm_authFailure_detected) {
+      setMapError(true);
+    }
+    // Listen for auth failure during runtime
+    const original = window.gm_authFailure;
+    window.gm_authFailure = () => {
+        window.gm_authFailure_detected = true;
+        setMapError(true);
+        if(original) original();
+    };
+  }, []);
+
   const isMapsLoaded = typeof window !== "undefined" && window.google && window.google.maps && window.google.maps.places;
 
-  if (!isMapsLoaded) {
+  if (!isMapsLoaded || mapError) {
       return (
         <div className="relative flex-grow w-full">
             <input
                 type="text"
                 defaultValue={defaultValue}
                 placeholder={placeholder}
-                className="w-full pl-10 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none text-sm transition-all"
+                className={`w-full pl-10 pr-8 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none text-sm transition-all ${mapError ? 'bg-amber-50 border-amber-200' : 'bg-white border-gray-300'}`}
                 onChange={(e) => onAddressSelect && onAddressSelect(e.target.value)}
+                title={mapError ? "Map services unavailable. Manual entry only." : ""}
             />
-            <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+            {mapError ? (
+                <AlertTriangle className="absolute left-3 top-1/2 -translate-y-1/2 text-amber-500 w-4 h-4" title="Map services unavailable" />
+            ) : (
+                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+            )}
         </div>
       );
   }
@@ -68,15 +88,7 @@ const MapsAutocomplete: React.FC<AutocompleteProps> = ({
 
   const [showSuggestions, setShowSuggestions] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const [globalError, setGlobalError] = useState(false);
-
-  // Check for global auth failure (Billing error)
-  useEffect(() => {
-    if (window.gm_authFailure_detected) {
-      setGlobalError(true);
-    }
-  }, []);
-
+  
   // Sync local value if defaultValue changes externally
   useEffect(() => {
     if (defaultValue && defaultValue !== value) {
@@ -99,7 +111,6 @@ const MapsAutocomplete: React.FC<AutocompleteProps> = ({
 
   const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     setValue(e.target.value);
-    // CRITICAL FIX: Allow manual typing to propagate even if no prediction is selected
     if (onAddressSelect) {
         onAddressSelect(e.target.value);
     }
@@ -122,12 +133,13 @@ const MapsAutocomplete: React.FC<AutocompleteProps> = ({
         setNewPlace({ lat, lng });
       } catch (error) {
         console.log("Error selecting place (Billing or Network): ", error);
-        // Fail silently for coordinates, but address string is already set
+        // Fail silently for coordinates, address string is already set
       }
     }
   };
 
-  const hasError = status === "REQUEST_DENIED" || status === "OVER_QUERY_LIMIT" || globalError;
+  // Check specifically for billing/quota errors from the Places API
+  const hasError = status === "REQUEST_DENIED" || status === "OVER_QUERY_LIMIT";
 
   return (
     <div ref={wrapperRef} className="relative flex-grow w-full"> 
@@ -135,8 +147,6 @@ const MapsAutocomplete: React.FC<AutocompleteProps> = ({
         <input
           value={value}
           onChange={handleInput}
-          // Fix: Do not disable input if ready is false, allow manual fallback
-          // disabled={!ready} 
           placeholder={placeholder}
           title={hasError ? "Google Maps API Error: Billing not enabled. Manual entry mode." : ""}
           className={`w-full pl-10 pr-8 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none text-sm transition-all ${hasError ? 'border-amber-300 bg-amber-50 text-amber-900' : 'border-gray-300'}`}

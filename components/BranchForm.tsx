@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { MapPin, Maximize, Crosshair, Loader2, AlertTriangle, Building, Trash2, Settings, Building2, Pencil, X, QrCode, Download } from 'lucide-react';
 import { Branch } from '../types';
@@ -114,9 +115,13 @@ const BranchForm: React.FC = () => {
   const handleNewPlaceSelected = (newPos: google.maps.LatLngLiteral) => {
     setLocation(newPos);
     if (mapInstance && markerInstance) {
-      mapInstance.panTo(newPos);
-      markerInstance.setPosition(newPos);
-      mapInstance.setZoom(17);
+      try {
+        mapInstance.panTo(newPos);
+        markerInstance.setPosition(newPos);
+        mapInstance.setZoom(17);
+      } catch (e) {
+        console.warn("Map interaction failed", e);
+      }
     }
     // Also fetch address for the selected place
     if (window.google && window.google.maps && window.google.maps.Geocoder) {
@@ -125,6 +130,11 @@ const BranchForm: React.FC = () => {
         geocoder.geocode({ location: newPos }, (results: any, status: any) => {
           if (status === "OK" && results[0]) {
             setAddress(results[0].formatted_address);
+          } else {
+             // Handle billing errors gracefully
+             if (status === 'REQUEST_DENIED' || status === 'OVER_QUERY_LIMIT') {
+                 setMapError("Google Cloud Billing is disabled. Manual entry required.");
+             }
           }
         });
       } catch (e) {
@@ -248,6 +258,7 @@ const BranchForm: React.FC = () => {
           setAddress(results[0].formatted_address);
         } else {
           if (status === 'REQUEST_DENIED' || status === 'OVER_QUERY_LIMIT') {
+            setMapError("Google Cloud Billing is disabled. Maps unavailable.");
             alert("Map Error: Billing not enabled or API Key invalid.");
           } else {
             alert(`Could not fetch address. Status: ${status}`);
@@ -271,9 +282,13 @@ const BranchForm: React.FC = () => {
           };
           setLocation(pos);
           if (mapInstance && markerInstance) {
-            mapInstance.setCenter(pos);
-            markerInstance.setPosition(pos);
-            mapInstance.setZoom(17);
+            try {
+                mapInstance.setCenter(pos);
+                markerInstance.setPosition(pos);
+                mapInstance.setZoom(17);
+            } catch (e) {
+                console.warn("Map update failed", e);
+            }
           }
         },
         () => {
@@ -297,9 +312,13 @@ const BranchForm: React.FC = () => {
     if(isSuperAdmin) setSelectedOwner(branch.owner || 'admin');
 
     if (mapInstance && markerInstance) {
-        mapInstance.panTo(newLoc);
-        markerInstance.setPosition(newLoc);
-        mapInstance.setZoom(17);
+        try {
+            mapInstance.panTo(newLoc);
+            markerInstance.setPosition(newLoc);
+            mapInstance.setZoom(17);
+        } catch(e) {
+            console.warn("Map update failed during edit", e);
+        }
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -381,9 +400,6 @@ const BranchForm: React.FC = () => {
 
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`OK BOZ - ${branchName || 'BRANCH'}`)}`;
 
-  // Filter branches for view? 
-  // Admin sees ALL in list.
-  // Corporate sees ONLY theirs (handled by initial state).
   const displayedBranches = branches;
 
   return (
@@ -440,8 +456,8 @@ const BranchForm: React.FC = () => {
                         type="text" 
                         value={address}
                         onChange={(e) => setAddress(e.target.value)}
-                        placeholder={mapError ? "Enter address manually" : "Select location on map or enter manually"}
-                        className={`flex-1 border border-gray-300 rounded-md px-4 py-3 transition-colors ${mapError ? 'bg-white' : 'bg-gray-50 focus:bg-white'}`}
+                        placeholder={mapError ? "Enter address manually (Map Unavailable)" : "Select location on map or enter manually"}
+                        className={`flex-1 border border-gray-300 rounded-md px-4 py-3 transition-colors ${mapError ? 'bg-amber-50' : 'bg-gray-50 focus:bg-white'}`}
                     />
                     <button 
                         onClick={handleGetAddress}
@@ -503,11 +519,10 @@ const BranchForm: React.FC = () => {
           <div className="space-y-2">
             <label className="block text-sm font-medium text-gray-700">Pin Location on Map</label>
             
-            {!mapError && isMapReady && (
-              <div className="relative z-20"> 
-                <Autocomplete setNewPlace={handleNewPlaceSelected} />
-              </div>
-            )}
+            {/* Always render autocomplete, it handles its own fallback state */}
+            <div className="relative z-20"> 
+                <Autocomplete setNewPlace={handleNewPlaceSelected} onAddressSelect={setAddress} defaultValue={address} />
+            </div>
             
             <div className={`border border-gray-300 rounded-lg overflow-hidden shadow-sm ${mapError ? 'bg-gray-50' : ''} relative h-96 w-full`}>
               {mapError ? (

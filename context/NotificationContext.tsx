@@ -15,10 +15,8 @@ const NotificationContext = createContext<NotificationContextType | undefined>(u
 
 const NOTIFICATION_STORAGE_KEY = 'app_notifications_cache';
 const LAST_PLAYED_COUNT_KEY = 'app_last_played_notification_count';
-// Use a louder, more distinct notification sound (e.g., a bell or alert chime)
-// Note: If you have a specific file you attached, please upload it to your public/assets folder 
-// and replace this URL with '/assets/your-sound-file.mp3'
-const NOTIFICATION_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3';
+// Louder, distinct alarm sound (Classic Alarm Clock style)
+const NOTIFICATION_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2190/2190-preview.mp3';
 
 export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [notifications, setNotifications] = useState<Notification[]>(() => {
@@ -70,7 +68,6 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     }
     
     // Always update ref and storage to current count
-    // If count decreased (read), we update so next increase triggers sound
     if (unreadCount !== lastPlayedCountRef.current) {
         lastPlayedCountRef.current = unreadCount;
         localStorage.setItem(LAST_PLAYED_COUNT_KEY, unreadCount.toString());
@@ -148,7 +145,6 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
       }}
     >
       {children}
-      {/* Hidden audio element to help with preloading */}
       <audio ref={audioRef} src={NOTIFICATION_SOUND_URL} preload="auto" style={{ display: 'none' }} />
     </NotificationContext.Provider>
   );
