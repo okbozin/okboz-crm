@@ -246,7 +246,6 @@ export interface Task {
   branch?: string; 
   status: 'Todo' | 'In Progress' | 'Review' | 'Done';
   priority: 'Low' | 'Medium' | 'High';
-  dueDate?: string;
   startDate?: string;
   endDate?: string;
   createdAt: string;

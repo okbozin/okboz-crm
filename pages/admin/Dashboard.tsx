@@ -440,7 +440,23 @@ const Dashboard = () => {
       </div>
 
       {/* Stats Cards Row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        {/* Total Staff Stat - NEW */}
+        <div className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm cursor-pointer hover:border-emerald-300 transition-colors" onClick={() => navigate('/admin/staff')}>
+            <div className="flex justify-between items-start mb-2">
+                <div>
+                    <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total Staff</p>
+                    <h3 className="text-2xl font-bold text-gray-800 dark:text-white mt-1">{filteredEmployees.length}</h3>
+                </div>
+                <div className="p-2 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg text-indigo-600 dark:text-indigo-400">
+                    <Users className="w-5 h-5" />
+                </div>
+            </div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">
+                Active in selected view
+            </div>
+        </div>
+
         {/* Attendance Stat */}
         <div className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
             <div className="flex justify-between items-start mb-2">

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Plus, Search, Phone, Mail, X, User, Upload, FileText, CreditCard, 
@@ -65,7 +66,7 @@ const StaffList: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState('All Roles');
-  const [filterStatus, setFilterStatus] = useState('All Status');
+  const [filterStatus, setFilterStatus] = useState('Active'); // Default to Active to "hide" inactive by default
   const [filterDepartment, setFilterDepartment] = useState('All Departments'); 
   
   // Settings for Dropdowns
@@ -390,9 +391,9 @@ const StaffList: React.FC = () => {
             onChange={(e) => setFilterStatus(e.target.value)}
             className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
          >
-            <option>All Status</option>
             <option>Active</option>
             <option>Inactive</option>
+            <option>All Status</option>
          </select>
       </div>
 
@@ -448,7 +449,7 @@ const StaffList: React.FC = () => {
          ))}
          {filteredEmployees.length === 0 && (
             <div className="col-span-full py-12 text-center text-gray-500">
-               No employees found.
+               No employees found matching the filters.
             </div>
          )}
       </div>
@@ -514,6 +515,13 @@ const StaffList: React.FC = () => {
                              <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Salary (CTC)</label>
                                 <input type="number" name="salary" value={formData.salary} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none" placeholder="Monthly Gross" />
+                             </div>
+                             <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                                <select name="status" value={formData.status} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none bg-white">
+                                   <option value="Active">Active</option>
+                                   <option value="Inactive">Inactive</option>
+                                </select>
                              </div>
                           </div>
                       </div>
