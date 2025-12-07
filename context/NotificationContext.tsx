@@ -15,8 +15,10 @@ const NotificationContext = createContext<NotificationContextType | undefined>(u
 
 const NOTIFICATION_STORAGE_KEY = 'app_notifications_cache';
 const LAST_PLAYED_COUNT_KEY = 'app_last_played_notification_count';
-// Use a reliable hosted sound file for notifications (Google CDN)
-const NOTIFICATION_SOUND_URL = 'https://codeskulptor-demos.commondatastorage.googleapis.com/pang/pop.mp3';
+// Use a louder, more distinct notification sound (e.g., a bell or alert chime)
+// Note: If you have a specific file you attached, please upload it to your public/assets folder 
+// and replace this URL with '/assets/your-sound-file.mp3'
+const NOTIFICATION_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3';
 
 export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [notifications, setNotifications] = useState<Notification[]>(() => {
@@ -44,6 +46,7 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
       // Create a new Audio object to ensure it plays even if one is already playing/paused
       const audio = new Audio(NOTIFICATION_SOUND_URL);
       audio.volume = 1.0; // Max volume
+      // Attempt to play
       const playPromise = audio.play();
       
       if (playPromise !== undefined) {
