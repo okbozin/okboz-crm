@@ -19,6 +19,7 @@ const MASTER_ADMIN_LINKS = [
   { id: 'reports', path: '/admin/reports', label: 'Reports', icon: BarChart3 },
   { id: 'customer-care', path: '/admin/customer-care', label: 'Customer Care', icon: Headset },
   { id: 'trips', path: '/admin/trips', label: 'Trip Booking', icon: Map },
+  { id: 'trip-earning', path: '/admin/trip-earning', label: 'Trip Earning', icon: ReceiptIndianRupee }, // NEW
   { id: 'tracking', path: '/admin/tracking', label: 'Live Tracking', icon: Navigation },
   
   { id: 'leads', path: '/admin/leads', label: 'Franchisee Leads', icon: Layers },

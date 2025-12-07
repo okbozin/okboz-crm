@@ -17,8 +17,9 @@ import Corporate from './pages/admin/Corporate';
 import Documents from './pages/Documents';
 import Leads from './pages/admin/Leads';
 import TripBooking from './pages/admin/TripBooking'; 
+import TripEarning from './pages/admin/TripEarning'; // NEW IMPORT
 import CustomerCare from './pages/admin/CustomerCare';
-import EmailMarketing from './pages/admin/EmailMarketing'; // Added import
+import EmailMarketing from './pages/admin/EmailMarketing'; 
 import UserAttendance from './pages/user/UserAttendance';
 import UserSalary from './pages/user/UserSalary';
 import ApplyLeave from './pages/user/ApplyLeave';
@@ -136,6 +137,7 @@ const App: React.FC = () => {
                         <Route path="/admin/reports" element={<Reports />} />
                         <Route path="/admin/customer-care" element={<CustomerCare role={userRole} />} />
                         <Route path="/admin/trips" element={<TripBooking />} /> 
+                        <Route path="/admin/trip-earning" element={<TripEarning />} /> {/* NEW ROUTE */}
                         <Route path="/admin/tracking" element={<LiveTracking />} />
                         <Route path="/admin/leads" element={<Leads />} />
                         <Route path="/admin/tasks" element={<TaskManagement role={userRole} />} />
