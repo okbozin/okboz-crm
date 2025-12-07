@@ -214,6 +214,7 @@ const StaffList: React.FC = () => {
   const [formData, setFormData] = useState<StaffFormData>(initialFormState);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState(1); // 1: Professional, 2: Settings, 3: Personal/Banking
+  const [showPassword, setShowPassword] = useState(false);
   
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -245,6 +246,7 @@ const StaffList: React.FC = () => {
       });
       setEditingId(null);
       setCurrentStep(1);
+      setShowPassword(false);
   };
 
   const handleEdit = (employee: DisplayEmployee) => {
@@ -482,6 +484,26 @@ const StaffList: React.FC = () => {
                              <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
                                 <input type="email" name="email" value={formData.email} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500" required />
+                             </div>
+                             <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                                <div className="relative">
+                                    <input 
+                                        type={showPassword ? "text" : "password"} 
+                                        name="password" 
+                                        value={formData.password || ''} 
+                                        onChange={handleInputChange} 
+                                        className="w-full p-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 pr-10" 
+                                        placeholder="Default: user123" 
+                                    />
+                                    <button 
+                                        type="button"
+                                        onClick={() => setShowPassword(!showPassword)}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                    >
+                                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                    </button>
+                                </div>
                              </div>
                              <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
