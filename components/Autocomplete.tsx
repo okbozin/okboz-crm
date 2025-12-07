@@ -1,4 +1,5 @@
 
+
 import React, { useEffect, useRef, useState } from "react";
 import { Search as SearchIcon, X, MapPin, AlertTriangle } from "lucide-react";
 import usePlacesAutocomplete, {
@@ -49,7 +50,7 @@ const Autocomplete: React.FC<AutocompleteProps> = ({
                 title={mapError ? "Map services unavailable. Manual entry only." : ""}
             />
             {mapError ? (
-                <AlertTriangle className="absolute left-3 top-1/2 -translate-y-1/2 text-amber-500 w-4 h-4" title="Map services unavailable" />
+                <AlertTriangle className="absolute left-3 top-1/2 -translate-y-1/2 text-amber-500 w-4 h-4" />
             ) : (
                 <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
             )}

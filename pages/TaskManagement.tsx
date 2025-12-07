@@ -1,4 +1,6 @@
 
+
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Plus, Calendar, User, Clock, CheckCircle, AlertCircle, 
@@ -114,7 +116,8 @@ const TaskManagement: React.FC<TaskManagementProps> = ({ role }) => {
     branch: '', // NEW: Added to form state
     assignedTo: '',
     priority: 'Medium',
-    dueDate: '',
+    startDate: '', // Added
+    endDate: '',   // Added
     status: 'Todo'
   });
 
@@ -154,7 +157,8 @@ const TaskManagement: React.FC<TaskManagementProps> = ({ role }) => {
       branch: '', // NEW: Reset branch
       assignedTo: '',
       priority: 'Medium',
-      dueDate: '',
+      startDate: '', // Added
+      endDate: '',   // Added
       status: 'Todo'
     });
     setEditingTask(null);
@@ -198,7 +202,8 @@ const TaskManagement: React.FC<TaskManagementProps> = ({ role }) => {
       branch: task.branch || '', // NEW: Set branch for edit
       assignedTo: task.assignedTo,
       priority: task.priority,
-      dueDate: task.dueDate,
+      startDate: task.startDate || '',
+      endDate: task.endDate || '',
       status: task.status
     });
     setIsModalOpen(true);
@@ -231,7 +236,8 @@ const TaskManagement: React.FC<TaskManagementProps> = ({ role }) => {
         corporateName: corpName,
         branch: formData.branch, // NEW: Update branch
         priority: formData.priority as any,
-        dueDate: formData.dueDate,
+        startDate: formData.startDate,
+        endDate: formData.endDate,
         status: formData.status as any
       } : t);
       setTasks(updatedTasks);
@@ -248,7 +254,8 @@ const TaskManagement: React.FC<TaskManagementProps> = ({ role }) => {
         branch: formData.branch, // NEW: Assign branch on creation
         status: 'Todo',
         priority: formData.priority as any,
-        dueDate: formData.dueDate,
+        startDate: formData.startDate,
+        endDate: formData.endDate,
         createdAt: new Date().toISOString()
       };
       setTasks([newTask, ...tasks]);
@@ -337,6 +344,11 @@ const TaskManagement: React.FC<TaskManagementProps> = ({ role }) => {
     setFilterCorporate('All');
     setFilterBranch('All');
     setFilterAssignedTo('All');
+  };
+
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleString([], {month: 'short', day: 'numeric', hour: '2-digit', minute:'2-digit'});
   };
 
   return (
@@ -493,8 +505,10 @@ const TaskManagement: React.FC<TaskManagementProps> = ({ role }) => {
                            <div className="flex items-center gap-2">
                               <img src={assignee.avatar || `https://ui-avatars.com/api/?name=${assignee.name}`} alt="" className="w-6 h-6 rounded-full" title={assignee.name} />
                               <div className="flex flex-col">
-                                 <span className="text-[10px] text-gray-400">Due Date</span>
-                                 <span className="text-xs font-medium text-gray-600">{task.dueDate}</span>
+                                 <span className="text-[10px] text-gray-400">Timeline</span>
+                                 <span className="text-[10px] font-medium text-gray-600">
+                                    {formatDate(task.startDate)} <span className="text-gray-400">to</span> {formatDate(task.endDate)}
+                                 </span>
                               </div>
                            </div>
                            
@@ -592,6 +606,18 @@ const TaskManagement: React.FC<TaskManagementProps> = ({ role }) => {
                     {role === UserRole.EMPLOYEE && <p className="text-xs text-emerald-600 mt-1">Auto-assigned to self</p>}
                  </div>
 
+                 {/* New Start Date & End Date fields */}
+                 <div className="grid grid-cols-2 gap-4">
+                    <div>
+                       <label className="block text-sm font-medium text-gray-700 mb-1">Start Date & Time</label>
+                       <input type="datetime-local" value={formData.startDate} onChange={(e) => setFormData({...formData, startDate: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none" />
+                    </div>
+                    <div>
+                       <label className="block text-sm font-medium text-gray-700 mb-1">End Date & Time</label>
+                       <input type="datetime-local" value={formData.endDate} onChange={(e) => setFormData({...formData, endDate: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none" />
+                    </div>
+                 </div>
+
                  <div className="grid grid-cols-2 gap-4">
                     <div>
                        <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
@@ -601,23 +627,18 @@ const TaskManagement: React.FC<TaskManagementProps> = ({ role }) => {
                           <option>High</option>
                        </select>
                     </div>
-                    <div>
-                       <label className="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
-                       <input required type="date" value={formData.dueDate} onChange={(e) => setFormData({...formData, dueDate: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none" />
-                    </div>
+                    {editingTask && (
+                        <div>
+                           <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                           <select value={formData.status} onChange={(e) => setFormData({...formData, status: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none bg-white">
+                              <option value="Todo">To Do</option>
+                              <option value="In Progress">In Progress</option>
+                              <option value="Review">Review</option>
+                              <option value="Done">Done</option>
+                           </select>
+                        </div>
+                     )}
                  </div>
-
-                 {editingTask && (
-                    <div>
-                       <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                       <select value={formData.status} onChange={(e) => setFormData({...formData, status: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none bg-white">
-                          <option value="Todo">To Do</option>
-                          <option value="In Progress">In Progress</option>
-                          <option value="Review">Review</option>
-                          <option value="Done">Done</option>
-                       </select>
-                    </div>
-                 )}
 
                  <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>

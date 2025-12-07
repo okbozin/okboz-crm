@@ -1,4 +1,5 @@
 
+
 export enum UserRole {
   ADMIN = 'ADMIN',
   EMPLOYEE = 'EMPLOYEE',
@@ -231,6 +232,7 @@ export interface LeaveRequest {
   reason: string;
   appliedOn: string;
   corporateId?: string; 
+  employeeId?: string;
 }
 
 export interface Task {
@@ -244,7 +246,9 @@ export interface Task {
   branch?: string; 
   status: 'Todo' | 'In Progress' | 'Review' | 'Done';
   priority: 'Low' | 'Medium' | 'High';
-  dueDate: string;
+  dueDate?: string;
+  startDate?: string;
+  endDate?: string;
   createdAt: string;
 }
 

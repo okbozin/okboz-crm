@@ -25,6 +25,13 @@ interface DisplayEmployee extends Employee {
     franchiseId?: string;
 }
 
+// Interface for Form Data which includes flat attendance config properties
+interface StaffFormData extends Partial<Employee> {
+  gpsGeofencing?: boolean;
+  qrScan?: boolean;
+  manualPunch?: boolean;
+}
+
 // Permissions List
 const PERMISSIONS = [
     { id: 'customer_care', label: 'Customer Care' },
@@ -163,7 +170,7 @@ const StaffList: React.FC = () => {
   };
 
   // --- Form State ---
-  const initialFormState = {
+  const initialFormState: StaffFormData = {
     name: '',
     email: '',
     role: '',
@@ -203,7 +210,7 @@ const StaffList: React.FC = () => {
     idProof2Url: '',
   };
 
-  const [formData, setFormData] = useState<Partial<Employee>>(initialFormState);
+  const [formData, setFormData] = useState<StaffFormData>(initialFormState);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState(1); // 1: Professional, 2: Settings, 3: Personal/Banking
   

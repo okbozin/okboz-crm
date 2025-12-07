@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Plus, Search, Download, X, Save,
@@ -22,8 +23,8 @@ interface Trip {
   tripCategory: string;
   bookingStatus: string;
   cancelBy?: string;
-  userName: string;
-  userMobile: string;
+  userName?: string;
+  userMobile?: string;
   driverName?: string;
   driverMobile?: string;
   tripPrice: number;
@@ -76,8 +77,8 @@ const TripEarning: React.FC = () => {
     }
   });
 
-  const [allBranches, setAllBranches] = useState<any[]>([]); // Store full branch objects
-  const [corporates, setCorporates] = useState<any[]>([]); // Store corporate accounts
+  const [allBranches, setAllBranches] = useState<any[]>([]); 
+  const [corporates, setCorporates] = useState<any[]>([]); 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   
@@ -93,16 +94,16 @@ const TripEarning: React.FC = () => {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
 
-  // Map state for Autocomplete in Modal
+  // Map state
   const [isMapReady, setIsMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
 
   // Financial Calc State
-  const [taxPercentage, setTaxPercentage] = useState<string>('5'); // Default 5%
-  const [adminCommissionPercentage, setAdminCommissionPercentage] = useState<string>('10'); // Default 10%
+  const [taxPercentage, setTaxPercentage] = useState<string>('5'); 
+  const [adminCommissionPercentage, setAdminCommissionPercentage] = useState<string>('10'); 
 
   const initialFormState = {
-    ownerId: isSuperAdmin ? 'admin' : sessionId, // Default owner
+    ownerId: isSuperAdmin ? 'admin' : sessionId,
     branch: '',
     tripId: '',
     date: new Date().toISOString().split('T')[0],
@@ -111,10 +112,7 @@ const TripEarning: React.FC = () => {
     tripCategory: 'Local',
     bookingStatus: 'Confirmed',
     cancelBy: '',
-    userName: '',
-    userMobile: '',
-    driverName: '',
-    driverMobile: '',
+    // Removed People fields
     tripPrice: 0,
     adminCommission: 0,
     tax: 0,
@@ -129,18 +127,18 @@ const TripEarning: React.FC = () => {
   // --- Google Maps Script Loader ---
   useEffect(() => {
     if (window.gm_authFailure_detected) {
-      setMapError("Map Error: Billing not enabled OR API Key Invalid. Check Google Cloud Console.");
+      setMapError("Map Error: Billing not enabled OR API Key Invalid.");
       return;
     }
     const apiKey = localStorage.getItem('maps_api_key');
     if (!apiKey) {
-      setMapError("API Key missing. Add in Settings > Integrations.");
+      setMapError("API Key missing.");
       return;
     }
     const originalAuthFailure = window.gm_authFailure;
     window.gm_authFailure = () => {
       window.gm_authFailure_detected = true;
-      setMapError("Map Error: Billing not enabled OR API Key Invalid. Check Google Cloud Console.");
+      setMapError("Map Error: Billing not enabled.");
       if (originalAuthFailure) originalAuthFailure();
     };
 
@@ -165,30 +163,23 @@ const TripEarning: React.FC = () => {
               setMapError("Google Maps 'places' library failed to load.");
             }
         };
-        script.onerror = () => setMapError("Network error: Failed to load Google Maps script.");
+        script.onerror = () => setMapError("Network error.");
         document.head.appendChild(script);
     } else {
         script.addEventListener('load', () => {
-          if (window.google && window.google.maps && window.google.maps.places) {
-            setIsMapReady(true);
-          }
+          if (window.google && window.google.maps && window.google.maps.places) setIsMapReady(true);
         });
-        if (window.google && window.google.maps && window.google.maps.places) {
-            setIsMapReady(true);
-        }
+        if (window.google && window.google.maps && window.google.maps.places) setIsMapReady(true);
     }
   }, []);
 
   // Load Branches and Corporates
   useEffect(() => {
     try {
-      // 1. Load Corporates
       const corps = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
       setCorporates(corps);
 
-      // 2. Load Branches
       let loadedBranches: any[] = [];
-      
       if (isSuperAdmin) {
           const adminBranches = JSON.parse(localStorage.getItem('branches_data') || '[]');
           loadedBranches = [...adminBranches.map((b: any) => ({...b, owner: 'admin', ownerName: 'Head Office'}))]; 
@@ -205,8 +196,6 @@ const TripEarning: React.FC = () => {
               loadedBranches = parsed.map((b: any) => ({...b, owner: sessionId}));
           }
       }
-      
-      // Filter branches by current session ID if not Super Admin
       if (!isSuperAdmin) {
           loadedBranches = loadedBranches.filter(b => b.owner === sessionId);
       }
@@ -214,25 +203,35 @@ const TripEarning: React.FC = () => {
     } catch (e) {}
   }, [isSuperAdmin, sessionId]);
 
-  // Sync Trips to Storage
+  // Sync Trips to Storage (FIXED PERSISTENCE FOR DELETE)
   useEffect(() => {
     if (isSuperAdmin) {
+        // 1. Save Head Office Trips
         const headOfficeTrips = trips.filter(t => t.ownerId === 'admin');
-        const cleanTrips = headOfficeTrips.map(({ownerId, ownerName, ...rest}) => rest);
-        localStorage.setItem('trips_data', JSON.stringify(cleanTrips));
+        const cleanAdminTrips = headOfficeTrips.map(({ownerId, ownerName, ...rest}) => rest);
+        localStorage.setItem('trips_data', JSON.stringify(cleanAdminTrips));
+
+        // 2. Save Corporate Trips (Distribute updates/deletes)
+        if (corporates.length > 0) {
+            corporates.forEach((corp: any) => {
+                const corpTrips = trips.filter(t => t.ownerId === corp.email);
+                const cleanCorpTrips = corpTrips.map(({ownerId, ownerName, ...rest}) => rest);
+                localStorage.setItem(`trips_data_${corp.email}`, JSON.stringify(cleanCorpTrips));
+            });
+        }
     } else {
         const key = `trips_data_${sessionId}`;
         const cleanTrips = trips.map(({ownerId, ownerName, ...rest}) => rest);
         localStorage.setItem(key, JSON.stringify(cleanTrips));
     }
-  }, [trips, isSuperAdmin, sessionId]);
+  }, [trips, isSuperAdmin, sessionId, corporates]);
 
   const filteredTrips = useMemo(() => {
     return trips.filter(t => {
       const matchesSearch = 
         t.tripId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        t.userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        t.userMobile.includes(searchTerm);
+        (t.userName && t.userName.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (t.userMobile && t.userMobile.includes(searchTerm));
       
       const matchesStatus = statusFilter === 'All' || t.bookingStatus === statusFilter;
       const matchesBranch = branchFilter === 'All' || (t.branch && t.branch === branchFilter);
@@ -257,57 +256,27 @@ const TripEarning: React.FC = () => {
   }, [trips, searchTerm, statusFilter, branchFilter, corporateFilter, bookingTypeFilter, transportTypeFilter, tripCategoryFilter, fromDate, toDate]);
 
   // --- Chart Data Logic ---
-  
-  // 1. Status & Revenue (Existing)
-  const mainCharts = useMemo(() => {
-    const statusCounts: Record<string, number> = {};
-    const revenueMap: Record<string, number> = {};
-    
-    filteredTrips.forEach(t => {
-        statusCounts[t.bookingStatus] = (statusCounts[t.bookingStatus] || 0) + 1;
-        revenueMap[t.date] = (revenueMap[t.date] || 0) + t.totalPrice;
-    });
-
-    const pieData = Object.keys(statusCounts).map((key) => ({ 
-        name: key, 
-        value: statusCounts[key],
-        color: key === 'Completed' ? '#10b981' : key === 'Cancelled' ? '#ef4444' : key === 'Confirmed' ? '#3b82f6' : '#f59e0b'
-    }));
-
-    const barData = Object.keys(revenueMap).sort().map(date => ({
-        name: new Date(date).toLocaleDateString('en-US', { day: '2-digit', month: 'short' }),
-        revenue: revenueMap[date]
-    }));
-
-    return { pieData, barData };
-  }, [filteredTrips]);
-
-  // 2. Booking Type Distribution
   const bookingTypeData = useMemo(() => {
       const counts: Record<string, number> = {};
       filteredTrips.forEach(t => { counts[t.bookingType] = (counts[t.bookingType] || 0) + 1; });
       return Object.keys(counts).map((key, idx) => ({ name: key, value: counts[key], color: COLORS[idx % COLORS.length] }));
   }, [filteredTrips]);
 
-  // 3. Transport Type Distribution
   const transportTypeData = useMemo(() => {
       const counts: Record<string, number> = {};
       filteredTrips.forEach(t => { counts[t.transportType] = (counts[t.transportType] || 0) + 1; });
       return Object.keys(counts).map((key, idx) => ({ name: key, value: counts[key], color: COLORS[idx % COLORS.length] }));
   }, [filteredTrips]);
 
-  // 4. Trip Category Distribution
   const tripCategoryData = useMemo(() => {
       const counts: Record<string, number> = {};
       filteredTrips.forEach(t => { counts[t.tripCategory] = (counts[t.tripCategory] || 0) + 1; });
       return Object.keys(counts).map((key, idx) => ({ name: key, value: counts[key], color: COLORS[idx % COLORS.length] }));
   }, [filteredTrips]);
 
-  // 5. Admin Commission Data (NEW)
   const commissionData = useMemo(() => {
       const counts: Record<string, number> = {};
       filteredTrips.forEach(t => { 
-          // Accumulate Commission value by Trip Category
           counts[t.tripCategory] = (counts[t.tripCategory] || 0) + (t.adminCommission || 0); 
       });
       return Object.keys(counts).map((key, idx) => ({ 
@@ -325,7 +294,7 @@ const TripEarning: React.FC = () => {
     const cancel = Number(formData.cancellationCharge) || 0;
     const discount = Number(formData.discount) || 0;
     return price + tax + waiting + cancel - discount; 
-  }, [formData.tripPrice, formData.tax, formData.waitingCharge, formData.cancellationCharge, formData.discount]);
+  }, [formData]);
 
   // Auto-calculate Admin Commission
   useEffect(() => {
@@ -363,8 +332,8 @@ const TripEarning: React.FC = () => {
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.tripId || !formData.date || !formData.userName) {
-      alert("Please fill all required fields (*)");
+    if (!formData.tripId || !formData.date) {
+      alert("Please fill required fields (*)");
       return;
     }
 
@@ -425,10 +394,6 @@ const TripEarning: React.FC = () => {
       tripCategory: trip.tripCategory,
       bookingStatus: trip.bookingStatus,
       cancelBy: trip.cancelBy || '',
-      userName: trip.userName,
-      userMobile: trip.userMobile,
-      driverName: trip.driverName || '',
-      driverMobile: trip.driverMobile || '',
       tripPrice: trip.tripPrice,
       adminCommission: trip.adminCommission,
       tax: trip.tax,
@@ -463,11 +428,7 @@ const TripEarning: React.FC = () => {
       alert("No trips to export.");
       return;
     }
-    const headers = [
-      "Trip ID", "Date", "Owner", "Branch", "Booking Type", "Category", "Transport", 
-      "Customer", "Mobile", "Driver", "Trip Price", "Comm", "Tax", "Wait Chg", "Discount", "Total", "Status"
-    ];
-    
+    const headers = ["Trip ID", "Date", "Owner", "Branch", "Booking Type", "Customer", "Driver", "Transport", "Comm %", "Comm Amt", "Total", "Status"];
     const escapeCsv = (val: any) => {
         if (val === null || val === undefined) return '';
         const stringVal = String(val);
@@ -476,12 +437,17 @@ const TripEarning: React.FC = () => {
         }
         return stringVal;
     };
-
-    const rows = filteredTrips.map(t => [
-      t.tripId, t.date, t.ownerName || '-', t.branch, t.bookingType, t.tripCategory, t.transportType,
-      t.userName, t.userMobile, t.driverName || '-', 
-      t.tripPrice, t.adminCommission, t.tax, t.waitingCharge, t.discount, t.totalPrice, t.bookingStatus
-    ].map(escapeCsv));
+    const rows = filteredTrips.map(t => {
+        // Calculate Comm % for Export
+        const base = (t.tripPrice || 0) + (t.waitingCharge || 0);
+        const commBase = (t.adminCommission || 0) - (t.cancellationCharge || 0);
+        const percent = base > 0 ? (commBase / base) * 100 : 0;
+        
+        return [
+            t.tripId, t.date, t.ownerName || '-', t.branch, t.bookingType, t.userName, t.driverName || '-', 
+            `${t.tripCategory} - ${t.transportType}`, `${percent.toFixed(1)}%`, t.adminCommission, t.totalPrice, t.bookingStatus
+        ].map(escapeCsv);
+    });
 
     const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
     const encodedUri = encodeURI(csvContent);
@@ -667,7 +633,6 @@ const TripEarning: React.FC = () => {
 
       {/* Visual Analytics */}
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-        {/* Booking Type Distribution */}
         <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
             <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
                 <PieChartIcon className="w-5 h-5 text-blue-500" /> Booking Type
@@ -695,7 +660,6 @@ const TripEarning: React.FC = () => {
             </div>
         </div>
 
-        {/* Transport Type Distribution */}
         <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
             <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
                 <Car className="w-5 h-5 text-red-500" /> Transport Type
@@ -723,7 +687,6 @@ const TripEarning: React.FC = () => {
             </div>
         </div>
 
-        {/* Trip Category Distribution */}
         <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
             <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
                 <MapPin className="w-5 h-5 text-orange-500" /> Trip Category
@@ -741,7 +704,7 @@ const TripEarning: React.FC = () => {
                             dataKey="value"
                         >
                             {tripCategoryData.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={entry.color} />
+                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                             ))}
                         </Pie>
                         <Tooltip />
@@ -751,7 +714,6 @@ const TripEarning: React.FC = () => {
             </div>
         </div>
 
-        {/* NEW CHART: Admin Commission */}
         <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
             <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
                 <PieChartIcon className="w-5 h-5 text-emerald-600" /> Admin Commission
@@ -792,14 +754,21 @@ const TripEarning: React.FC = () => {
                     <th className="px-6 py-4">Customer</th>
                     <th className="px-6 py-4">Booking Type</th>
                     <th className="px-6 py-4">Transport</th>
-                    <th className="px-6 py-4 text-right">Commission</th>
+                    <th className="px-6 py-4 text-right">Comm %</th>
+                    <th className="px-6 py-4 text-right">Comm Amt</th>
                     <th className="px-6 py-4 text-right">Total Price</th>
                     <th className="px-6 py-4 text-center">Status</th>
                     <th className="px-6 py-4 text-right">Actions</th>
                  </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                 {filteredTrips.map(trip => (
+                 {filteredTrips.map(trip => {
+                    // Calculate percentage for display
+                    const baseForComm = (trip.tripPrice || 0) + (trip.waitingCharge || 0);
+                    const commAmt = (trip.adminCommission || 0) - (trip.cancellationCharge || 0);
+                    const commPercent = baseForComm > 0 ? (commAmt / baseForComm) * 100 : 0;
+
+                    return (
                     <tr key={trip.id} className="hover:bg-gray-50 transition-colors">
                        <td className="px-6 py-4">
                           <div className="font-bold text-gray-900">{trip.tripId}</div>
@@ -817,8 +786,8 @@ const TripEarning: React.FC = () => {
                        )}
                        <td className="px-6 py-4 text-gray-600">{trip.branch}</td>
                        <td className="px-6 py-4">
-                          <div className="font-medium text-gray-900">{trip.userName}</div>
-                          <div className="text-xs text-gray-500">{trip.userMobile}</div>
+                          <div className="font-medium text-gray-900">{trip.userName || '-'}</div>
+                          <div className="text-xs text-gray-500">{trip.userMobile || '-'}</div>
                        </td>
                        <td className="px-6 py-4">
                           <span className="text-gray-700 text-xs font-semibold bg-gray-100 px-2 py-1 rounded">
@@ -829,6 +798,9 @@ const TripEarning: React.FC = () => {
                           <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-blue-50 text-blue-700 text-xs font-medium border border-blue-100">
                              {trip.tripCategory} • {trip.transportType}
                           </span>
+                       </td>
+                       <td className="px-6 py-4 text-right text-gray-500 text-xs">
+                          {commPercent.toFixed(1)}%
                        </td>
                        <td className="px-6 py-4 text-right text-emerald-600 font-medium">
                           ₹{trip.adminCommission.toFixed(0)}
@@ -852,10 +824,10 @@ const TripEarning: React.FC = () => {
                           </div>
                        </td>
                     </tr>
-                 ))}
+                 )})}
                  {filteredTrips.length === 0 && (
                     <tr>
-                       <td colSpan={isSuperAdmin ? 10 : 9} className="text-center py-12 text-gray-500 bg-gray-50">
+                       <td colSpan={isSuperAdmin ? 11 : 10} className="text-center py-12 text-gray-500 bg-gray-50">
                           <div className="flex flex-col items-center">
                               <Search className="w-10 h-10 text-gray-300 mb-2" />
                               <p>No trips found matching the selected filters.</p>
@@ -878,7 +850,7 @@ const TripEarning: React.FC = () => {
               </div>
               
               <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-6">
-                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* Column 1: Trip Basic Info */}
                     <div className="space-y-4">
                        <h4 className="text-sm font-bold text-gray-900 border-b pb-2 flex items-center gap-2"><MapPin className="w-4 h-4 text-emerald-500"/> Trip Info</h4>
@@ -992,47 +964,6 @@ const TripEarning: React.FC = () => {
                              </select>
                           </div>
                        </div>
-                    </div>
-
-                    {/* Column 2: People Info */}
-                    <div className="space-y-4">
-                       <h4 className="text-sm font-bold text-gray-900 border-b pb-2 flex items-center gap-2"><User className="w-4 h-4 text-blue-500"/> People</h4>
-                       
-                       <div className="space-y-3">
-                          <div>
-                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">User Name *</label>
-                             <input type="text" name="userName" value={formData.userName} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="Customer Name" required />
-                          </div>
-                          <div>
-                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">User Mobile *</label>
-                             <input type="tel" name="userMobile" value={formData.userMobile} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="+91..." required />
-                          </div>
-                          <div>
-                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Pickup Location</label>
-                              {!isMapReady ? (
-                                <div className="p-2 bg-gray-100 text-gray-500 text-sm rounded flex items-center gap-2">
-                                    <Loader2 className="w-4 h-4 animate-spin" /> Map Loading...
-                                </div>
-                              ) : (
-                                <Autocomplete 
-                                    placeholder="Search Pickup Location"
-                                    onAddressSelect={(addr) => {}}
-                                />
-                              )}
-                              {mapError && <p className="text-xs text-red-500 mt-1">{mapError}</p>}
-                          </div>
-                       </div>
-
-                       <div className="pt-2 space-y-3">
-                          <div>
-                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Driver Name</label>
-                             <input type="text" name="driverName" value={formData.driverName} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="Driver Name" />
-                          </div>
-                          <div>
-                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Driver Mobile</label>
-                             <input type="tel" name="driverMobile" value={formData.driverMobile} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="+91..." />
-                          </div>
-                       </div>
 
                        <div>
                           <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Remarks</label>
@@ -1040,66 +971,80 @@ const TripEarning: React.FC = () => {
                        </div>
                     </div>
 
-                    {/* Column 3: Financials */}
+                    {/* Column 2: Financials */}
                     <div className="space-y-4">
                        <h4 className="text-sm font-bold text-gray-900 border-b pb-2 flex items-center gap-2"><Calculator className="w-4 h-4 text-purple-500"/> Financials</h4>
                        
                        <div>
-                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Trip Price (₹) *</label>
+                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">{formData.bookingStatus === 'Cancelled' ? 'Cancellation Fee (Trip Price Field)' : 'Trip Price (₹) *'}</label>
                           <input type="number" name="tripPrice" value={formData.tripPrice || ''} onChange={(e) => {
                               const price = parseFloat(e.target.value) || 0;
-                              const taxAmt = (price * parseFloat(taxPercentage)) / 100;
+                              // Only auto-calc tax if NOT cancelled
+                              const taxAmt = formData.bookingStatus !== 'Cancelled' ? (price * parseFloat(taxPercentage)) / 100 : 0;
                               setFormData(prev => ({ ...prev, tripPrice: price, tax: taxAmt }));
                           }} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm font-medium" placeholder="0" />
                        </div>
 
-                       <div className="grid grid-cols-2 gap-2">
-                          <div>
-                             <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Tax %</label>
-                             <input 
-                                 type="number" 
-                                 value={taxPercentage} 
-                                 onChange={(e) => {
-                                     const percent = parseFloat(e.target.value) || 0;
-                                     setTaxPercentage(e.target.value);
-                                     const taxAmt = (formData.tripPrice * percent) / 100;
-                                     setFormData(prev => ({ ...prev, tax: taxAmt }));
-                                 }}
-                                 className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm focus:ring-2 focus:ring-emerald-500" 
-                                 placeholder="%" 
-                             />
-                          </div>
-                          <div>
-                             <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Tax Amt</label>
-                             <div className="relative">
-                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">₹</span>
-                                <input 
-                                    type="number" 
-                                    name="tax" 
-                                    value={formData.tax || ''} 
-                                    readOnly 
-                                    className="w-full pl-5 p-2 border border-gray-300 rounded-lg outline-none text-sm bg-gray-50 focus:ring-2 focus:ring-emerald-500" 
-                                    placeholder="0" 
-                                />
-                             </div>
-                          </div>
-                       </div>
+                       {/* Conditional Rendering based on Status */}
+                       {formData.bookingStatus !== 'Cancelled' && (
+                           <>
+                           <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                 <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Tax %</label>
+                                 <input 
+                                     type="number" 
+                                     value={taxPercentage} 
+                                     onChange={(e) => {
+                                         const percent = parseFloat(e.target.value) || 0;
+                                         setTaxPercentage(e.target.value);
+                                         const taxAmt = (formData.tripPrice * percent) / 100;
+                                         setFormData(prev => ({ ...prev, tax: taxAmt }));
+                                     }}
+                                     className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm focus:ring-2 focus:ring-emerald-500" 
+                                     placeholder="%" 
+                                 />
+                              </div>
+                              <div>
+                                 <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Tax Amt</label>
+                                 <div className="relative">
+                                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">₹</span>
+                                    <input 
+                                        type="number" 
+                                        name="tax" 
+                                        value={formData.tax || ''} 
+                                        readOnly 
+                                        className="w-full pl-5 p-2 border border-gray-300 rounded-lg outline-none text-sm bg-gray-50 focus:ring-2 focus:ring-emerald-500" 
+                                        placeholder="0" 
+                                    />
+                                 </div>
+                              </div>
+                           </div>
 
-                       <div className="grid grid-cols-2 gap-2">
-                          <div>
-                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Waiting Chg.</label>
-                             <input type="number" name="waitingCharge" value={formData.waitingCharge || ''} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="0" />
-                          </div>
-                          <div>
-                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cancel Chg.</label>
-                             <input type="number" name="cancellationCharge" value={formData.cancellationCharge || ''} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="0" />
-                          </div>
-                       </div>
+                           <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Waiting Chg.</label>
+                                 <input type="number" name="waitingCharge" value={formData.waitingCharge || ''} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="0" />
+                              </div>
+                              <div>
+                                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cancel Chg.</label>
+                                 <input type="number" name="cancellationCharge" value={formData.cancellationCharge || ''} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="0" />
+                              </div>
+                           </div>
 
-                       <div>
-                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Discount</label>
-                          <input type="number" name="discount" value={formData.discount || ''} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm text-red-600" placeholder="0" />
-                       </div>
+                           <div>
+                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Discount</label>
+                              <input type="number" name="discount" value={formData.discount || ''} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm text-red-600" placeholder="0" />
+                           </div>
+                           </>
+                       )}
+                       
+                       {/* Fields visible when Cancelled */}
+                       {formData.bookingStatus === 'Cancelled' && (
+                           <div>
+                               <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cancellation Charge (Addt'l)</label>
+                               <input type="number" name="cancellationCharge" value={formData.cancellationCharge || ''} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="0" />
+                           </div>
+                       )}
 
                        <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 mt-2">
                           <label className="block text-xs font-bold text-emerald-800 uppercase mb-1">Total Price</label>
@@ -1115,33 +1060,42 @@ const TripEarning: React.FC = () => {
                           <p className="text-[10px] text-emerald-600 mt-1">Trip + Tax + Wait + Cancel - Disc</p>
                        </div>
 
-                       <div className="grid grid-cols-2 gap-2">
-                          <div>
-                             <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Admin Comm %</label>
-                             <input 
-                                 type="number" 
-                                 value={adminCommissionPercentage} 
-                                 onChange={(e) => setAdminCommissionPercentage(e.target.value)}
-                                 className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm focus:ring-2 focus:ring-emerald-500" 
-                                 placeholder="%" 
-                             />
-                          </div>
-                          <div>
-                             <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Admin Comm Amt</label>
-                             <div className="relative">
-                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">₹</span>
-                                <input 
-                                    type="number" 
-                                    name="adminCommission" 
-                                    value={formData.adminCommission || ''} 
-                                    readOnly 
-                                    className="w-full pl-5 p-2 border border-gray-300 rounded-lg outline-none text-sm bg-gray-50 focus:ring-2 focus:ring-emerald-500" 
-                                    placeholder="0" 
-                                />
-                             </div>
-                          </div>
-                       </div>
-                       <p className="text-[10px] text-gray-400 mt-1">Calculated on (Trip + Wait) + 100% Cancel</p>
+                       {formData.bookingStatus !== 'Cancelled' && (
+                           <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-gray-100">
+                              <div>
+                                 <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Admin Comm %</label>
+                                 <input 
+                                     type="number" 
+                                     value={adminCommissionPercentage} 
+                                     onChange={(e) => setAdminCommissionPercentage(e.target.value)}
+                                     className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm focus:ring-2 focus:ring-emerald-500" 
+                                     placeholder="%" 
+                                 />
+                              </div>
+                              <div>
+                                 <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Admin Comm Amt</label>
+                                 <div className="relative">
+                                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">₹</span>
+                                    <input 
+                                        type="number" 
+                                        name="adminCommission" 
+                                        value={formData.adminCommission || ''} 
+                                        readOnly 
+                                        className="w-full pl-5 p-2 border border-gray-300 rounded-lg outline-none text-sm bg-gray-100 text-gray-600 font-medium cursor-not-allowed" 
+                                        placeholder="0" 
+                                    />
+                                 </div>
+                              </div>
+                           </div>
+                       )}
+                       
+                       {formData.bookingStatus === 'Cancelled' && (
+                           <div className="mt-2 text-xs text-gray-500 italic">
+                               * Admin Commission is 100% of Total Cancellation Fee.
+                           </div>
+                       )}
+                       
+                       <p className="text-[10px] text-gray-400 mt-1">Calculated on (Trip + Wait) + Cancel</p>
                     </div>
                  </div>
 
