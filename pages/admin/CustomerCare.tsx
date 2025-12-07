@@ -4,9 +4,9 @@ import {
   Headset, User, MapPin, Calculator, Phone, Mail, MessageCircle, 
   Settings, Save, Calendar, Clock, Edit2, CheckCircle, 
   AlertTriangle, Loader2, Building2, Copy, Send, Plus, Trash2, X, DollarSign, ArrowRight, ArrowRightLeft,
-  Navigation
+  Navigation, Car, Briefcase, History, RefreshCcw
 } from 'lucide-react';
-import { Enquiry, Employee, UserRole, Branch } from '../../types';
+import { Enquiry, Employee, UserRole, Branch, TripType, OutstationSubType, VehicleType, EnquiryCategory } from '../../types';
 import Autocomplete from '../../components/Autocomplete';
 
 interface CustomerCareProps {
@@ -105,11 +105,18 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
       return branches;
   });
 
-  // --- State ---
-  const [showRates, setShowRates] = useState(false); // Default Hidden
-  const [settingsVehicleType, setSettingsVehicleType] = useState<'Sedan' | 'SUV'>('Sedan');
+  const [enquiries, setEnquiries] = useState<Enquiry[]>(() => {
+    return JSON.parse(localStorage.getItem('global_enquiries_data') || '[]');
+  });
+
+  // --- Configuration State ---
+  const [showRates, setShowRates] = useState(false);
+  const [settingsVehicleType, setSettingsVehicleType] = useState<VehicleType>('Sedan');
   
-  // Pricing Rules
+  // Which profile are we currently editing? (Default to own session)
+  const [configTargetId, setConfigTargetId] = useState<string>(sessionId);
+
+  // Pricing Rules State
   const [pricing, setPricing] = useState<{ Sedan: PricingRules; SUV: PricingRules }>({
     Sedan: DEFAULT_PRICING_SEDAN,
     SUV: DEFAULT_PRICING_SUV
@@ -118,6 +125,7 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
   
   // Package Management State
   const [showAddPackage, setShowAddPackage] = useState(false);
+  const [pkgEditingId, setPkgEditingId] = useState<string | null>(null);
   const [newPackage, setNewPackage] = useState({ name: '', hours: '', km: '', priceSedan: '', priceSuv: '' });
 
   // Map State
@@ -131,10 +139,10 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
-    enquiryCategory: 'Transport' as 'Transport' | 'General',
-    tripType: 'Local' as 'Local' | 'Rental' | 'Outstation',
-    outstationSubType: 'RoundTrip' as 'OneWay' | 'RoundTrip',
-    vehicleType: 'Sedan' as 'Sedan' | 'SUV',
+    enquiryCategory: 'Transport' as EnquiryCategory,
+    tripType: 'Local' as TripType,
+    outstationSubType: 'RoundTrip' as OutstationSubType,
+    vehicleType: 'Sedan' as VehicleType,
     pickup: '',
     drop: '',
     estKm: '',
@@ -153,10 +161,34 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
     priority: 'Warm'
   });
 
+  const [customerHistory, setCustomerHistory] = useState<Enquiry[]>([]);
   const [estimate, setEstimate] = useState(0);
   const [generatedMessage, setGeneratedMessage] = useState('');
 
   // --- Effects ---
+
+  // Load Settings whenever the Config Target ID Changes
+  useEffect(() => {
+      // Determine the storage keys suffix based on target
+      // If admin is selected (or default), key is base. If corporate selected, key has suffix.
+      const suffix = configTargetId === 'admin' ? '' : `_${configTargetId}`;
+      
+      const savedPricing = localStorage.getItem(`transport_pricing_rules_v2${suffix}`);
+      const savedPackages = localStorage.getItem(`transport_rental_packages_v2${suffix}`);
+
+      if (savedPricing) {
+          setPricing(JSON.parse(savedPricing));
+      } else {
+          // If no specific settings found, fall back to defaults (or global defaults if you prefer)
+          setPricing({ Sedan: DEFAULT_PRICING_SEDAN, SUV: DEFAULT_PRICING_SUV });
+      }
+
+      if (savedPackages) {
+          setRentalPackages(JSON.parse(savedPackages));
+      } else {
+          setRentalPackages(DEFAULT_RENTAL_PACKAGES);
+      }
+  }, [configTargetId]);
 
   // Google Maps Loader
   useEffect(() => {
@@ -173,11 +205,29 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
       setIsMapReady(true);
       return;
     }
-    // Logic handled by main App loader mostly, but safety check here
-    setTimeout(() => {
+    const scriptId = 'google-maps-script';
+    let script = document.getElementById(scriptId) as HTMLScriptElement;
+    if (!script) {
+        script = document.createElement('script');
+        script.id = scriptId;
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+        script.async = true;
+        script.defer = true;
+        script.onload = () => setIsMapReady(true);
+        script.onerror = () => setMapError("Map Load Failed");
+        document.head.appendChild(script);
+    } else {
+        script.addEventListener('load', () => setIsMapReady(true));
         if (window.google) setIsMapReady(true);
-    }, 1000);
+    }
   }, []);
+
+  // Sync rental package selection to valid default
+  useEffect(() => {
+      if (!rentalPackages.find(p => p.id === formData.packageId) && rentalPackages.length > 0) {
+          setFormData(prev => ({ ...prev, packageId: rentalPackages[0].id }));
+      }
+  }, [rentalPackages]);
 
   // Distance Calculation
   useEffect(() => {
@@ -261,28 +311,69 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
     setEstimate(Math.round(total));
   }, [formData, pricing, rentalPackages]);
 
+  // Dynamic Rules Text Generation
+  const currentRulesText = useMemo(() => {
+    const r = pricing[formData.vehicleType];
+    if (formData.tripType === 'Local') {
+        return `Current Rules (${formData.vehicleType} - Local): Min ${r.localBaseKm}km Base ₹${r.localBaseFare}. Rate ₹${r.localPerKmRate}/km. Wait ₹${r.localWaitingRate}/min.`;
+    } else if (formData.tripType === 'Rental') {
+        return `Current Rules (${formData.vehicleType} - Rental): Extra ₹${r.rentalExtraHrRate}/hr & ₹${r.rentalExtraKmRate}/km.`;
+    } else {
+        if (formData.outstationSubType === 'RoundTrip') {
+            return `Current Rules (${formData.vehicleType} - RoundTrip): Min ${r.outstationMinKmPerDay}km/day. Rate ₹${r.outstationExtraKmRate}/km. Driver ₹${r.outstationDriverAllowance}/day. Night Allow ₹${r.outstationNightAllowance}.`;
+        } else {
+            return `Current Rules (${formData.vehicleType} - OneWay): Base ₹${r.outstationBaseRate}. Rate ₹${r.outstationExtraKmRate}/km. Driver ₹${r.outstationDriverAllowance}. No Night Allow.`;
+        }
+    }
+  }, [pricing, formData.vehicleType, formData.tripType, formData.outstationSubType]);
+
   // Generate Message
   useEffect(() => {
     let msg = `Hello ${formData.name || 'Customer'},\n`;
     
     if (formData.enquiryCategory === 'General') {
-        msg += `Thank you for your enquiry.\n\nRequirement:\n${formData.notes || 'N/A'}`;
+        msg += `Here is your Local estimate from OK BOZ! 🚕\n\n*General Enquiry*\nRequirement:\n${formData.notes || 'N/A'}`;
     } else {
-        msg += `Here is your ${formData.tripType} estimate from OK BOZ! 🚕\n\n*${formData.tripType} Trip Estimate*\n🚘 Vehicle: ${formData.vehicleType}`;
+        msg += `Here is your Local estimate from OK BOZ! 🚕\n\n*${formData.tripType} Trip Estimate*\n🚘 Vehicle: ${formData.vehicleType}`;
         
         if (formData.tripType === 'Local') {
-            msg += `\n📍 Pickup: ${formData.pickup}\n📍 Drop: ${formData.drop}`;
+            msg += `\n📍 Pickup: ${formData.pickup || 'TBD'}\n📍 Drop: ${formData.drop || 'TBD'}\n🛣 Distance: ${formData.estKm} km`;
+        } else if (formData.tripType === 'Rental') {
+            const pkg = rentalPackages.find(p => p.id === formData.packageId);
+            msg += `\n📦 Package: ${pkg?.name || 'Standard'}\n📍 Pickup: ${formData.pickup || 'TBD'}`;
         } else if (formData.tripType === 'Outstation') {
             msg += `\n🌍 Destination: ${formData.destination}\n🔄 Type: ${formData.outstationSubType === 'OneWay' ? 'One Way' : 'Round Trip'}\n📅 Days: ${formData.days}`;
         }
         
         msg += `\n\n💰 *Estimated Cost: ₹${estimate}*`;
-        if (formData.tripType === 'Outstation') msg += `\n(Tolls & Parking extra)`;
+        
+        // Add Rules and Disclaimer
+        msg += `\n\n📋 *Rules:* ${currentRulesText}`;
+        msg += `\n\n*Toll and Parking, Permit Extra.*`;
     }
+    
+    // Add App Promo
+    msg += `\n\n🚕 Get moving with OK BOZ TAXI!
+
+Fast, reliable, and just a tap away. Download the app now and book your first trip!
+
+📱 Android: https://play.google.com/store/apps/details?id=com.okboz.user.superapp&hl=en 
+🍎 iOS: https://apps.apple.com/us/app/ok-boz-super-app/id6738637246`;
+
     setGeneratedMessage(msg);
-  }, [estimate, formData]);
+  }, [estimate, formData, currentRulesText, rentalPackages]);
 
   // --- Handlers ---
+
+  const handleSaveConfiguration = () => {
+      const suffix = configTargetId === 'admin' ? '' : `_${configTargetId}`;
+      localStorage.setItem(`transport_pricing_rules_v2${suffix}`, JSON.stringify(pricing));
+      localStorage.setItem(`transport_rental_packages_v2${suffix}`, JSON.stringify(rentalPackages));
+      
+      const targetName = configTargetId === 'admin' ? 'Head Office' : (corporates.find(c => c.email === configTargetId)?.companyName || 'Corporate');
+      alert(`Configuration saved successfully for ${targetName}!`);
+      setShowRates(false);
+  };
 
   const handlePricingChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -300,19 +391,58 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  const handlePhoneBlur = () => {
+      if (formData.phone.length < 5) return;
+      // Find history
+      const history = enquiries.filter(e => e.phone === formData.phone).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 3);
+      setCustomerHistory(history);
+      
+      // Auto-fill name if found
+      if (history.length > 0 && !formData.name) {
+          setFormData(prev => ({ ...prev, name: history[0].name }));
+      }
+  };
+
   const handleAddPackage = () => {
     if (!newPackage.name || !newPackage.priceSedan) return;
-    const pkg: RentalPackage = {
-      id: `pkg-${Date.now()}`,
-      name: newPackage.name,
-      hours: parseFloat(newPackage.hours) || 0,
-      km: parseFloat(newPackage.km) || 0,
-      priceSedan: parseFloat(newPackage.priceSedan) || 0,
-      priceSuv: parseFloat(newPackage.priceSuv) || 0,
-    };
-    setRentalPackages([...rentalPackages, pkg]);
+    
+    if (pkgEditingId) {
+        // Edit Mode
+        setRentalPackages(prev => prev.map(p => p.id === pkgEditingId ? {
+            ...p,
+            name: newPackage.name,
+            hours: parseFloat(newPackage.hours) || 0,
+            km: parseFloat(newPackage.km) || 0,
+            priceSedan: parseFloat(newPackage.priceSedan) || 0,
+            priceSuv: parseFloat(newPackage.priceSuv) || 0,
+        } : p));
+        setPkgEditingId(null);
+    } else {
+        // Add Mode
+        const pkg: RentalPackage = {
+            id: `pkg-${Date.now()}`,
+            name: newPackage.name,
+            hours: parseFloat(newPackage.hours) || 0,
+            km: parseFloat(newPackage.km) || 0,
+            priceSedan: parseFloat(newPackage.priceSedan) || 0,
+            priceSuv: parseFloat(newPackage.priceSuv) || 0,
+        };
+        setRentalPackages([...rentalPackages, pkg]);
+    }
     setShowAddPackage(false);
     setNewPackage({ name: '', hours: '', km: '', priceSedan: '', priceSuv: '' });
+  };
+
+  const startEditPackage = (pkg: RentalPackage) => {
+      setNewPackage({
+          name: pkg.name,
+          hours: pkg.hours.toString(),
+          km: pkg.km.toString(),
+          priceSedan: pkg.priceSedan.toString(),
+          priceSuv: pkg.priceSuv.toString()
+      });
+      setPkgEditingId(pkg.id);
+      setShowAddPackage(true);
   };
 
   const removePackage = (id: string, e: React.MouseEvent) => {
@@ -366,7 +496,13 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
       localStorage.setItem('global_enquiries_data', JSON.stringify([newEnquiry, ...saved]));
       
       alert("Enquiry Saved Successfully!");
-      setFormData(prev => ({...prev, name: '', phone: '', pickup: '', drop: '', estKm: '', notes: ''}));
+      // Reset form partly
+      setFormData(prev => ({
+          ...prev, 
+          name: '', phone: '', pickup: '', drop: '', estKm: '', notes: '', 
+          estTotalKm: '', destination: '', days: '1', nights: '0'
+      }));
+      setCustomerHistory([]);
   };
 
   // Filtered Lists for Assignment
@@ -383,23 +519,6 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
       return staff.filter(s => s.status !== 'Inactive');
   }, [allStaff, formData.assignCorporate, formData.assignBranch]);
 
-  // Current Rules Text
-  const currentRulesText = useMemo(() => {
-      const r = pricing[formData.vehicleType];
-      if (formData.tripType === 'Local') {
-          return `Min ${r.localBaseKm}km Base ₹${r.localBaseFare}. Rate ₹${r.localPerKmRate}/km. Wait ₹${r.localWaitingRate}/min.`;
-      } else if (formData.tripType === 'Rental') {
-          return `Extra: ₹${r.rentalExtraHrRate}/hr & ₹${r.rentalExtraKmRate}/km.`;
-      } else {
-          // Outstation
-          if (formData.outstationSubType === 'RoundTrip') {
-              return `Min ${r.outstationMinKmPerDay}km/day. Rate ₹${r.outstationExtraKmRate}/km. Driver ₹${r.outstationDriverAllowance}/day. Night Allow ₹${r.outstationNightAllowance}.`;
-          } else {
-              return `Base ₹${r.outstationBaseRate}. Rate ₹${r.outstationExtraKmRate}/km. Driver ₹${r.outstationDriverAllowance}. No Night Allow.`;
-          }
-      }
-  }, [pricing, formData.vehicleType, formData.tripType, formData.outstationSubType]);
-
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-20">
       <div className="flex justify-between items-center">
@@ -413,24 +532,50 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
             onClick={() => setShowRates(!showRates)}
             className="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-900 transition-colors flex items-center gap-2"
         >
-            <Settings className="w-4 h-4" /> {showRates ? 'Hide Rates' : 'Show Rates'}
+            <Settings className="w-4 h-4" /> {showRates ? 'Hide Rates' : 'Fare Configuration'}
         </button>
       </div>
 
       {showRates && (
         <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm animate-in fade-in slide-in-from-top-2">
-            <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-3">
-                <h3 className="font-bold text-gray-800 flex items-center gap-2"><Edit2 className="w-4 h-4"/> Fare Configuration</h3>
-                <div className="flex bg-gray-100 p-1 rounded-lg">
-                    <button onClick={() => setSettingsVehicleType('Sedan')} className={`px-4 py-1 rounded text-xs font-bold ${settingsVehicleType === 'Sedan' ? 'bg-emerald-500 text-white' : 'text-gray-600'}`}>Sedan</button>
-                    <button onClick={() => setSettingsVehicleType('SUV')} className={`px-4 py-1 rounded text-xs font-bold ${settingsVehicleType === 'SUV' ? 'bg-emerald-500 text-white' : 'text-gray-600'}`}>SUV</button>
+            {/* Header: Title and Profile Selector */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 border-b border-gray-100 pb-4 gap-4">
+                <div className="flex-1">
+                    <h3 className="font-bold text-gray-800 flex items-center gap-2 text-lg">
+                        <Edit2 className="w-5 h-5 text-indigo-600"/> Fare Configuration
+                    </h3>
+                    <p className="text-xs text-gray-500 mt-1">Set basic tariffs for Local, Rental & Outstation trips.</p>
+                </div>
+
+                <div className="flex items-center gap-3">
+                    {/* Admin Profile Selector */}
+                    {isSuperAdmin && (
+                        <div className="relative">
+                            <select 
+                                value={configTargetId} 
+                                onChange={(e) => setConfigTargetId(e.target.value)}
+                                className="pl-9 pr-4 py-2 border border-indigo-200 bg-indigo-50 text-indigo-800 rounded-lg text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer appearance-none min-w-[200px]"
+                            >
+                                <option value="admin">Head Office (Default)</option>
+                                {corporates.map(c => (
+                                    <option key={c.email} value={c.email}>{c.companyName} - {c.city}</option>
+                                ))}
+                            </select>
+                            <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-500 pointer-events-none" />
+                        </div>
+                    )}
+
+                    <div className="flex bg-gray-100 p-1 rounded-lg">
+                        <button onClick={() => setSettingsVehicleType('Sedan')} className={`px-4 py-1.5 rounded text-xs font-bold transition-all ${settingsVehicleType === 'Sedan' ? 'bg-emerald-500 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-200'}`}>Sedan</button>
+                        <button onClick={() => setSettingsVehicleType('SUV')} className={`px-4 py-1.5 rounded text-xs font-bold transition-all ${settingsVehicleType === 'SUV' ? 'bg-emerald-500 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-200'}`}>SUV</button>
+                    </div>
                 </div>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {/* Local */}
                 <div className="space-y-2">
-                    <h4 className="text-xs font-bold text-emerald-600 uppercase">Local Rules ({settingsVehicleType})</h4>
+                    <h4 className="text-xs font-bold text-emerald-600 uppercase flex items-center gap-1"><MapPin className="w-3 h-3"/> LOCAL RULES ({settingsVehicleType})</h4>
                     <div className="p-3 bg-gray-50 rounded-lg border border-gray-100 space-y-2">
                         <div><label className="text-[10px] text-gray-500 block">Base Fare (₹)</label><input type="number" name="localBaseFare" value={pricing[settingsVehicleType].localBaseFare} onChange={handlePricingChange} className="w-full p-1.5 border rounded text-sm"/></div>
                         <div><label className="text-[10px] text-gray-500 block">Base Km Included</label><input type="number" name="localBaseKm" value={pricing[settingsVehicleType].localBaseKm} onChange={handlePricingChange} className="w-full p-1.5 border rounded text-sm"/></div>
@@ -440,7 +585,7 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
                 </div>
                 {/* Outstation */}
                 <div className="space-y-2">
-                    <h4 className="text-xs font-bold text-orange-600 uppercase">Outstation Rules ({settingsVehicleType})</h4>
+                    <h4 className="text-xs font-bold text-orange-600 uppercase flex items-center gap-1"><Navigation className="w-3 h-3"/> OUTSTATION RULES ({settingsVehicleType})</h4>
                     <div className="p-3 bg-gray-50 rounded-lg border border-gray-100 space-y-2">
                         <div><label className="text-[10px] text-gray-500 block">Min Km / Day</label><input type="number" name="outstationMinKmPerDay" value={pricing[settingsVehicleType].outstationMinKmPerDay} onChange={handlePricingChange} className="w-full p-1.5 border rounded text-sm"/></div>
                         <div><label className="text-[10px] text-gray-500 block">Per Km Rate (₹/km)</label><input type="number" name="outstationExtraKmRate" value={pricing[settingsVehicleType].outstationExtraKmRate} onChange={handlePricingChange} className="w-full p-1.5 border rounded text-sm"/></div>
@@ -451,7 +596,7 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
                 </div>
                 {/* Rental */}
                 <div className="space-y-2">
-                    <h4 className="text-xs font-bold text-blue-600 uppercase">Rental Rules ({settingsVehicleType})</h4>
+                    <h4 className="text-xs font-bold text-blue-600 uppercase flex items-center gap-1"><Briefcase className="w-3 h-3"/> RENTAL RULES ({settingsVehicleType})</h4>
                     <div className="p-3 bg-gray-50 rounded-lg border border-gray-100 space-y-2">
                         <div className="flex gap-2">
                             <div className="flex-1"><label className="text-[10px] text-gray-500 block">Extra Hr (₹)</label><input type="number" name="rentalExtraHrRate" value={pricing[settingsVehicleType].rentalExtraHrRate} onChange={handlePricingChange} className="w-full p-1.5 border rounded text-sm"/></div>
@@ -460,7 +605,7 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
                         <div className="mt-2 pt-2 border-t border-gray-200">
                             <div className="flex justify-between items-center mb-1">
                                 <span className="text-[10px] font-bold text-gray-600">Packages</span>
-                                <button onClick={() => setShowAddPackage(!showAddPackage)} className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded border border-blue-200 hover:bg-blue-100">+ New</button>
+                                <button onClick={() => { setShowAddPackage(!showAddPackage); setPkgEditingId(null); setNewPackage({name:'', hours:'', km:'', priceSedan:'', priceSuv:''}); }} className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded border border-blue-200 hover:bg-blue-100">+ New</button>
                             </div>
                             
                             {showAddPackage && (
@@ -474,7 +619,7 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
                                         <input placeholder="₹ Sedan" className="w-1/2 p-1 text-[10px] border rounded" value={newPackage.priceSedan} onChange={e => setNewPackage({...newPackage, priceSedan: e.target.value})} />
                                         <input placeholder="₹ SUV" className="w-1/2 p-1 text-[10px] border rounded" value={newPackage.priceSuv} onChange={e => setNewPackage({...newPackage, priceSuv: e.target.value})} />
                                     </div>
-                                    <button onClick={handleAddPackage} className="w-full bg-blue-600 text-white text-[10px] py-1 rounded">Save</button>
+                                    <button onClick={handleAddPackage} className="w-full bg-blue-600 text-white text-[10px] py-1 rounded">{pkgEditingId ? 'Update' : 'Save'}</button>
                                 </div>
                             )}
 
@@ -485,17 +630,24 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
                                             <span className="font-bold">{pkg.name}</span>
                                             <span className="text-[10px] text-gray-500 ml-1">({pkg.hours}h/{pkg.km}km)</span>
                                         </div>
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-1">
                                             <span className="font-mono text-gray-500 text-[10px]">S:{pkg.priceSedan} X:{pkg.priceSuv}</span>
-                                            <button onClick={(e) => removePackage(pkg.id, e)} className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100"><Trash2 className="w-3 h-3" /></button>
+                                            <button onClick={() => startEditPackage(pkg)} className="text-blue-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 p-1"><Edit2 className="w-3 h-3" /></button>
+                                            <button onClick={(e) => removePackage(pkg.id, e)} className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 p-1"><Trash2 className="w-3 h-3" /></button>
                                         </div>
                                     </div>
                                 ))}
                             </div>
                         </div>
                     </div>
-                    <button onClick={() => setShowRates(false)} className="w-full mt-2 bg-slate-800 text-white text-xs font-bold py-2 rounded">Close</button>
                 </div>
+            </div>
+            
+            <div className="flex gap-3 justify-end mt-6 pt-4 border-t border-gray-100">
+                <button onClick={() => setShowRates(false)} className="px-6 py-2 border border-gray-300 text-gray-700 font-bold text-sm rounded-lg hover:bg-gray-50 transition-colors">Cancel</button>
+                <button onClick={handleSaveConfiguration} className="px-6 py-2 bg-slate-900 text-white text-sm font-bold rounded-lg hover:bg-slate-800 shadow-md flex items-center gap-2 transition-colors">
+                    <Save className="w-4 h-4" /> Save Configuration
+                </button>
             </div>
         </div>
       )}
@@ -507,150 +659,195 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
                   <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><User className="w-4 h-4"/> Customer Info</h3>
                   <div className="grid grid-cols-2 gap-4">
                       <input name="name" value={formData.name} onChange={handleInputChange} placeholder="Name" className="w-full p-2 border rounded-lg outline-none focus:ring-2 focus:ring-emerald-500" />
-                      <input name="phone" value={formData.phone} onChange={handleInputChange} placeholder="Phone" className="w-full p-2 border rounded-lg outline-none focus:ring-2 focus:ring-emerald-500" />
+                      <input name="phone" value={formData.phone} onChange={handleInputChange} onBlur={handlePhoneBlur} placeholder="Phone" className="w-full p-2 border rounded-lg outline-none focus:ring-2 focus:ring-emerald-500" />
                   </div>
+                  
+                  {/* Customer History Peek */}
+                  {customerHistory.length > 0 && (
+                      <div className="mt-4 border-t border-gray-100 pt-3">
+                          <h4 className="text-xs font-bold text-gray-500 uppercase mb-2 flex items-center gap-1"><History className="w-3 h-3"/> Booking History</h4>
+                          <div className="space-y-2 max-h-40 overflow-y-auto">
+                              {customerHistory.map(h => (
+                                  <div key={h.id} className="text-xs bg-gray-50 p-2 rounded border border-gray-100 flex justify-between">
+                                      <span>{new Date(h.createdAt).toLocaleDateString()}</span>
+                                      <span className="font-medium text-emerald-600">{h.tripType || 'General'}</span>
+                                      <span className="text-gray-500">{h.status}</span>
+                                  </div>
+                              ))}
+                          </div>
+                      </div>
+                  )}
               </div>
 
-              <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-                  <h3 className="font-bold text-gray-800 mb-4">Trip Details</h3>
-                  
-                  {/* Transport / General Toggle */}
-                  <div className="flex gap-2 mb-4 bg-gray-100 p-1 rounded-lg">
-                      <button onClick={() => setFormData(prev => ({...prev, enquiryCategory: 'Transport'}))} className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${formData.enquiryCategory === 'Transport' ? 'bg-white shadow text-emerald-600 font-bold' : 'text-gray-500'}`}>Transport</button>
-                      <button onClick={() => setFormData(prev => ({...prev, enquiryCategory: 'General'}))} className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${formData.enquiryCategory === 'General' ? 'bg-white shadow text-emerald-600 font-bold' : 'text-gray-500'}`}>General</button>
-                  </div>
+              {/* Enquiry Category Toggle */}
+              <div className="flex gap-2 bg-white p-2 rounded-xl border border-gray-200 shadow-sm">
+                  <button onClick={() => setFormData(prev => ({...prev, enquiryCategory: 'Transport'}))} className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${formData.enquiryCategory === 'Transport' ? 'bg-emerald-50 text-emerald-700 font-bold border border-emerald-200' : 'text-gray-500 hover:bg-gray-50'}`}>Transport</button>
+                  <button onClick={() => setFormData(prev => ({...prev, enquiryCategory: 'General'}))} className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${formData.enquiryCategory === 'General' ? 'bg-gray-100 text-gray-800 font-bold' : 'text-gray-500 hover:bg-gray-50'}`}>General</button>
+              </div>
 
-                  {formData.enquiryCategory === 'Transport' && (
-                    <>
-                        <div className="flex justify-between items-center mb-4">
-                            <div className="flex gap-4 border-b border-gray-200 pb-1">
-                                {['Local', 'Rental', 'Outstation'].map(t => (
-                                    <button 
-                                        key={t} 
-                                        onClick={() => setFormData(prev => ({...prev, tripType: t as any}))} 
-                                        className={`pb-2 text-sm font-medium transition-all ${formData.tripType === t ? 'text-emerald-600 border-b-2 border-emerald-600' : 'text-gray-500'}`}
-                                    >
-                                        {t}
-                                    </button>
-                                ))}
-                            </div>
-                            <div className="flex gap-1 bg-slate-100 p-1 rounded">
-                                <button onClick={() => setFormData(prev => ({...prev, vehicleType: 'Sedan'}))} className={`px-3 py-1 text-xs rounded ${formData.vehicleType === 'Sedan' ? 'bg-slate-800 text-white' : 'text-slate-600'}`}>Sedan</button>
-                                <button onClick={() => setFormData(prev => ({...prev, vehicleType: 'SUV'}))} className={`px-3 py-1 text-xs rounded ${formData.vehicleType === 'SUV' ? 'bg-slate-800 text-white' : 'text-slate-600'}`}>SUV</button>
-                            </div>
+              {formData.enquiryCategory === 'Transport' && (
+                <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm animate-in fade-in">
+                    <h3 className="font-bold text-gray-800 mb-4">Trip Details</h3>
+                    <div className="flex justify-between items-center mb-4">
+                        <div className="flex gap-4 border-b border-gray-200 pb-1">
+                            {['Local', 'Rental', 'Outstation'].map(t => (
+                                <button 
+                                    key={t} 
+                                    onClick={() => setFormData(prev => ({...prev, tripType: t as any}))} 
+                                    className={`pb-2 text-sm font-medium transition-all ${formData.tripType === t ? 'text-emerald-600 border-b-2 border-emerald-600' : 'text-gray-500'}`}
+                                >
+                                    {t}
+                                </button>
+                            ))}
                         </div>
+                        <div className="flex gap-1 bg-slate-100 p-1 rounded">
+                            <button onClick={() => setFormData(prev => ({...prev, vehicleType: 'Sedan'}))} className={`px-3 py-1 text-xs rounded ${formData.vehicleType === 'Sedan' ? 'bg-slate-800 text-white' : 'text-slate-600'}`}>Sedan</button>
+                            <button onClick={() => setFormData(prev => ({...prev, vehicleType: 'SUV'}))} className={`px-3 py-1 text-xs rounded ${formData.vehicleType === 'SUV' ? 'bg-slate-800 text-white' : 'text-slate-600'}`}>SUV</button>
+                        </div>
+                    </div>
 
+                    {/* DYNAMIC FORM FIELDS */}
+                    <div className="space-y-4">
                         {formData.tripType === 'Local' && (
-                            <div className="space-y-3">
-                                <div className="relative">
-                                    <Autocomplete placeholder="Search Pickup Location" onAddressSelect={addr => setFormData(prev => ({...prev, pickup: addr}))} setNewPlace={setPickupCoords} defaultValue={formData.pickup} />
+                            <>
+                                <label className="block text-xs font-bold text-gray-500 uppercase">PICKUP LOCATION</label>
+                                <Autocomplete 
+                                    placeholder="Search Pickup" 
+                                    onAddressSelect={addr => setFormData(prev => ({...prev, pickup: addr}))} 
+                                    setNewPlace={setPickupCoords} 
+                                    defaultValue={formData.pickup} 
+                                />
+                                <label className="block text-xs font-bold text-gray-500 uppercase mt-2">DROP LOCATION</label>
+                                <Autocomplete 
+                                    placeholder="Search Drop" 
+                                    onAddressSelect={addr => setFormData(prev => ({...prev, drop: addr}))} 
+                                    setNewPlace={setDropCoords} 
+                                    defaultValue={formData.drop} 
+                                />
+                                <div className="grid grid-cols-2 gap-4 mt-2">
+                                    <input type="number" name="estKm" value={formData.estKm} onChange={handleInputChange} placeholder="Est Km" className="p-2 border rounded-lg w-full text-sm" />
+                                    <input type="number" name="waitingMins" value={formData.waitingMins} onChange={handleInputChange} placeholder="Wait Mins" className="p-2 border rounded-lg w-full text-sm" />
                                 </div>
-                                <div className="relative">
-                                    <Autocomplete placeholder="Search Drop Location" onAddressSelect={addr => setFormData(prev => ({...prev, drop: addr}))} setNewPlace={setDropCoords} defaultValue={formData.drop} />
-                                </div>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <input type="number" name="estKm" value={formData.estKm} onChange={handleInputChange} placeholder="Est Km" className="p-2 border rounded-lg w-full" />
-                                    <input type="number" name="waitingMins" value={formData.waitingMins} onChange={handleInputChange} placeholder="Wait Mins" className="p-2 border rounded-lg w-full" />
-                                </div>
-                            </div>
+                            </>
                         )}
 
                         {formData.tripType === 'Rental' && (
-                            <div className="space-y-3">
-                                <Autocomplete placeholder="Pickup Location" onAddressSelect={addr => setFormData(prev => ({...prev, pickup: addr}))} defaultValue={formData.pickup} />
-                                <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto">
+                            <>
+                                <label className="block text-xs font-bold text-gray-500 uppercase">PICKUP LOCATION</label>
+                                <Autocomplete 
+                                    placeholder="Search Pickup" 
+                                    onAddressSelect={addr => setFormData(prev => ({...prev, pickup: addr}))} 
+                                    setNewPlace={setPickupCoords} 
+                                    defaultValue={formData.pickup} 
+                                />
+                                <label className="block text-xs font-bold text-gray-500 uppercase mt-2">SELECT PACKAGE</label>
+                                <div className="grid grid-cols-2 gap-2">
                                     {rentalPackages.map(pkg => (
-                                        <button key={pkg.id} onClick={() => setFormData(prev => ({...prev, packageId: pkg.id}))} className={`p-2 border rounded text-left text-xs ${formData.packageId === pkg.id ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}>
+                                        <button key={pkg.id} onClick={() => setFormData(prev => ({...prev, packageId: pkg.id}))} className={`p-2 border rounded text-left text-xs ${formData.packageId === pkg.id ? 'bg-emerald-50 border-emerald-500 ring-1 ring-emerald-500' : 'hover:bg-gray-50'}`}>
                                             <div className="font-bold">{pkg.name}</div>
                                             <div className="text-gray-500">₹{formData.vehicleType === 'Sedan' ? pkg.priceSedan : pkg.priceSuv}</div>
                                         </button>
                                     ))}
                                 </div>
-                            </div>
+                            </>
                         )}
 
                         {formData.tripType === 'Outstation' && (
-                            <div className="space-y-3">
-                                <div className="flex gap-2 bg-orange-50 p-1 rounded border border-orange-100">
-                                    <button onClick={() => setFormData(prev => ({...prev, outstationSubType: 'RoundTrip'}))} className={`flex-1 text-xs py-1.5 rounded ${formData.outstationSubType === 'RoundTrip' ? 'bg-white shadow text-orange-700 font-bold' : 'text-orange-600'}`}>
-                                        <ArrowRightLeft className="w-3 h-3 inline mr-1"/> Round Trip
-                                    </button>
-                                    <button onClick={() => setFormData(prev => ({...prev, outstationSubType: 'OneWay'}))} className={`flex-1 text-xs py-1.5 rounded ${formData.outstationSubType === 'OneWay' ? 'bg-white shadow text-orange-700 font-bold' : 'text-orange-600'}`}>
-                                        <ArrowRight className="w-3 h-3 inline mr-1"/> One Way
-                                    </button>
+                            <>
+                                <div className="flex gap-2 mb-2">
+                                    <button onClick={() => setFormData(prev => ({...prev, outstationSubType: 'OneWay'}))} className={`flex-1 text-xs py-2 rounded font-bold border ${formData.outstationSubType === 'OneWay' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'text-gray-500 border-gray-200'}`}><ArrowRight className="w-3 h-3 inline mr-1"/> One Way</button>
+                                    <button onClick={() => setFormData(prev => ({...prev, outstationSubType: 'RoundTrip'}))} className={`flex-1 text-xs py-2 rounded font-bold border ${formData.outstationSubType === 'RoundTrip' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'text-gray-500 border-gray-200'}`}><ArrowRightLeft className="w-3 h-3 inline mr-1"/> Round Trip</button>
                                 </div>
-
-                                <Autocomplete placeholder={formData.outstationSubType === 'OneWay' ? "Pickup Location" : "Start Location"} onAddressSelect={addr => setFormData(prev => ({...prev, pickup: addr}))} setNewPlace={setPickupCoords} defaultValue={formData.pickup} />
-                                <Autocomplete placeholder="Destination" onAddressSelect={addr => setFormData(prev => ({...prev, destination: addr}))} setNewPlace={setDestCoords} defaultValue={formData.destination} />
-                                
-                                <div className="grid grid-cols-3 gap-3">
-                                    <input type="number" name="days" value={formData.days} onChange={handleInputChange} placeholder="Days" className="p-2 border rounded-lg w-full" />
-                                    <input type="number" name="estTotalKm" value={formData.estTotalKm} onChange={handleInputChange} placeholder="Total Km" className="p-2 border rounded-lg w-full" />
+                                <label className="block text-xs font-bold text-gray-500 uppercase">PICKUP LOCATION</label>
+                                <Autocomplete 
+                                    placeholder="Search Pickup" 
+                                    onAddressSelect={addr => setFormData(prev => ({...prev, pickup: addr}))} 
+                                    setNewPlace={setPickupCoords} 
+                                    defaultValue={formData.pickup} 
+                                />
+                                <label className="block text-xs font-bold text-gray-500 uppercase mt-2">DESTINATION</label>
+                                <Autocomplete 
+                                    placeholder="Search Destination" 
+                                    onAddressSelect={addr => setFormData(prev => ({...prev, destination: addr}))} 
+                                    setNewPlace={setDestCoords} 
+                                    defaultValue={formData.destination} 
+                                />
+                                <div className="grid grid-cols-3 gap-3 mt-2">
+                                    <input type="number" name="days" value={formData.days} onChange={handleInputChange} placeholder="Days" className="p-2 border rounded-lg w-full text-sm" />
+                                    <input type="number" name="estTotalKm" value={formData.estTotalKm} onChange={handleInputChange} placeholder="Total Km" className="p-2 border rounded-lg w-full text-sm" />
                                     {formData.outstationSubType === 'RoundTrip' && (
-                                        <input type="number" name="nights" value={formData.nights} onChange={handleInputChange} placeholder="Nights" className="p-2 border rounded-lg w-full" />
+                                        <input type="number" name="nights" value={formData.nights} onChange={handleInputChange} placeholder="Nights" className="p-2 border rounded-lg w-full text-sm" />
                                     )}
                                 </div>
-                            </div>
+                            </>
                         )}
-
-                        <div className="mt-4 p-3 bg-orange-50 border border-orange-100 rounded-lg flex gap-2 items-start text-xs text-orange-800">
-                            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                            <div><span className="font-bold">Current Rules:</span> {currentRulesText}</div>
+                        
+                        {/* CURRENT RULES YELLOW BOX */}
+                        <div className="bg-orange-50 border border-orange-100 p-3 rounded-lg flex gap-2 items-start text-xs text-orange-800 mt-4">
+                            <MapPin className="w-4 h-4 shrink-0 mt-0.5 text-orange-600" />
+                            <span className="font-medium">{currentRulesText}</span>
                         </div>
-                    </>
-                  )}
-                  
-                  <div className="mt-4 pt-4 border-t border-gray-100">
-                      <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Requirement Details</label>
-                      <textarea name="notes" value={formData.notes} onChange={handleInputChange} rows={3} className="w-full p-2 border border-gray-300 rounded-lg text-sm resize-none focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="Special requests, extra luggage, etc..." />
+                    </div>
+                </div>
+              )}
+
+              {/* Requirement Details */}
+              <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-2">REQUIREMENT DETAILS</label>
+                  <textarea name="notes" value={formData.notes} onChange={handleInputChange} rows={3} className="w-full p-3 border border-gray-300 rounded-lg text-sm resize-none focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="Special requests, extra luggage, etc..." />
+              </div>
+
+              {/* Assignment & Schedule */}
+              <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                  <div className="mb-4">
+                      <label className="block text-xs font-bold text-gray-500 uppercase mb-2 flex items-center gap-1"><Building2 className="w-3 h-3"/> ASSIGN ENQUIRY TO</label>
+                      <div className="flex gap-2">
+                          {isSuperAdmin && (
+                              <select name="assignCorporate" value={formData.assignCorporate} onChange={handleInputChange} className="flex-1 p-2 border rounded-lg text-sm bg-white">
+                                  <option value="admin">Head Office</option>
+                                  {corporates.map(c => <option key={c.id} value={c.email}>{c.companyName}</option>)}
+                              </select>
+                          )}
+                          <select name="assignBranch" value={formData.assignBranch} onChange={handleInputChange} className="flex-1 p-2 border rounded-lg text-sm bg-white">
+                              <option>All Branches</option>
+                              {allBranches.filter(b => isSuperAdmin ? (formData.assignCorporate === 'admin' ? b.owner === 'admin' : b.owner === formData.assignCorporate) : true).map(b => (
+                                  <option key={b.id} value={b.name}>{b.name}</option>
+                              ))}
+                          </select>
+                          <select name="assignStaff" value={formData.assignStaff} onChange={handleInputChange} className="flex-1 p-2 border rounded-lg text-sm bg-white">
+                              <option value="">Select Staff</option>
+                              {allStaff
+                                .filter(s => isSuperAdmin ? (formData.assignCorporate === 'admin' ? s.corporateId === 'admin' : s.corporateId === formData.assignCorporate) : true)
+                                .filter(s => formData.assignBranch === 'All Branches' || s.branch === formData.assignBranch)
+                                .map(s => <option key={s.id} value={s.id}>{s.name}</option>)
+                              }
+                          </select>
+                      </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4 mt-4">
+                  <div className="grid grid-cols-2 gap-4 border-t border-gray-100 pt-4">
                       <div>
                           <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Follow-up Date</label>
                           <input type="date" name="followUpDate" value={formData.followUpDate} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg text-sm outline-none" />
                       </div>
                       <div>
-                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Time</label>
-                          <input type="time" name="followUpTime" value={formData.followUpTime} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg text-sm outline-none" />
-                      </div>
-                  </div>
-                  
-                  <div className="mt-4">
-                      <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Priority</label>
-                      <div className="flex gap-2">
-                          {['Hot', 'Warm', 'Cold'].map(p => (
-                              <button key={p} onClick={() => setFormData(prev => ({...prev, priority: p}))} className={`flex-1 py-1.5 rounded text-sm border ${formData.priority === p ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-gray-600 border-gray-300'}`}>{p}</button>
-                          ))}
+                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Priority</label>
+                          <select name="priority" value={formData.priority} onChange={handleInputChange as any} className="w-full p-2 border border-gray-300 rounded-lg text-sm outline-none bg-white">
+                              <option>Hot</option>
+                              <option>Warm</option>
+                              <option>Cold</option>
+                          </select>
                       </div>
                   </div>
 
-                  <div className="mt-4 pt-4 border-t border-gray-100 bg-gray-50 -mx-6 -mb-6 p-6 rounded-b-xl">
-                      <h4 className="font-bold text-gray-700 mb-3 flex items-center gap-2"><User className="w-4 h-4"/> ASSIGN ENQUIRY TO</h4>
-                      <div className="flex gap-2">
-                          {isSuperAdmin && (
-                              <select name="assignCorporate" value={formData.assignCorporate} onChange={handleInputChange} className="flex-1 p-2 border rounded-lg text-sm bg-white">
-                                  <option value="admin">Head Office</option>
-                                  {corporates.map(c => <option key={c.email} value={c.email}>{c.companyName}</option>)}
-                              </select>
-                          )}
-                          <select name="assignBranch" value={formData.assignBranch} onChange={handleInputChange} className="flex-1 p-2 border rounded-lg text-sm bg-white">
-                              <option>All Branches</option>
-                              {availableBranches.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
-                          </select>
-                          <select name="assignStaff" value={formData.assignStaff} onChange={handleInputChange} className="flex-1 p-2 border rounded-lg text-sm bg-white">
-                              <option value="">Select Staff</option>
-                              {availableStaff.map(s => <option key={s.id} value={s.id}>{s.name} ({s.role})</option>)}
-                          </select>
-                      </div>
-                      <div className="flex gap-3 mt-4">
-                          <button className="flex-1 border border-blue-500 text-blue-600 py-2 rounded-lg font-bold hover:bg-blue-50 transition-colors flex items-center justify-center gap-2"><Calendar className="w-4 h-4"/> Schedule</button>
-                          <button className="flex-1 bg-emerald-600 text-white py-2 rounded-lg font-bold hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"><ArrowRight className="w-4 h-4"/> Book Now</button>
-                      </div>
-                      <div className="flex justify-end gap-3 mt-3">
-                          <button onClick={() => setFormData({...formData, name:'', phone:''})} className="text-gray-500 hover:text-gray-700 text-sm flex items-center gap-1"><X className="w-3 h-3"/> Cancel</button>
-                          <button onClick={handleSaveEnquiry} className="text-emerald-600 hover:text-emerald-800 text-sm font-bold flex items-center gap-1"><Save className="w-3 h-3"/> Save Enquiry</button>
-                      </div>
+                  <div className="flex gap-3 mt-6">
+                      <button className="flex-1 border border-blue-500 text-blue-600 py-2.5 rounded-lg font-bold hover:bg-blue-50 transition-colors flex items-center justify-center gap-2"><Calendar className="w-4 h-4"/> Schedule</button>
+                      <button onClick={handleSaveEnquiry} className="flex-1 bg-emerald-600 text-white py-2.5 rounded-lg font-bold hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"><ArrowRight className="w-4 h-4"/> Book Now</button>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-3 mt-3">
+                      <button onClick={() => setFormData({...formData, name:'', phone:'', notes:''})} className="text-gray-500 hover:text-gray-700 text-sm flex items-center justify-center gap-1 py-2"><X className="w-3 h-3"/> Cancel</button>
+                      <button onClick={handleSaveEnquiry} className="text-emerald-600 hover:text-emerald-800 text-sm font-bold flex items-center justify-center gap-1 py-2 bg-emerald-50 rounded-lg border border-emerald-100"><Save className="w-3 h-3"/> Save Enquiry</button>
                   </div>
               </div>
           </div>
@@ -673,7 +870,9 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
                       <h3 className="font-bold text-gray-800 flex items-center gap-2"><MessageCircle className="w-4 h-4"/> Generated Message</h3>
                       <button onClick={() => navigator.clipboard.writeText(generatedMessage)} className="text-blue-600 text-xs hover:underline flex items-center gap-1"><Copy className="w-3 h-3"/> Copy</button>
                   </div>
-                  <textarea value={generatedMessage} readOnly className="w-full h-48 p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 resize-none outline-none" />
+                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 text-sm text-gray-700 whitespace-pre-wrap min-h-[200px]">
+                      {generatedMessage}
+                  </div>
                   <div className="grid grid-cols-2 gap-3 mt-4">
                       <button 
                         onClick={() => window.open(`https://wa.me/${formData.phone.replace(/\D/g, '')}?text=${encodeURIComponent(generatedMessage)}`, '_blank')}

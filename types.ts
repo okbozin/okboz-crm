@@ -115,10 +115,10 @@ export interface HistoryLog {
 }
 
 // Re-using common types from CustomerCare/VehicleEnquiries for Enquiry interface
-type TripType = 'Local' | 'Rental' | 'Outstation';
-type OutstationSubType = 'RoundTrip' | 'OneWay';
-type VehicleType = 'Sedan' | 'SUV';
-type EnquiryCategory = 'Transport' | 'General';
+export type TripType = 'Local' | 'Rental' | 'Outstation';
+export type OutstationSubType = 'RoundTrip' | 'OneWay';
+export type VehicleType = 'Sedan' | 'SUV';
+export type EnquiryCategory = 'Transport' | 'General';
 
 
 export interface Enquiry {
@@ -156,6 +156,34 @@ export interface Enquiry {
   estimatedPrice?: number;
   priority?: 'Hot' | 'Warm' | 'Cold';
   corporateId?: string; 
+}
+
+export interface Trip {
+  id: string;
+  tripId: string;
+  date: string;
+  branch: string;
+  bookingType: string;
+  transportType: string;
+  tripCategory: string;
+  bookingStatus: string;
+  cancelBy?: string;
+  userName: string;
+  userMobile: string;
+  driverName?: string;
+  driverMobile?: string;
+  pickup?: string; // Added pickup location
+  drop?: string;   // Added drop location
+  tripPrice: number;
+  adminCommission: number;
+  tax: number;
+  waitingCharge: number;
+  discount: number;
+  cancellationCharge: number;
+  totalPrice: number;
+  remarks?: string;
+  ownerId?: string;
+  ownerName?: string;
 }
 
 export interface DocumentFile {

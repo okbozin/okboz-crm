@@ -1,45 +1,21 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Plus, Search, Download, X, Save,
   User, Car, MapPin, DollarSign, Trash2, Edit2, 
   PieChart as PieChartIcon, TrendingUp, Building2, RefreshCcw, Calculator, Filter,
-  Loader2, AlertTriangle
+  Loader2, AlertTriangle, ReceiptIndianRupee, Printer
 } from 'lucide-react';
 import { 
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, 
   BarChart, Bar, XAxis, YAxis, CartesianGrid 
 } from 'recharts';
 import Autocomplete from '../../components/Autocomplete';
+import { Trip } from '../../types';
 
-interface Trip {
-  id: string;
-  tripId: string;
-  date: string;
-  branch: string;
-  bookingType: string;
-  transportType: string;
-  tripCategory: string;
-  bookingStatus: string;
-  cancelBy?: string;
-  userName: string;
-  userMobile: string;
-  driverName?: string;
-  driverMobile?: string;
-  tripPrice: number;
-  adminCommission: number;
-  tax: number;
-  waitingCharge: number;
-  discount: number;
-  cancellationCharge: number;
-  totalPrice: number;
-  remarks?: string;
-  ownerId?: string;
-  ownerName?: string;
-}
+const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#6366f1'];
 
-const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'];
-
-const TripBooking: React.FC = () => {
+const TripEarning: React.FC = () => {
   const sessionId = localStorage.getItem('app_session_id') || 'admin';
   const isSuperAdmin = sessionId === 'admin';
   
@@ -75,8 +51,8 @@ const TripBooking: React.FC = () => {
     }
   });
 
-  const [allBranches, setAllBranches] = useState<any[]>([]); // Store full branch objects
-  const [corporates, setCorporates] = useState<any[]>([]); // Store corporate accounts
+  const [allBranches, setAllBranches] = useState<any[]>([]); 
+  const [corporates, setCorporates] = useState<any[]>([]); 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   
@@ -85,19 +61,23 @@ const TripBooking: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [branchFilter, setBranchFilter] = useState('All');
-  const [corporateFilter, setCorporateFilter] = useState('All'); // New Filter
-  const [bookingTypeFilter, setBookingTypeFilter] = useState('All'); // NEW FILTER
-  const [transportTypeFilter, setTransportTypeFilter] = useState('All'); // NEW FILTER
-  const [tripCategoryFilter, setTripCategoryFilter] = useState('All'); // NEW FILTER
+  const [corporateFilter, setCorporateFilter] = useState('All');
+  const [bookingTypeFilter, setBookingTypeFilter] = useState('All');
+  const [transportTypeFilter, setTransportTypeFilter] = useState('All');
+  const [tripCategoryFilter, setTripCategoryFilter] = useState('All');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
 
-  // Map state for Autocomplete in Modal
+  // Map state
   const [isMapReady, setIsMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
 
+  // Financial Calc State
+  const [taxPercentage, setTaxPercentage] = useState<string>('5'); 
+  const [adminCommissionPercentage, setAdminCommissionPercentage] = useState<string>('10'); 
+
   const initialFormState = {
-    ownerId: isSuperAdmin ? 'admin' : sessionId, // Default owner
+    ownerId: isSuperAdmin ? 'admin' : sessionId,
     branch: '',
     tripId: '',
     date: new Date().toISOString().split('T')[0],
@@ -110,6 +90,7 @@ const TripBooking: React.FC = () => {
     userMobile: '',
     driverName: '',
     driverMobile: '',
+    pickup: '', // Added Pickup
     tripPrice: 0,
     adminCommission: 0,
     tax: 0,
@@ -124,18 +105,18 @@ const TripBooking: React.FC = () => {
   // --- Google Maps Script Loader ---
   useEffect(() => {
     if (window.gm_authFailure_detected) {
-      setMapError("Map Error: Billing not enabled OR API Key Invalid. Check Google Cloud Console.");
+      setMapError("Map Error: Billing not enabled OR API Key Invalid.");
       return;
     }
     const apiKey = localStorage.getItem('maps_api_key');
     if (!apiKey) {
-      setMapError("API Key missing. Add in Settings > Integrations.");
+      setMapError("API Key missing.");
       return;
     }
     const originalAuthFailure = window.gm_authFailure;
     window.gm_authFailure = () => {
       window.gm_authFailure_detected = true;
-      setMapError("Map Error: Billing not enabled OR API Key Invalid. Check Google Cloud Console.");
+      setMapError("Map Error: Billing not enabled.");
       if (originalAuthFailure) originalAuthFailure();
     };
 
@@ -160,30 +141,23 @@ const TripBooking: React.FC = () => {
               setMapError("Google Maps 'places' library failed to load.");
             }
         };
-        script.onerror = () => setMapError("Network error: Failed to load Google Maps script.");
+        script.onerror = () => setMapError("Network error.");
         document.head.appendChild(script);
     } else {
         script.addEventListener('load', () => {
-          if (window.google && window.google.maps && window.google.maps.places) {
-            setIsMapReady(true);
-          }
+          if (window.google && window.google.maps && window.google.maps.places) setIsMapReady(true);
         });
-        if (window.google && window.google.maps && window.google.maps.places) {
-            setIsMapReady(true);
-        }
+        if (window.google && window.google.maps && window.google.maps.places) setIsMapReady(true);
     }
   }, []);
 
   // Load Branches and Corporates
   useEffect(() => {
     try {
-      // 1. Load Corporates
       const corps = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
       setCorporates(corps);
 
-      // 2. Load Branches
       let loadedBranches: any[] = [];
-      
       if (isSuperAdmin) {
           const adminBranches = JSON.parse(localStorage.getItem('branches_data') || '[]');
           loadedBranches = [...adminBranches.map((b: any) => ({...b, owner: 'admin', ownerName: 'Head Office'}))]; 
@@ -200,8 +174,6 @@ const TripBooking: React.FC = () => {
               loadedBranches = parsed.map((b: any) => ({...b, owner: sessionId}));
           }
       }
-      
-      // Filter branches by current session ID if not Super Admin
       if (!isSuperAdmin) {
           loadedBranches = loadedBranches.filter(b => b.owner === sessionId);
       }
@@ -212,30 +184,37 @@ const TripBooking: React.FC = () => {
   // Sync Trips to Storage
   useEffect(() => {
     if (isSuperAdmin) {
+        // 1. Save Head Office Trips
         const headOfficeTrips = trips.filter(t => t.ownerId === 'admin');
-        const cleanTrips = headOfficeTrips.map(({ownerId, ownerName, ...rest}) => rest);
-        localStorage.setItem('trips_data', JSON.stringify(cleanTrips));
+        const cleanAdminTrips = headOfficeTrips.map(({ownerId, ownerName, ...rest}) => rest);
+        localStorage.setItem('trips_data', JSON.stringify(cleanAdminTrips));
+
+        // 2. Save Corporate Trips (Distribute updates/deletes)
+        if (corporates.length > 0) {
+            corporates.forEach((corp: any) => {
+                const corpTrips = trips.filter(t => t.ownerId === corp.email);
+                const cleanCorpTrips = corpTrips.map(({ownerId, ownerName, ...rest}) => rest);
+                localStorage.setItem(`trips_data_${corp.email}`, JSON.stringify(cleanCorpTrips));
+            });
+        }
     } else {
         const key = `trips_data_${sessionId}`;
         const cleanTrips = trips.map(({ownerId, ownerName, ...rest}) => rest);
         localStorage.setItem(key, JSON.stringify(cleanTrips));
     }
-  }, [trips, isSuperAdmin, sessionId]);
+  }, [trips, isSuperAdmin, sessionId, corporates]);
 
   const filteredTrips = useMemo(() => {
     return trips.filter(t => {
       const matchesSearch = 
         t.tripId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        t.userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        t.userMobile.includes(searchTerm);
+        (t.userName && t.userName.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (t.userMobile && t.userMobile.includes(searchTerm));
       
       const matchesStatus = statusFilter === 'All' || t.bookingStatus === statusFilter;
       const matchesBranch = branchFilter === 'All' || (t.branch && t.branch === branchFilter);
-      
-      // Corporate Filter (Super Admin Only)
       const matchesCorporate = corporateFilter === 'All' || (t.ownerId === corporateFilter);
-
-      // NEW FILTERS
+      
       const matchesBookingType = bookingTypeFilter === 'All' || t.bookingType === bookingTypeFilter;
       const matchesTransportType = transportTypeFilter === 'All' || t.transportType === transportTypeFilter;
       const matchesTripCategory = tripCategoryFilter === 'All' || t.tripCategory === tripCategoryFilter;
@@ -254,102 +233,80 @@ const TripBooking: React.FC = () => {
     });
   }, [trips, searchTerm, statusFilter, branchFilter, corporateFilter, bookingTypeFilter, transportTypeFilter, tripCategoryFilter, fromDate, toDate]);
 
-  // Chart Data for existing Booking Status and Revenue Trend
-  const chartData = useMemo(() => {
-    const statusCounts: Record<string, number> = {};
-    const revenueMap: Record<string, number> = {};
-    
-    filteredTrips.forEach(t => {
-        statusCounts[t.bookingStatus] = (statusCounts[t.bookingStatus] || 0) + 1;
-        revenueMap[t.date] = (revenueMap[t.date] || 0) + t.totalPrice;
-    });
-
-    const pieData = Object.keys(statusCounts).map((key) => ({ 
-        name: key, 
-        value: statusCounts[key],
-        color: key === 'Completed' ? '#10b981' : key === 'Cancelled' ? '#ef4444' : key === 'Confirmed' ? '#3b82f6' : '#f59e0b'
-    }));
-
-    const barData = Object.keys(revenueMap).sort().map(date => ({
-        name: new Date(date).toLocaleDateString('en-US', { day: '2-digit', month: 'short' }),
-        revenue: revenueMap[date]
-    }));
-
-    return { pieData, barData };
+  // --- Chart Data Logic ---
+  const bookingTypeData = useMemo(() => {
+      const counts: Record<string, number> = {};
+      filteredTrips.forEach(t => { counts[t.bookingType] = (counts[t.bookingType] || 0) + 1; });
+      return Object.keys(counts).map((key, idx) => ({ name: key, value: counts[key], color: COLORS[idx % COLORS.length] }));
   }, [filteredTrips]);
 
-  // NEW CHART DATA: Booking Type Distribution
-  const bookingTypeDistribution = useMemo(() => {
+  const transportTypeData = useMemo(() => {
       const counts: Record<string, number> = {};
-      filteredTrips.forEach(t => {
-          counts[t.bookingType] = (counts[t.bookingType] || 0) + 1;
+      filteredTrips.forEach(t => { counts[t.transportType] = (counts[t.transportType] || 0) + 1; });
+      return Object.keys(counts).map((key, idx) => ({ name: key, value: counts[key], color: COLORS[idx % COLORS.length] }));
+  }, [filteredTrips]);
+
+  const tripCategoryData = useMemo(() => {
+      const counts: Record<string, number> = {};
+      filteredTrips.forEach(t => { counts[t.tripCategory] = (counts[t.tripCategory] || 0) + 1; });
+      return Object.keys(counts).map((key, idx) => ({ name: key, value: counts[key], color: COLORS[idx % COLORS.length] }));
+  }, [filteredTrips]);
+
+  const commissionData = useMemo(() => {
+      const counts: Record<string, number> = {};
+      filteredTrips.forEach(t => { 
+          counts[t.tripCategory] = (counts[t.tripCategory] || 0) + (t.adminCommission || 0); 
       });
       return Object.keys(counts).map((key, idx) => ({ 
           name: key, 
-          value: counts[key],
-          color: COLORS[idx % COLORS.length]
-      }));
-  }, [filteredTrips]);
-
-  // NEW CHART DATA: Transport Type Distribution
-  const transportTypeDistribution = useMemo(() => {
-      const counts: Record<string, number> = {};
-      filteredTrips.forEach(t => {
-          counts[t.transportType] = (counts[t.transportType] || 0) + 1;
-      });
-      return Object.keys(counts).map((key, idx) => ({ 
-          name: key, 
-          value: counts[key],
-          color: COLORS[idx % COLORS.length]
-      }));
-  }, [filteredTrips]);
-
-  // NEW CHART DATA: Trip Category Distribution
-  const tripCategoryDistribution = useMemo(() => {
-      const counts: Record<string, number> = {};
-      filteredTrips.forEach(t => {
-          counts[t.tripCategory] = (counts[t.tripCategory] || 0) + 1;
-      });
-      return Object.keys(counts).map((key, idx) => ({ 
-          name: key, 
-          value: counts[key],
-          color: COLORS[idx % COLORS.length]
+          value: counts[key], 
+          color: COLORS[idx % COLORS.length] 
       }));
   }, [filteredTrips]);
 
 
   const totalPrice = useMemo(() => {
     const price = Number(formData.tripPrice) || 0;
-    const comm = Number(formData.adminCommission) || 0;
     const tax = Number(formData.tax) || 0;
     const waiting = Number(formData.waitingCharge) || 0;
     const cancel = Number(formData.cancellationCharge) || 0;
     const discount = Number(formData.discount) || 0;
-
-    return price + comm + tax + waiting + cancel - discount; 
+    return price + tax + waiting + cancel - discount; 
   }, [formData]);
+
+  // Auto-calculate Admin Commission
+  useEffect(() => {
+    const price = Number(formData.tripPrice) || 0;
+    const waiting = Number(formData.waitingCharge) || 0;
+    const cancel = Number(formData.cancellationCharge) || 0;
+    const percent = parseFloat(adminCommissionPercentage) || 0;
+    
+    // Formula: X% of (Trip + Wait) + 100% of Cancel
+    const commission = ((price + waiting) * (percent / 100)) + cancel;
+    
+    setFormData(prev => {
+        if (prev.adminCommission === commission) return prev;
+        return { ...prev, adminCommission: commission };
+    });
+  }, [formData.tripPrice, formData.waitingCharge, formData.cancellationCharge, adminCommissionPercentage]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  // Available Branches for Modal Dropdown
   const formAvailableBranches = useMemo(() => {
-      // Filter branches based on the selected owner in the form
       const targetOwner = formData.ownerId;
       return allBranches.filter(b => b.owner === targetOwner);
   }, [allBranches, formData.ownerId]);
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!formData.tripId || !formData.date || !formData.userName) {
-      alert("Please fill all required fields (*)");
+    if (!formData.tripId || !formData.date) {
+      alert("Please fill required fields (*)");
       return;
     }
 
-    // Determine Owner Name
     let ownerName = 'My Branch';
     if (isSuperAdmin) {
         if (formData.ownerId === 'admin') ownerName = 'Head Office';
@@ -382,10 +339,21 @@ const TripBooking: React.FC = () => {
     setIsModalOpen(false);
     setEditingId(null);
     setFormData(initialFormState);
+    setTaxPercentage('5');
+    setAdminCommissionPercentage('10');
   };
 
   const handleEdit = (trip: Trip) => {
     setEditingId(trip.id);
+    const impliedTax = (trip.tax && trip.tripPrice) ? ((trip.tax / trip.tripPrice) * 100).toFixed(2) : '5';
+    setTaxPercentage(parseFloat(impliedTax).toString());
+
+    // Calculate implied commission percentage
+    const baseForComm = (trip.tripPrice || 0) + (trip.waitingCharge || 0);
+    const commFromBase = (trip.adminCommission || 0) - (trip.cancellationCharge || 0);
+    const impliedCommPercent = baseForComm > 0 ? (commFromBase / baseForComm) * 100 : 10;
+    setAdminCommissionPercentage(impliedCommPercent.toFixed(2));
+
     setFormData({
       ownerId: trip.ownerId || 'admin',
       branch: trip.branch,
@@ -396,10 +364,11 @@ const TripBooking: React.FC = () => {
       tripCategory: trip.tripCategory,
       bookingStatus: trip.bookingStatus,
       cancelBy: trip.cancelBy || '',
-      userName: trip.userName,
-      userMobile: trip.userMobile,
+      userName: trip.userName || '',
+      userMobile: trip.userMobile || '',
       driverName: trip.driverName || '',
       driverMobile: trip.driverMobile || '',
+      pickup: trip.pickup || '',
       tripPrice: trip.tripPrice,
       adminCommission: trip.adminCommission,
       tax: trip.tax,
@@ -422,9 +391,9 @@ const TripBooking: React.FC = () => {
       setStatusFilter('All');
       setBranchFilter('All');
       setCorporateFilter('All');
-      setBookingTypeFilter('All'); // RESET NEW FILTERS
-      setTransportTypeFilter('All'); // RESET NEW FILTERS
-      setTripCategoryFilter('All'); // RESET NEW FILTERS
+      setBookingTypeFilter('All');
+      setTransportTypeFilter('All');
+      setTripCategoryFilter('All');
       setFromDate('');
       setToDate('');
   };
@@ -434,7 +403,7 @@ const TripBooking: React.FC = () => {
       alert("No trips to export.");
       return;
     }
-    const headers = ["Trip ID", "Date", "Owner", "Branch", "Booking Type", "Customer", "Driver", "Transport", "Comm", "Tax", "Total", "Status"];
+    const headers = ["Trip ID", "Date", "Owner", "Branch", "Booking Type", "Customer", "Driver", "Transport", "Comm %", "Comm Amt", "Total", "Status"];
     const escapeCsv = (val: any) => {
         if (val === null || val === undefined) return '';
         const stringVal = String(val);
@@ -443,42 +412,56 @@ const TripBooking: React.FC = () => {
         }
         return stringVal;
     };
-    const rows = filteredTrips.map(t => [
-      t.tripId, t.date, t.ownerName || '-', t.branch, t.bookingType, t.userName, t.driverName || '-', 
-      `${t.tripCategory} - ${t.transportType}`, t.adminCommission, t.tax, t.totalPrice, t.bookingStatus
-    ].map(escapeCsv));
+    const rows = filteredTrips.map(t => {
+        // Calculate Comm % for Export
+        const base = (t.tripPrice || 0) + (t.waitingCharge || 0);
+        const commBase = (t.adminCommission || 0) - (t.cancellationCharge || 0);
+        const percent = base > 0 ? (commBase / base) * 100 : 0;
+        
+        return [
+            t.tripId, t.date, t.ownerName || '-', t.branch, t.bookingType, t.userName, t.driverName || '-', 
+            `${t.tripCategory} - ${t.transportType}`, `${percent.toFixed(1)}%`, t.adminCommission, t.totalPrice, t.bookingStatus
+        ].map(escapeCsv);
+    });
 
     const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `trips_export_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute("download", `trips_earning_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const handlePrint = () => {
+      window.print();
   };
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-gray-800">Trip Booking</h2>
+          <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+              <ReceiptIndianRupee className="w-8 h-8 text-emerald-600" /> Trip Earning
+          </h2>
           <p className="text-gray-500">
-             {isSuperAdmin ? "Manage all trips across Head Office & Agencies" : "Manage your branch trip records"}
+             Financial analytics and booking management
           </p>
         </div>
-        <button 
-          onClick={() => { setEditingId(null); setFormData(initialFormState); setIsModalOpen(true); }}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 shadow-sm transition-colors"
-        >
-          <Plus className="w-5 h-5" /> New Trip
-        </button>
+        <div className="flex gap-2">
+            <button 
+                onClick={() => { setEditingId(null); setFormData(initialFormState); setIsModalOpen(true); }}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 shadow-sm transition-colors"
+            >
+                <Plus className="w-5 h-5" /> New Trip Entry
+            </button>
+        </div>
       </div>
 
-      {/* NEWLY MOVED: Search and Filter Toolbar */}
+      {/* Toolbar */}
       <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col gap-4">
           <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-              {/* Search */}
               <div className="relative flex-1 w-full">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
                   <input 
@@ -490,7 +473,6 @@ const TripBooking: React.FC = () => {
                   />
               </div>
               
-              {/* Action Buttons */}
               <div className="flex gap-2 w-full md:w-auto">
                   <button 
                       onClick={() => setShowFilters(!showFilters)}
@@ -502,16 +484,20 @@ const TripBooking: React.FC = () => {
                       onClick={handleExport}
                       className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 text-sm font-medium flex items-center gap-2"
                   >
-                      <Download className="w-4 h-4" /> Export
+                      <Download className="w-4 h-4" /> Export CSV
+                  </button>
+                  <button 
+                      onClick={handlePrint}
+                      className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 text-sm font-medium flex items-center gap-2"
+                  >
+                      <Printer className="w-4 h-4" /> Print / PDF
                   </button>
               </div>
           </div>
           
-          {/* Collapsible Filters */}
           {showFilters && (
              <div className="flex flex-wrap gap-3 pt-4 border-t border-gray-200 animate-in fade-in slide-in-from-top-2">
                  
-                 {/* Corporate Filter (Super Admin Only) */}
                  {isSuperAdmin && (
                      <select 
                         value={corporateFilter}
@@ -532,11 +518,8 @@ const TripBooking: React.FC = () => {
                     className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 min-w-[140px]"
                  >
                     <option value="All">All Branches</option>
-                    {/* Show unique branches available in the current context */}
                     {Array.from(new Set(allBranches.map((b: any) => b.name))).map((name: string) => (
-                      <option key={name} value={name}>
-                          {name}
-                      </option>
+                      <option key={name} value={name}>{name}</option>
                     ))}
                  </select>
 
@@ -552,7 +535,6 @@ const TripBooking: React.FC = () => {
                     <option value="Pending">Pending</option>
                  </select>
 
-                 {/* NEW FILTER: Booking Type */}
                  <select 
                     value={bookingTypeFilter}
                     onChange={(e) => setBookingTypeFilter(e.target.value)}
@@ -564,7 +546,6 @@ const TripBooking: React.FC = () => {
                     ))}
                  </select>
 
-                 {/* NEW FILTER: Transport Type */}
                  <select 
                     value={transportTypeFilter}
                     onChange={(e) => setTransportTypeFilter(e.target.value)}
@@ -576,7 +557,6 @@ const TripBooking: React.FC = () => {
                     ))}
                  </select>
 
-                 {/* NEW FILTER: Trip Category */}
                  <select 
                     value={tripCategoryFilter}
                     onChange={(e) => setTripCategoryFilter(e.target.value)}
@@ -590,32 +570,17 @@ const TripBooking: React.FC = () => {
                  
                  <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-1.5">
                     <span className="text-xs text-gray-500 font-medium">From:</span>
-                    <input 
-                      type="date"
-                      value={fromDate}
-                      onChange={(e) => setFromDate(e.target.value)}
-                      className="text-sm outline-none bg-transparent text-gray-700"
-                    />
+                    <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="text-sm outline-none bg-transparent text-gray-700" />
                  </div>
 
                  <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-1.5">
                     <span className="text-xs text-gray-500 font-medium">To:</span>
-                    <input 
-                      type="date"
-                      value={toDate}
-                      onChange={(e) => setToDate(e.target.value)}
-                      className="text-sm outline-none bg-transparent text-gray-700"
-                    />
+                    <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="text-sm outline-none bg-transparent text-gray-700" />
                  </div>
 
-                 {(searchTerm || statusFilter !== 'All' || branchFilter !== 'All' || corporateFilter !== 'All' || bookingTypeFilter !== 'All' || transportTypeFilter !== 'All' || tripCategoryFilter !== 'All' || fromDate || toDate) && (
-                     <button 
-                        onClick={handleResetFilters}
-                        className="px-3 py-2 text-red-500 hover:bg-red-50 rounded-lg text-sm font-medium flex items-center gap-1 transition-colors ml-auto"
-                     >
-                        <RefreshCcw className="w-4 h-4" /> Reset
-                     </button>
-                 )}
+                 <button onClick={handleResetFilters} className="px-3 py-2 text-red-500 hover:bg-red-50 rounded-lg text-sm font-medium flex items-center gap-1 transition-colors ml-auto">
+                    <RefreshCcw className="w-4 h-4" /> Reset
+                 </button>
              </div>
           )}
       </div>
@@ -641,55 +606,8 @@ const TripBooking: React.FC = () => {
         </div>
       </div>
 
-      {/* Charts Section - Now with more charts! */}
+      {/* Visual Analytics */}
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-        {/* Existing Booking Status Pie Chart */}
-        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
-            <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <PieChartIcon className="w-5 h-5 text-indigo-500" /> Booking Status
-            </h3>
-            <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                        <Pie
-                            data={chartData.pieData}
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={60}
-                            outerRadius={80}
-                            paddingAngle={5}
-                            dataKey="value"
-                        >
-                            {chartData.pieData.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={entry.color} />
-                            ))}
-                        </Pie>
-                        <Tooltip />
-                        <Legend />
-                    </PieChart>
-                </ResponsiveContainer>
-            </div>
-        </div>
-
-        {/* Existing Revenue Trend Bar Chart */}
-        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
-            <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <TrendingUp className="w-5 h-5 text-emerald-500" /> Revenue Trend
-            </h3>
-            <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chartData.barData}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill:'#9ca3af', fontSize:12}} />
-                        <YAxis axisLine={false} tickLine={false} tick={{fill:'#9ca3af', fontSize:12}} />
-                        <Tooltip cursor={{fill: '#f3f4f6'}} />
-                        <Bar dataKey="revenue" fill="#10b981" radius={[4, 4, 0, 0]} barSize={20} />
-                    </BarChart>
-                </ResponsiveContainer>
-            </div>
-        </div>
-
-        {/* NEW CHART: Booking Type Distribution */}
         <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
             <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
                 <PieChartIcon className="w-5 h-5 text-blue-500" /> Booking Type
@@ -698,7 +616,7 @@ const TripBooking: React.FC = () => {
                 <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                         <Pie
-                            data={bookingTypeDistribution}
+                            data={bookingTypeData}
                             cx="50%"
                             cy="50%"
                             innerRadius={60}
@@ -706,7 +624,7 @@ const TripBooking: React.FC = () => {
                             paddingAngle={5}
                             dataKey="value"
                         >
-                            {bookingTypeDistribution.map((entry, index) => (
+                            {bookingTypeData.map((entry, index) => (
                                 <Cell key={`cell-${index}`} fill={entry.color} />
                             ))}
                         </Pie>
@@ -717,7 +635,6 @@ const TripBooking: React.FC = () => {
             </div>
         </div>
 
-        {/* NEW CHART: Transport Type Distribution */}
         <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
             <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
                 <Car className="w-5 h-5 text-red-500" /> Transport Type
@@ -726,7 +643,7 @@ const TripBooking: React.FC = () => {
                 <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                         <Pie
-                            data={transportTypeDistribution}
+                            data={transportTypeData}
                             cx="50%"
                             cy="50%"
                             innerRadius={60}
@@ -734,8 +651,8 @@ const TripBooking: React.FC = () => {
                             paddingAngle={5}
                             dataKey="value"
                         >
-                            {transportTypeDistribution.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                            {transportTypeData.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={entry.color} />
                             ))}
                         </Pie>
                         <Tooltip />
@@ -745,7 +662,6 @@ const TripBooking: React.FC = () => {
             </div>
         </div>
 
-        {/* NEW CHART: Trip Category Distribution */}
         <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
             <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
                 <MapPin className="w-5 h-5 text-orange-500" /> Trip Category
@@ -754,7 +670,7 @@ const TripBooking: React.FC = () => {
                 <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                         <Pie
-                            data={tripCategoryDistribution}
+                            data={tripCategoryData}
                             cx="50%"
                             cy="50%"
                             innerRadius={60}
@@ -762,7 +678,7 @@ const TripBooking: React.FC = () => {
                             paddingAngle={5}
                             dataKey="value"
                         >
-                            {tripCategoryDistribution.map((entry, index) => (
+                            {tripCategoryData.map((entry, index) => (
                                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                             ))}
                         </Pie>
@@ -772,12 +688,37 @@ const TripBooking: React.FC = () => {
                 </ResponsiveContainer>
             </div>
         </div>
+
+        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+            <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <PieChartIcon className="w-5 h-5 text-emerald-600" /> Admin Commission
+            </h3>
+            <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                        <Pie
+                            data={commissionData}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={60}
+                            outerRadius={80}
+                            paddingAngle={5}
+                            dataKey="value"
+                        >
+                            {commissionData.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                        </Pie>
+                        <Tooltip formatter={(value: number) => `₹${value.toFixed(0)}`} />
+                        <Legend />
+                    </PieChart>
+                </ResponsiveContainer>
+            </div>
+        </div>
       </div>
 
-      {/* Main Content */}
+      {/* Main Table Content */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        
-        {/* Table */}
         <div className="overflow-x-auto">
            <table className="w-full text-left text-sm whitespace-nowrap">
               <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-200">
@@ -788,15 +729,21 @@ const TripBooking: React.FC = () => {
                     <th className="px-6 py-4">Customer</th>
                     <th className="px-6 py-4">Booking Type</th>
                     <th className="px-6 py-4">Transport</th>
-                    <th className="px-6 py-4 text-right">Commission</th>
-                    <th className="px-6 py-4 text-right">Tax</th>
+                    <th className="px-6 py-4 text-right">Comm %</th>
+                    <th className="px-6 py-4 text-right">Comm Amt</th>
                     <th className="px-6 py-4 text-right">Total Price</th>
                     <th className="px-6 py-4 text-center">Status</th>
                     <th className="px-6 py-4 text-right">Actions</th>
                  </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                 {filteredTrips.map(trip => (
+                 {filteredTrips.map(trip => {
+                    // Calculate percentage for display
+                    const baseForComm = (trip.tripPrice || 0) + (trip.waitingCharge || 0);
+                    const commAmt = (trip.adminCommission || 0) - (trip.cancellationCharge || 0);
+                    const commPercent = baseForComm > 0 ? (commAmt / baseForComm) * 100 : 0;
+
+                    return (
                     <tr key={trip.id} className="hover:bg-gray-50 transition-colors">
                        <td className="px-6 py-4">
                           <div className="font-bold text-gray-900">{trip.tripId}</div>
@@ -814,8 +761,8 @@ const TripBooking: React.FC = () => {
                        )}
                        <td className="px-6 py-4 text-gray-600">{trip.branch}</td>
                        <td className="px-6 py-4">
-                          <div className="font-medium text-gray-900">{trip.userName}</div>
-                          <div className="text-xs text-gray-500">{trip.userMobile}</div>
+                          <div className="font-medium text-gray-900">{trip.userName || '-'}</div>
+                          <div className="text-xs text-gray-500">{trip.userMobile || '-'}</div>
                        </td>
                        <td className="px-6 py-4">
                           <span className="text-gray-700 text-xs font-semibold bg-gray-100 px-2 py-1 rounded">
@@ -827,11 +774,11 @@ const TripBooking: React.FC = () => {
                              {trip.tripCategory} • {trip.transportType}
                           </span>
                        </td>
+                       <td className="px-6 py-4 text-right text-gray-500 text-xs">
+                          {commPercent.toFixed(1)}%
+                       </td>
                        <td className="px-6 py-4 text-right text-emerald-600 font-medium">
                           ₹{trip.adminCommission.toFixed(0)}
-                       </td>
-                       <td className="px-6 py-4 text-right text-gray-600">
-                          ₹{trip.tax.toFixed(0)}
                        </td>
                        <td className="px-6 py-4 text-right">
                           <div className="font-bold text-gray-900">₹{trip.totalPrice.toLocaleString()}</div>
@@ -852,7 +799,7 @@ const TripBooking: React.FC = () => {
                           </div>
                        </td>
                     </tr>
-                 ))}
+                 )})}
                  {filteredTrips.length === 0 && (
                     <tr>
                        <td colSpan={isSuperAdmin ? 11 : 10} className="text-center py-12 text-gray-500 bg-gray-50">
@@ -873,12 +820,12 @@ const TripBooking: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
            <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col animate-in fade-in zoom-in duration-200">
               <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-2xl">
-                 <h3 className="font-bold text-gray-800 text-xl">{editingId ? 'Edit Trip' : 'New Trip Booking'}</h3>
+                 <h3 className="font-bold text-gray-800 text-xl">{editingId ? 'Edit Trip' : 'New Trip Entry'}</h3>
                  <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600"><X className="w-6 h-6"/></button>
               </div>
               
               <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-6">
-                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* Column 1: Trip Basic Info */}
                     <div className="space-y-4">
                        <h4 className="text-sm font-bold text-gray-900 border-b pb-2 flex items-center gap-2"><MapPin className="w-4 h-4 text-emerald-500"/> Trip Info</h4>
@@ -1017,8 +964,8 @@ const TripBooking: React.FC = () => {
                               ) : (
                                 <Autocomplete 
                                     placeholder="Search Pickup Location"
-                                    onAddressSelect={(addr) => {}} // No direct form field for pickup in Trip model shown, but good for context
-                                    // If pickup needs to be saved, add it to Trip interface and formData
+                                    onAddressSelect={(addr) => setFormData(prev => ({ ...prev, pickup: addr }))}
+                                    defaultValue={formData.pickup}
                                 />
                               )}
                               {mapError && <p className="text-xs text-red-500 mt-1">{mapError}</p>}
@@ -1043,66 +990,131 @@ const TripBooking: React.FC = () => {
                     </div>
 
                     {/* Column 3: Financials */}
-                    <div className="space-y-4">
+                    <div className="space-y-4 md:col-span-2">
                        <h4 className="text-sm font-bold text-gray-900 border-b pb-2 flex items-center gap-2"><Calculator className="w-4 h-4 text-purple-500"/> Financials</h4>
                        
-                       <div>
-                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Trip Price (₹) *</label>
-                          <input type="number" name="tripPrice" value={formData.tripPrice || ''} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm font-medium" placeholder="0" />
-                       </div>
+                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                           <div>
+                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">{formData.bookingStatus === 'Cancelled' ? 'Cancellation Fee (Trip Price Field)' : 'Trip Price (₹) *'}</label>
+                              <input type="number" name="tripPrice" value={formData.tripPrice || ''} onChange={(e) => {
+                                  const price = parseFloat(e.target.value) || 0;
+                                  // Only auto-calc tax if NOT cancelled
+                                  const taxAmt = formData.bookingStatus !== 'Cancelled' ? (price * parseFloat(taxPercentage)) / 100 : 0;
+                                  setFormData(prev => ({ ...prev, tripPrice: price, tax: taxAmt }));
+                              }} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm font-medium" placeholder="0" />
+                           </div>
 
-                       <div className="grid grid-cols-2 gap-2">
-                          <div>
-                             <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Admin Commission</label>
-                             <div className="relative">
-                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">₹</span>
-                                <input 
-                                    type="number" 
-                                    name="adminCommission" 
-                                    value={formData.adminCommission || ''} 
-                                    onChange={handleInputChange}
-                                    className="w-full pl-5 p-2 border border-gray-300 rounded-lg outline-none text-sm focus:ring-2 focus:ring-emerald-500" 
-                                    placeholder="0" 
-                                />
-                             </div>
-                          </div>
-                          <div>
-                             <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Tax</label>
-                             <div className="relative">
-                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">₹</span>
-                                <input 
-                                    type="number" 
-                                    name="tax" 
-                                    value={formData.tax || ''} 
-                                    onChange={handleInputChange}
-                                    className="w-full pl-5 p-2 border border-gray-300 rounded-lg outline-none text-sm focus:ring-2 focus:ring-emerald-500" 
-                                    placeholder="0" 
-                                />
-                             </div>
-                          </div>
-                       </div>
+                           {/* Conditional Rendering based on Status */}
+                           {formData.bookingStatus !== 'Cancelled' && (
+                               <>
+                               <div>
+                                     <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Tax %</label>
+                                     <input 
+                                         type="number" 
+                                         value={taxPercentage} 
+                                         onChange={(e) => {
+                                             const percent = parseFloat(e.target.value) || 0;
+                                             setTaxPercentage(e.target.value);
+                                             const taxAmt = (formData.tripPrice * percent) / 100;
+                                             setFormData(prev => ({ ...prev, tax: taxAmt }));
+                                         }}
+                                         className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm focus:ring-2 focus:ring-emerald-500" 
+                                         placeholder="%" 
+                                     />
+                                  </div>
+                                  <div>
+                                     <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Tax Amt</label>
+                                     <div className="relative">
+                                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">₹</span>
+                                        <input 
+                                            type="number" 
+                                            name="tax" 
+                                            value={formData.tax || ''} 
+                                            readOnly 
+                                            className="w-full pl-5 p-2 border border-gray-300 rounded-lg outline-none text-sm bg-gray-50 focus:ring-2 focus:ring-emerald-500" 
+                                            placeholder="0" 
+                                        />
+                                     </div>
+                                  </div>
+                               </>
+                           )}
+                           
+                           {/* Fields visible when Cancelled */}
+                           {formData.bookingStatus === 'Cancelled' && (
+                               <div>
+                                   <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cancellation Charge (Addt'l)</label>
+                                   <input type="number" name="cancellationCharge" value={formData.cancellationCharge || ''} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="0" />
+                               </div>
+                           )}
 
-                       <div className="grid grid-cols-2 gap-2">
-                          <div>
-                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Waiting Chg.</label>
-                             <input type="number" name="waitingCharge" value={formData.waitingCharge || ''} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="0" />
-                          </div>
-                          <div>
-                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cancel Chg.</label>
-                             <input type="number" name="cancellationCharge" value={formData.cancellationCharge || ''} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="0" />
-                          </div>
-                       </div>
-
-                       <div>
-                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Discount</label>
-                          <input type="number" name="discount" value={formData.discount || ''} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm text-red-600" placeholder="0" />
+                           {formData.bookingStatus !== 'Cancelled' && (
+                               <>
+                               <div>
+                                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Waiting Chg.</label>
+                                 <input type="number" name="waitingCharge" value={formData.waitingCharge || ''} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="0" />
+                               </div>
+                               <div>
+                                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cancel Chg.</label>
+                                 <input type="number" name="cancellationCharge" value={formData.cancellationCharge || ''} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="0" />
+                               </div>
+                               <div>
+                                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Discount</label>
+                                  <input type="number" name="discount" value={formData.discount || ''} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm text-red-600" placeholder="0" />
+                               </div>
+                               </>
+                           )}
                        </div>
 
                        <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 mt-2">
                           <label className="block text-xs font-bold text-emerald-800 uppercase mb-1">Total Price</label>
-                          <div className="text-2xl font-bold text-emerald-600">₹{totalPrice.toFixed(2)}</div>
-                          <p className="text-[10px] text-emerald-600 mt-1">Includes tax & extras</p>
+                          <div className="text-2xl font-bold text-emerald-600">
+                              ₹{(
+                                  (Number(formData.tripPrice) || 0) + 
+                                  (Number(formData.tax) || 0) + 
+                                  (Number(formData.waitingCharge) || 0) + 
+                                  (Number(formData.cancellationCharge) || 0) - 
+                                  (Number(formData.discount) || 0)
+                              ).toFixed(2)}
+                          </div>
+                          <p className="text-[10px] text-emerald-600 mt-1">Trip + Tax + Wait + Cancel - Disc</p>
                        </div>
+
+                       {formData.bookingStatus !== 'Cancelled' && (
+                           <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-gray-100">
+                              <div>
+                                 <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Admin Comm %</label>
+                                 <input 
+                                     type="number" 
+                                     value={adminCommissionPercentage} 
+                                     onChange={(e) => setAdminCommissionPercentage(e.target.value)}
+                                     className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm focus:ring-2 focus:ring-emerald-500" 
+                                     placeholder="%" 
+                                 />
+                              </div>
+                              <div>
+                                 <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Admin Comm Amt</label>
+                                 <div className="relative">
+                                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">₹</span>
+                                    <input 
+                                        type="number" 
+                                        name="adminCommission" 
+                                        value={formData.adminCommission || ''} 
+                                        readOnly 
+                                        className="w-full pl-5 p-2 border border-gray-300 rounded-lg outline-none text-sm bg-gray-100 text-gray-600 font-medium cursor-not-allowed" 
+                                        placeholder="0" 
+                                    />
+                                 </div>
+                              </div>
+                           </div>
+                       )}
+                       
+                       {formData.bookingStatus === 'Cancelled' && (
+                           <div className="mt-2 text-xs text-gray-500 italic">
+                               * Admin Commission is 100% of Total Cancellation Fee.
+                           </div>
+                       )}
+                       
+                       <p className="text-[10px] text-gray-400 mt-1">Calculated on (Trip + Wait) + Cancel</p>
                     </div>
                  </div>
 
@@ -1126,4 +1138,4 @@ const TripBooking: React.FC = () => {
   );
 };
 
-export default TripBooking;
+export default TripEarning;
