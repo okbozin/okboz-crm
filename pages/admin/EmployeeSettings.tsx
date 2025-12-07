@@ -1,13 +1,12 @@
-
 import React, { useState, useEffect } from 'react';
 import { 
   Building2, Users, FileText, UserX, Clock, 
   Settings2, Plane, Calendar, Zap, DollarSign, 
   RotateCcw, Download, Award, File, Bell, 
-  MessageCircle, Plus, Trash2, Edit2, CheckCircle, 
-  MapPin as MapPinIcon, Briefcase as BriefcaseIcon,
-  ToggleLeft, ToggleRight, Save, UploadCloud, Search,
-  AlertCircle, Shield, Smartphone, TrendingUp as TrendingUpIcon, RotateCw, CalendarCheck, X, MessageSquare, Briefcase
+  MessageCircle, Plus, Trash2, Edit2, 
+  MapPin as MapPinIcon, 
+  Save, UploadCloud, 
+  AlertCircle, Shield, Smartphone, RotateCw, CalendarCheck, MessageSquare
 } from 'lucide-react';
 import { MOCK_EMPLOYEES } from '../../constants';
 
@@ -53,17 +52,16 @@ const ToggleSwitch = ({ label, checked, onChange, disabled }: { label: string, c
 
 // --- Sub-Components ---
 
-// 1. My Company Report (Real Calculation)
+// 1. My Company Report
 const MyCompanyReport = () => {
   const [stats, setStats] = useState({ total: 0, active: 0, payroll: 0 });
 
   useEffect(() => {
-    // Load staff to calculate stats
     const key = getStorageKey('staff_data');
     let staff = [];
     try {
       staff = JSON.parse(localStorage.getItem(key) || '[]');
-    } catch(e) { staff = isSuperAdmin() ? [] : MOCK_EMPLOYEES; } // Fallback for demo if empty
+    } catch(e) { staff = isSuperAdmin() ? [] : MOCK_EMPLOYEES; }
 
     const activeStaff = staff.filter((e: any) => e.status !== 'Inactive');
     const totalPayroll = activeStaff.reduce((sum: number, e: any) => sum + (parseFloat(e.salary || '0') || 0), 0);
@@ -135,9 +133,9 @@ const MyTeamAdmins = () => {
       <div className="bg-white p-4 rounded-xl border border-gray-200 mb-6">
          <h4 className="text-sm font-bold text-gray-700 mb-3">Add New Admin</h4>
          <div className="flex gap-2">
-            <input placeholder="Name" value={newAdmin.name} onChange={e=>setNewAdmin({...newAdmin, name: e.target.value})} className="flex-1 p-2 border rounded text-sm"/>
-            <input placeholder="Email" value={newAdmin.email} onChange={e=>setNewAdmin({...newAdmin, email: e.target.value})} className="flex-1 p-2 border rounded text-sm"/>
-            <button onClick={handleAdd} className="bg-emerald-500 text-white px-4 rounded text-sm font-bold">Add</button>
+            <input placeholder="Name" value={newAdmin.name} onChange={e=>setNewAdmin({...newAdmin, name: e.target.value})} className="flex-1 p-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"/>
+            <input placeholder="Email" value={newAdmin.email} onChange={e=>setNewAdmin({...newAdmin, email: e.target.value})} className="flex-1 p-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"/>
+            <button onClick={handleAdd} className="bg-emerald-500 text-white px-4 rounded-lg text-sm font-bold shadow-sm hover:bg-emerald-600">Add</button>
          </div>
       </div>
 
@@ -251,15 +249,15 @@ const DepartmentsAndRoles = () => {
                   <input 
                     value={inputVal} 
                     onChange={(e) => setInputVal(e.target.value)} 
-                    className="flex-1 border rounded-lg px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500" 
+                    className="flex-1 border border-gray-300 rounded-lg px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500" 
                     placeholder={editingIdx !== null ? `Edit ${activeTab.slice(0,-1)}` : `Add New ${activeTab.slice(0,-1)}`}
                   />
-                  <button onClick={handleSave} className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2">
+                  <button onClick={handleSave} className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 shadow-sm transition-colors">
                       {editingIdx !== null ? <Save className="w-4 h-4"/> : <Plus className="w-4 h-4"/>}
                       {editingIdx !== null ? 'Save' : 'Add'}
                   </button>
                   {editingIdx !== null && (
-                      <button onClick={() => { setEditingIdx(null); setInputVal(''); }} className="text-gray-500 px-3 hover:bg-gray-100 rounded-lg">Cancel</button>
+                      <button onClick={() => { setEditingIdx(null); setInputVal(''); }} className="text-gray-500 px-3 hover:bg-gray-100 rounded-lg border border-gray-200">Cancel</button>
                   )}
               </div>
 
@@ -268,8 +266,8 @@ const DepartmentsAndRoles = () => {
                       <div key={i} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-100 hover:border-emerald-200 transition-colors group">
                           <span className="text-sm font-medium text-gray-700">{item}</span>
                           <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button onClick={() => handleEdit(i)} className="text-blue-500 hover:bg-blue-50 p-1 rounded"><Edit2 className="w-3.5 h-3.5"/></button>
-                              <button onClick={() => handleDelete(i)} className="text-red-500 hover:bg-red-50 p-1 rounded"><Trash2 className="w-3.5 h-3.5"/></button>
+                              <button onClick={() => handleEdit(i)} className="text-blue-500 hover:bg-blue-50 p-1.5 rounded"><Edit2 className="w-4 h-4"/></button>
+                              <button onClick={() => handleDelete(i)} className="text-red-500 hover:bg-red-50 p-1.5 rounded"><Trash2 className="w-4 h-4"/></button>
                           </div>
                       </div>
                   ))}
@@ -337,7 +335,7 @@ const InactiveEmployees = () => {
                   <td className="px-6 py-4 font-medium">{emp.name}</td>
                   <td className="px-6 py-4 text-gray-600">{emp.role}</td>
                   <td className="px-6 py-4 text-right">
-                    <button onClick={() => handleRestore(emp.id)} className="bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-100">Restore</button>
+                    <button onClick={() => handleRestore(emp.id)} className="bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors">Restore</button>
                   </td>
                 </tr>
               ))}
@@ -396,9 +394,11 @@ const ShiftsAndBreaks = () => {
   const handleEdit = (shift: any) => {
       // Parse "09:30 AM" -> hour, min, ampm
       const parseTime = (timeStr: string) => {
-          const [time, period] = timeStr.split(' ');
-          const [hour, min] = time.split(':');
-          return { hour, min, period };
+          try {
+            const [time, period] = timeStr.split(' ');
+            const [hour, min] = time.split(':');
+            return { hour, min, period };
+          } catch(e) { return { hour: '09', min: '00', period: 'AM' }; }
       };
       
       const s = parseTime(shift.start);
@@ -410,6 +410,7 @@ const ShiftsAndBreaks = () => {
           endHour: e.hour, endMin: e.min, endAmPm: e.period
       });
       setEditingId(shift.id);
+      window.scrollTo({ top: 0, behavior: 'smooth' }); // Scroll to top to see form
   };
 
   return (
@@ -424,12 +425,12 @@ const ShiftsAndBreaks = () => {
                 <input 
                   value={shiftForm.name} 
                   onChange={(e) => setShiftForm({...shiftForm, name: e.target.value})} 
-                  className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none" 
+                  className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white" 
                   placeholder="e.g. Morning Shift" 
                 />
             </div>
             
-            <div className="flex gap-6 items-end">
+            <div className="flex flex-wrap gap-6 items-end">
                 {/* Start Time */}
                 <div>
                     <label className="text-xs font-bold text-gray-500 mb-1 block uppercase">Start Time</label>
@@ -437,7 +438,7 @@ const ShiftsAndBreaks = () => {
                         <select value={shiftForm.startHour} onChange={e => setShiftForm({...shiftForm, startHour: e.target.value})} className="p-2 text-sm outline-none bg-transparent appearance-none text-center w-12 cursor-pointer hover:bg-gray-50">
                             {hours.map(h => <option key={h} value={h}>{h}</option>)}
                         </select>
-                        <span className="py-2 text-sm text-gray-400">:</span>
+                        <span className="py-2 text-sm text-gray-400 font-bold">:</span>
                         <select value={shiftForm.startMin} onChange={e => setShiftForm({...shiftForm, startMin: e.target.value})} className="p-2 text-sm outline-none bg-transparent appearance-none text-center w-12 cursor-pointer hover:bg-gray-50">
                             {minutes.map(m => <option key={m} value={m}>{m}</option>)}
                         </select>
@@ -454,7 +455,7 @@ const ShiftsAndBreaks = () => {
                         <select value={shiftForm.endHour} onChange={e => setShiftForm({...shiftForm, endHour: e.target.value})} className="p-2 text-sm outline-none bg-transparent appearance-none text-center w-12 cursor-pointer hover:bg-gray-50">
                             {hours.map(h => <option key={h} value={h}>{h}</option>)}
                         </select>
-                        <span className="py-2 text-sm text-gray-400">:</span>
+                        <span className="py-2 text-sm text-gray-400 font-bold">:</span>
                         <select value={shiftForm.endMin} onChange={e => setShiftForm({...shiftForm, endMin: e.target.value})} className="p-2 text-sm outline-none bg-transparent appearance-none text-center w-12 cursor-pointer hover:bg-gray-50">
                             {minutes.map(m => <option key={m} value={m}>{m}</option>)}
                         </select>
@@ -465,8 +466,8 @@ const ShiftsAndBreaks = () => {
                 </div>
 
                 <div className="flex gap-2">
-                    <button onClick={handleSave} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm">
-                        {editingId ? 'Update' : 'Add Shift'}
+                    <button onClick={handleSave} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm transition-colors">
+                        {editingId ? 'Update Shift' : 'Add Shift'}
                     </button>
                     {editingId && (
                         <button 
@@ -474,7 +475,7 @@ const ShiftsAndBreaks = () => {
                                 setEditingId(null);
                                 setShiftForm({ name: '', startHour: '09', startMin: '00', startAmPm: 'AM', endHour: '06', endMin: '00', endAmPm: 'PM' });
                             }} 
-                            className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg font-bold text-sm"
+                            className="bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-lg font-bold text-sm transition-colors"
                         >
                             Cancel
                         </button>
@@ -485,29 +486,29 @@ const ShiftsAndBreaks = () => {
 
         <div className="space-y-2">
           {shifts.map((s) => (
-            <div key={s.id} className="flex justify-between items-center p-3 bg-white hover:bg-gray-50 rounded-lg border border-gray-200 transition-colors group">
-              <div className="flex items-center gap-3">
-                 <div className="p-2 bg-emerald-50 text-emerald-600 rounded-md">
-                    <Clock className="w-4 h-4" />
+            <div key={s.id} className="flex justify-between items-center p-4 bg-white hover:bg-gray-50 rounded-lg border border-gray-200 transition-colors group">
+              <div className="flex items-center gap-4">
+                 <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg border border-emerald-100">
+                    <Clock className="w-5 h-5" />
                  </div>
                  <div>
-                     <span className="block text-sm font-bold text-gray-800">{s.name}</span>
-                     <span className="text-xs text-gray-500 font-mono">
+                     <span className="block text-sm font-bold text-gray-900">{s.name}</span>
+                     <span className="text-xs text-gray-500 font-mono bg-gray-100 px-2 py-0.5 rounded mt-1 inline-block">
                         {s.start} - {s.end}
                      </span>
                  </div>
               </div>
               <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => handleEdit(s)} className="text-blue-500 hover:bg-blue-50 p-2 rounded-lg">
+                  <button onClick={() => handleEdit(s)} className="text-blue-500 hover:bg-blue-50 p-2 rounded-lg transition-colors border border-transparent hover:border-blue-200" title="Edit">
                     <Edit2 className="w-4 h-4"/>
                   </button>
-                  <button onClick={() => setShifts(shifts.filter(x => x.id !== s.id))} className="text-red-500 hover:bg-red-50 p-2 rounded-lg">
+                  <button onClick={() => setShifts(shifts.filter(x => x.id !== s.id))} className="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors border border-transparent hover:border-red-200" title="Delete">
                     <Trash2 className="w-4 h-4"/>
                   </button>
               </div>
             </div>
           ))}
-          {shifts.length === 0 && <div className="text-center text-gray-400 text-sm py-4">No shifts configured.</div>}
+          {shifts.length === 0 && <div className="text-center text-gray-400 text-sm py-8 border border-dashed border-gray-300 rounded-lg">No shifts configured.</div>}
         </div>
       </div>
     </div>
@@ -580,23 +581,23 @@ const CustomPaidLeaves = () => {
       <SectionHeader title="Custom Paid Leaves" icon={Plane} desc="Define leave types and annual quotas." />
       <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
          <div className="flex gap-2 mb-4">
-            <input value={leaveForm.name} onChange={e=>setLeaveForm({...leaveForm, name: e.target.value})} className="flex-1 border rounded p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="Leave Name" />
-            <input type="number" value={leaveForm.quota} onChange={e=>setLeaveForm({...leaveForm, quota: e.target.value})} className="w-24 border rounded p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="Quota" />
-            <button onClick={handleSave} className="bg-emerald-500 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2">
+            <input value={leaveForm.name} onChange={e=>setLeaveForm({...leaveForm, name: e.target.value})} className="flex-1 border rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="Leave Name" />
+            <input type="number" value={leaveForm.quota} onChange={e=>setLeaveForm({...leaveForm, quota: e.target.value})} className="w-24 border rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="Quota" />
+            <button onClick={handleSave} className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-colors">
                 {editingId ? <Save className="w-4 h-4"/> : <Plus className="w-4 h-4"/>}
                 {editingId ? 'Save' : 'Add'}
             </button>
             {editingId && (
-                <button onClick={() => { setEditingId(null); setLeaveForm({name:'', quota:''}); }} className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-bold">Cancel</button>
+                <button onClick={() => { setEditingId(null); setLeaveForm({name:'', quota:''}); }} className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg font-bold hover:bg-gray-50 transition-colors">Cancel</button>
             )}
          </div>
          <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
             {leaveTypes.map(l => (
-                <div key={l.id} className="flex justify-between items-center p-3 bg-gray-50 rounded border border-gray-100 group hover:border-emerald-200 transition-colors">
-                    <span className="text-sm font-medium">{l.name} <span className="text-emerald-600 font-bold ml-2">({l.quota} Days)</span></span>
+                <div key={l.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-100 group hover:border-emerald-200 transition-colors">
+                    <span className="text-sm font-medium text-gray-700">{l.name} <span className="text-emerald-600 font-bold ml-2 bg-emerald-50 px-2 py-0.5 rounded text-xs">({l.quota} Days)</span></span>
                     <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => handleEdit(l)} className="text-blue-500 hover:bg-blue-50 p-1 rounded"><Edit2 className="w-4 h-4"/></button>
-                        <button onClick={() => setLeaveTypes(leaveTypes.filter(x => x.id !== l.id))} className="text-red-500 hover:bg-red-50 p-1 rounded"><Trash2 className="w-4 h-4"/></button>
+                        <button onClick={() => handleEdit(l)} className="text-blue-500 hover:bg-blue-50 p-1.5 rounded"><Edit2 className="w-4 h-4"/></button>
+                        <button onClick={() => setLeaveTypes(leaveTypes.filter(x => x.id !== l.id))} className="text-red-500 hover:bg-red-50 p-1.5 rounded"><Trash2 className="w-4 h-4"/></button>
                     </div>
                 </div>
             ))}
@@ -606,15 +607,56 @@ const CustomPaidLeaves = () => {
   );
 };
 
-// 9. Holiday List
+// 9. Holiday List (Up to 2026)
+const INDIAN_HOLIDAYS = [
+    // 2024 (Remaining)
+    { id: '2024-10-02', name: 'Gandhi Jayanti', date: '2024-10-02' },
+    { id: '2024-10-12', name: 'Dussehra', date: '2024-10-12' },
+    { id: '2024-10-31', name: 'Diwali', date: '2024-10-31' },
+    { id: '2024-11-15', name: 'Guru Nanak Jayanti', date: '2024-11-15' },
+    { id: '2024-12-25', name: 'Christmas', date: '2024-12-25' },
+    // 2025
+    { id: '2025-01-01', name: 'New Year', date: '2025-01-01' },
+    { id: '2025-01-14', name: 'Pongal / Makar Sankranti', date: '2025-01-14' },
+    { id: '2025-01-26', name: 'Republic Day', date: '2025-01-26' },
+    { id: '2025-02-26', name: 'Maha Shivaratri', date: '2025-02-26' },
+    { id: '2025-03-14', name: 'Holi', date: '2025-03-14' },
+    { id: '2025-03-31', name: 'Eid al-Fitr (Ramzan)', date: '2025-03-31' },
+    { id: '2025-04-14', name: 'Tamil New Year / Ambedkar Jayanti', date: '2025-04-14' },
+    { id: '2025-04-18', name: 'Good Friday', date: '2025-04-18' },
+    { id: '2025-05-01', name: 'Labour Day', date: '2025-05-01' },
+    { id: '2025-06-07', name: 'Bakrid / Eid al-Adha', date: '2025-06-07' },
+    { id: '2025-08-15', name: 'Independence Day', date: '2025-08-15' },
+    { id: '2025-08-16', name: 'Janmashtami', date: '2025-08-16' },
+    { id: '2025-08-27', name: 'Ganesh Chaturthi', date: '2025-08-27' },
+    { id: '2025-10-02', name: 'Gandhi Jayanti / Dussehra', date: '2025-10-02' },
+    { id: '2025-10-20', name: 'Diwali', date: '2025-10-20' },
+    { id: '2025-12-25', name: 'Christmas', date: '2025-12-25' },
+    // 2026
+    { id: '2026-01-01', name: 'New Year', date: '2026-01-01' },
+    { id: '2026-01-15', name: 'Pongal / Makar Sankranti', date: '2026-01-15' },
+    { id: '2026-01-26', name: 'Republic Day', date: '2026-01-26' },
+    { id: '2026-02-15', name: 'Maha Shivaratri', date: '2026-02-15' },
+    { id: '2026-03-04', name: 'Holi', date: '2026-03-04' },
+    { id: '2026-03-20', name: 'Eid al-Fitr', date: '2026-03-20' },
+    { id: '2026-04-03', name: 'Good Friday', date: '2026-04-03' },
+    { id: '2026-04-14', name: 'Ambedkar Jayanti', date: '2026-04-14' },
+    { id: '2026-05-01', name: 'Labour Day', date: '2026-05-01' },
+    { id: '2026-05-27', name: 'Bakrid', date: '2026-05-27' },
+    { id: '2026-08-15', name: 'Independence Day', date: '2026-08-15' },
+    { id: '2026-09-04', name: 'Janmashtami', date: '2026-09-04' },
+    { id: '2026-09-14', name: 'Ganesh Chaturthi', date: '2026-09-14' },
+    { id: '2026-10-02', name: 'Gandhi Jayanti', date: '2026-10-02' },
+    { id: '2026-10-20', name: 'Dussehra', date: '2026-10-20' },
+    { id: '2026-11-08', name: 'Diwali', date: '2026-11-08' },
+    { id: '2026-12-25', name: 'Christmas', date: '2026-12-25' },
+];
+
 const HolidayList = () => {
   const [holidays, setHolidays] = useState<any[]>(() => {
     const saved = localStorage.getItem(getStorageKey('company_holidays'));
-    return saved ? JSON.parse(saved) : [
-        { id: 'h1', name: 'New Year', date: '2025-01-01' },
-        { id: 'h2', name: 'Republic Day', date: '2025-01-26' },
-        { id: 'h3', name: 'Independence Day', date: '2025-08-15' },
-    ];
+    // If no saved holidays, initialize with the full Indian list
+    return saved ? JSON.parse(saved) : INDIAN_HOLIDAYS;
   });
   const [form, setForm] = useState({ name: '', date: '' });
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -638,33 +680,36 @@ const HolidayList = () => {
   const handleEdit = (h: any) => {
       setForm({ name: h.name, date: h.date });
       setEditingId(h.id);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-      <SectionHeader title="Holiday List" icon={CalendarCheck} desc="Manage company holidays." />
+      <SectionHeader title="Holiday List (2024-2026)" icon={CalendarCheck} desc="Manage company holidays." />
       <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-         <div className="flex gap-2 mb-4">
-            <input value={form.name} onChange={e=>setForm({...form, name: e.target.value})} className="flex-1 border rounded p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="Holiday Name" />
-            <input type="date" value={form.date} onChange={e=>setForm({...form, date: e.target.value})} className="w-36 border rounded p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none" />
-            <button onClick={handleSave} className="bg-emerald-500 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2">
+         <div className="flex gap-2 mb-4 p-4 bg-gray-50 rounded-lg border border-gray-100">
+            <input value={form.name} onChange={e=>setForm({...form, name: e.target.value})} className="flex-1 border rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white" placeholder="Holiday Name" />
+            <input type="date" value={form.date} onChange={e=>setForm({...form, date: e.target.value})} className="w-40 border rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white" />
+            <button onClick={handleSave} className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-colors">
                 {editingId ? <Save className="w-4 h-4"/> : <Plus className="w-4 h-4"/>}
-                {editingId ? 'Save' : 'Add'}
+                {editingId ? 'Update' : 'Add'}
             </button>
             {editingId && (
-                <button onClick={() => { setEditingId(null); setForm({name:'', date:''}); }} className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-bold">Cancel</button>
+                <button onClick={() => { setEditingId(null); setForm({name:'', date:''}); }} className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg font-bold hover:bg-gray-50 transition-colors">Cancel</button>
             )}
          </div>
-         <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
+         <div className="space-y-2 max-h-[500px] overflow-y-auto custom-scrollbar">
             {holidays.map(h => (
-                <div key={h.id} className="flex justify-between items-center p-3 bg-gray-50 rounded border border-gray-100 group hover:border-emerald-200 transition-colors">
+                <div key={h.id} className="flex justify-between items-center p-3 bg-white rounded-lg border border-gray-200 group hover:border-emerald-300 hover:shadow-sm transition-all">
                     <div>
                         <span className="text-sm font-bold text-gray-800">{h.name}</span>
-                        <span className="text-xs text-gray-500 ml-2">{h.date}</span>
+                        <span className="text-xs text-gray-500 ml-2 bg-gray-100 px-2 py-0.5 rounded font-mono">{h.date}</span>
+                        {/* Highlight year */}
+                        <span className="text-[10px] text-gray-400 ml-2">{h.date.split('-')[0]}</span>
                     </div>
                     <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => handleEdit(h)} className="text-blue-500 hover:bg-blue-50 p-1 rounded"><Edit2 className="w-4 h-4"/></button>
-                        <button onClick={() => setHolidays(holidays.filter(x => x.id !== h.id))} className="text-red-500 hover:bg-red-50 p-1 rounded"><Trash2 className="w-4 h-4"/></button>
+                        <button onClick={() => handleEdit(h)} className="text-blue-500 hover:bg-blue-50 p-1.5 rounded transition-colors"><Edit2 className="w-4 h-4"/></button>
+                        <button onClick={() => setHolidays(holidays.filter(x => x.id !== h.id))} className="text-red-500 hover:bg-red-50 p-1.5 rounded transition-colors"><Trash2 className="w-4 h-4"/></button>
                     </div>
                 </div>
             ))}
@@ -699,9 +744,9 @@ const CalendarMonth = () => {
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
             <SectionHeader title="Calendar Month" icon={Calendar} desc="Set financial year start." />
-            <div className="bg-white p-6 rounded-xl border border-gray-200">
+            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
                 <label className="block text-sm font-medium text-gray-700 mb-2">Financial Year Start</label>
-                <select value={startMonth} onChange={(e) => setStartMonth(e.target.value)} className="w-full p-2 border rounded-lg bg-white">
+                <select value={startMonth} onChange={(e) => setStartMonth(e.target.value)} className="w-full p-2 border rounded-lg bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
                     <option>January</option><option>April</option><option>July</option><option>October</option>
                 </select>
             </div>
@@ -717,9 +762,9 @@ const AttendanceCycle = () => {
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
             <SectionHeader title="Attendance Cycle" icon={RotateCw} desc="Define attendance calculation period." />
-            <div className="bg-white p-6 rounded-xl border border-gray-200">
+            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
                 <label className="block text-sm font-medium text-gray-700 mb-2">Cycle Period</label>
-                <select value={cycle} onChange={(e) => setCycle(e.target.value)} className="w-full p-2 border rounded-lg bg-white">
+                <select value={cycle} onChange={(e) => setCycle(e.target.value)} className="w-full p-2 border rounded-lg bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
                     <option>Calendar Month (1st to End)</option>
                     <option>Wage Cycle (26th to 25th)</option>
                 </select>
@@ -736,9 +781,9 @@ const PayoutDate = () => {
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
             <SectionHeader title="Payout Date" icon={DollarSign} desc="Set monthly salary payout day." />
-            <div className="bg-white p-6 rounded-xl border border-gray-200">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Day of Month</label>
-                <input type="number" min="1" max="28" value={payoutDate} onChange={(e) => setPayoutDate(e.target.value)} className="w-full p-2 border rounded-lg" />
+            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Day of Month (1-28)</label>
+                <input type="number" min="1" max="28" value={payoutDate} onChange={(e) => setPayoutDate(e.target.value)} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none" />
             </div>
         </div>
     );
@@ -748,7 +793,7 @@ const PayoutDate = () => {
 const ImportSettings = () => (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
         <SectionHeader title="Import Settings" icon={UploadCloud} desc="Configure data import defaults." />
-        <div className="bg-white p-6 rounded-xl border border-gray-200 text-center text-gray-500">
+        <div className="bg-white p-6 rounded-xl border border-gray-200 text-center text-gray-500 shadow-sm">
             Import configurations are managed automatically based on CSV headers.
         </div>
     </div>
@@ -767,16 +812,16 @@ const IncentiveTypes = () => {
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
             <SectionHeader title="Incentive Types" icon={Award} desc="Define incentive categories." />
-            <div className="bg-white border border-gray-200 rounded-xl p-6">
+            <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
                 <div className="flex gap-2 mb-4">
-                    <input value={newType} onChange={e=>setNewType(e.target.value)} className="flex-1 border rounded p-2 text-sm" placeholder="Incentive Name" />
-                    <button onClick={()=>{if(newType) {setTypes([...types, newType]); setNewType('')}}} className="bg-emerald-500 text-white p-2 rounded"><Plus className="w-4 h-4"/></button>
+                    <input value={newType} onChange={e=>setNewType(e.target.value)} className="flex-1 border rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="Incentive Name" />
+                    <button onClick={()=>{if(newType) {setTypes([...types, newType]); setNewType('')}}} className="bg-emerald-500 hover:bg-emerald-600 text-white p-2 rounded-lg transition-colors"><Plus className="w-4 h-4"/></button>
                 </div>
-                <div className="space-y-2 max-h-40 overflow-y-auto">
+                <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar">
                     {types.map((t, i) => (
-                        <div key={i} className="flex justify-between p-2 bg-gray-50 rounded border border-gray-100">
-                            <span className="text-sm">{t}</span>
-                            <button onClick={()=>setTypes(types.filter((_, idx)=>idx!==i))} className="text-red-400"><Trash2 className="w-3 h-3"/></button>
+                        <div key={i} className="flex justify-between p-2 bg-gray-50 rounded border border-gray-100 hover:border-emerald-100 transition-colors">
+                            <span className="text-sm text-gray-700">{t}</span>
+                            <button onClick={()=>setTypes(types.filter((_, idx)=>idx!==i))} className="text-red-400 hover:text-red-600"><Trash2 className="w-3 h-3"/></button>
                         </div>
                     ))}
                 </div>
@@ -789,7 +834,7 @@ const IncentiveTypes = () => {
 const SalaryTemplates = () => (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
         <SectionHeader title="Salary Templates" icon={File} desc="Manage salary structures." />
-        <div className="bg-white p-6 rounded-xl border border-gray-200 text-center text-gray-500">
+        <div className="bg-white p-6 rounded-xl border border-gray-200 text-center text-gray-500 shadow-sm">
             Standard Template: Basic (50%), HRA (30%), Allowance (20%) is currently active.
         </div>
     </div>
@@ -803,8 +848,8 @@ const RoundOff = () => {
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
             <SectionHeader title="Round Off" icon={RotateCcw} desc="Round off attendance times." />
-            <div className="bg-white p-6 rounded-xl border border-gray-200">
-                <select value={round} onChange={(e) => setRound(e.target.value)} className="w-full p-2 border rounded-lg bg-white">
+            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                <select value={round} onChange={(e) => setRound(e.target.value)} className="w-full p-2 border rounded-lg bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
                     <option>None</option><option>Nearest 15 Mins</option><option>Nearest 30 Mins</option>
                 </select>
             </div>
@@ -829,9 +874,9 @@ const AppNotifications = () => {
 const RequestAFeature = () => (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
         <SectionHeader title="Request A Feature" icon={MessageSquare} desc="Feedback and suggestions." />
-        <div className="bg-white p-6 rounded-xl border border-gray-200 text-center">
-            <textarea className="w-full border rounded-lg p-3 mb-3 text-sm" rows={4} placeholder="Describe your idea..."></textarea>
-            <button className="bg-blue-600 text-white px-6 py-2 rounded-lg text-sm font-bold">Submit</button>
+        <div className="bg-white p-6 rounded-xl border border-gray-200 text-center shadow-sm">
+            <textarea className="w-full border rounded-lg p-3 mb-3 text-sm focus:ring-2 focus:ring-emerald-500 outline-none" rows={4} placeholder="Describe your idea..."></textarea>
+            <button className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg text-sm font-bold transition-colors">Submit</button>
         </div>
     </div>
 );
@@ -903,7 +948,7 @@ const EmployeeSettings: React.FC = () => {
               <button
                 key={link.category}
                 onClick={() => setActiveSetting(link.category)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors group ${isActive ? 'bg-emerald-50 text-emerald-700 font-medium' : 'text-gray-700 hover:bg-gray-50'}`}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors group ${isActive ? 'bg-emerald-50 text-emerald-700 font-medium border border-emerald-100' : 'text-gray-700 hover:bg-gray-50 border border-transparent'}`}
               >
                 <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-emerald-600' : 'text-gray-500 group-hover:text-gray-700'}`} />
                 <span className="truncate">{link.category}</span>

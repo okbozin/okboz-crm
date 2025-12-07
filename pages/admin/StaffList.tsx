@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Plus, Search, Phone, Mail, X, User, Upload, FileText, CreditCard, 
@@ -227,6 +226,7 @@ const StaffList: React.FC = () => {
   const resetForm = () => {
       setFormData({
           ...initialFormState,
+          // Dynamically set default workingHours from the first available shift in settings
           workingHours: shiftsList.length > 0 ? shiftsList[0].name : 'General Shift',
           role: rolesList.length > 0 ? rolesList[0] : '',
           department: departmentsList.length > 0 ? departmentsList[0] : '',
