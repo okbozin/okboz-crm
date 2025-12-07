@@ -63,19 +63,8 @@ const LiveTracking: React.FC = () => {
           lastUpdate: 'Live'
       }));
       
-      // If no active staff with location, generate MOCKS for demo purposes
-      if (activeStaff.length === 0) {
-          setIsDemoMode(true);
-          const MOCK_LOCATIONS = [
-              { id: 'm1', name: 'Rajesh (Driver)', role: 'Driver', lat: 11.0168 + 0.01, lng: 76.9558 + 0.01, lastUpdate: 'Just now' },
-              { id: 'm2', name: 'Suresh (Sales)', role: 'Sales Exec', lat: 11.0168 - 0.01, lng: 76.9558 - 0.005, lastUpdate: '2m ago' },
-              { id: 'm3', name: 'Priya (Field)', role: 'Field Officer', lat: 11.0168 + 0.005, lng: 76.9558 - 0.015, lastUpdate: '5m ago' },
-          ];
-          setStaffLocations(MOCK_LOCATIONS);
-      } else {
-          setIsDemoMode(false);
-          setStaffLocations(activeStaff);
-      }
+      setIsDemoMode(false);
+      setStaffLocations(activeStaff);
   };
 
   useEffect(() => {
