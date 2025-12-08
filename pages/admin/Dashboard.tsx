@@ -1,18 +1,21 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Users, DollarSign, TrendingUp, Calendar, MapPin, 
-  Building2, Car, Activity, Briefcase
+  Building2, Car, Activity, Briefcase, Clock, FileText, CreditCard, CheckCircle, ArrowRight
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
-  LineChart, Line, PieChart, Pie, Cell 
+  LineChart, Line, PieChart, Pie, Cell, AreaChart, Area 
 } from 'recharts';
-import { Employee, Trip, CorporateAccount } from '../../types';
-import { MOCK_EMPLOYEES } from '../../constants';
+import { Employee, Trip, CorporateAccount, LeaveRequest, SalaryAdvanceRequest, AttendanceStatus } from '../../types';
+import { MOCK_EMPLOYEES, getEmployeeAttendance } from '../../constants';
 
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
 const Dashboard: React.FC = () => {
+  const navigate = useNavigate();
   const sessionId = localStorage.getItem('app_session_id') || 'admin';
   const isSuperAdmin = sessionId === 'admin';
 
@@ -28,6 +31,8 @@ const Dashboard: React.FC = () => {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [corporates, setCorporates] = useState<CorporateAccount[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
+  const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
+  const [advances, setAdvances] = useState<SalaryAdvanceRequest[]>([]);
 
   // Load Data
   useEffect(() => {
@@ -38,16 +43,23 @@ const Dashboard: React.FC = () => {
       let allEmployees: Employee[] = [];
       let allTrips: Trip[] = [];
       let allBranches: any[] = [];
+      let allLeaves: LeaveRequest[] = [];
+      let allAdvances: SalaryAdvanceRequest[] = [];
 
       if (isSuperAdmin) {
         // Load Admin Data
         const adminStaff = JSON.parse(localStorage.getItem('staff_data') || '[]').filter((item: any) => item && typeof item === 'object');
         const adminTrips = JSON.parse(localStorage.getItem('trips_data') || '[]').filter((item: any) => item && typeof item === 'object');
         const adminBranches = JSON.parse(localStorage.getItem('branches_data') || '[]').filter((item: any) => item && typeof item === 'object');
+        // Note: Global lists like leave_history often store all, but if namespaced:
+        const adminLeaves = JSON.parse(localStorage.getItem('leave_history') || '[]'); 
+        const adminAdvances = JSON.parse(localStorage.getItem('salary_advances') || '[]');
 
         allEmployees = [...adminStaff];
         allTrips = [...adminTrips];
         allBranches = [...adminBranches];
+        allLeaves = [...adminLeaves]; // Assuming centralized storage for simplicity in this demo structure
+        allAdvances = [...adminAdvances];
 
         // Load Corporate Data
         loadedCorporates.forEach((c: any) => {
@@ -61,14 +73,24 @@ const Dashboard: React.FC = () => {
         });
       } else {
         const keySuffix = `_${sessionId}`;
+        
         allEmployees = JSON.parse(localStorage.getItem(`staff_data${keySuffix}`) || '[]').filter((item: any) => item && typeof item === 'object');
         allTrips = JSON.parse(localStorage.getItem(`trips_data${keySuffix}`) || '[]').filter((item: any) => item && typeof item === 'object');
         allBranches = JSON.parse(localStorage.getItem(`branches_data${keySuffix}`) || '[]').filter((item: any) => item && typeof item === 'object');
+        
+        // Filter global arrays for current session if not separated
+        const globalLeaves = JSON.parse(localStorage.getItem('leave_history') || '[]');
+        allLeaves = globalLeaves.filter((l: any) => l.corporateId === sessionId);
+        
+        const globalAdvances = JSON.parse(localStorage.getItem('salary_advances') || '[]');
+        allAdvances = globalAdvances.filter((a: any) => a.corporateId === sessionId);
       }
 
       setEmployees(allEmployees.length ? allEmployees : (isSuperAdmin ? MOCK_EMPLOYEES : []));
       setTrips(allTrips);
       setBranches(allBranches);
+      setLeaves(allLeaves);
+      setAdvances(allAdvances);
 
     } catch (e) {
       console.error("Error loading dashboard data", e);
@@ -101,27 +123,102 @@ const Dashboard: React.FC = () => {
       });
   }, [trips, filterCorporate, filterBranch, filterType, selectedDate, selectedMonth]);
 
+  // --- NEW: Pending Requests Logic ---
+  const pendingRequests = useMemo(() => {
+    const pendingLeaves = leaves.filter(l => l.status === 'Pending').map(l => ({
+      id: l.id,
+      type: 'Leave',
+      title: `${l.type} Request`,
+      subtitle: `${l.days} Day(s) • ${l.reason}`,
+      date: l.appliedOn,
+      personId: l.employeeId,
+      link: '/admin/employee-settings' // Redirect to leave approval
+    }));
+
+    const pendingAdvances = advances.filter(a => a.status === 'Pending').map(a => ({
+      id: a.id,
+      type: 'Advance',
+      title: 'Salary Advance',
+      subtitle: `₹${a.amountRequested} • ${a.reason}`,
+      date: a.requestDate,
+      personId: a.employeeId,
+      link: '/admin/payroll' // Redirect to advance approval
+    }));
+
+    // Combine and Sort by newest
+    const combined = [...pendingLeaves, ...pendingAdvances].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    
+    // Enrich with Employee Name
+    return combined.map(req => {
+      const emp = employees.find(e => e.id === req.personId);
+      return { ...req, personName: emp ? emp.name : 'Unknown Employee', personAvatar: emp ? emp.avatar : '' };
+    }).slice(0, 5); // Top 5
+  }, [leaves, advances, employees]);
+
+  // --- NEW: Recent Staff Login Logic ---
+  const recentStaffActivity = useMemo(() => {
+     // Flatten onlineHistory from all employees
+     const activityList: { id: string; name: string; role: string; avatar: string; status: 'online' | 'offline'; time: string; }[] = [];
+     
+     employees.forEach(emp => {
+        if (emp.onlineHistory && emp.onlineHistory.length > 0) {
+            // Get the last 3 events for each employee to build a feed
+            const events = [...emp.onlineHistory].reverse().slice(0, 3);
+            events.forEach(event => {
+                activityList.push({
+                    id: emp.id + event.timestamp,
+                    name: emp.name,
+                    role: emp.role,
+                    avatar: emp.avatar,
+                    status: event.status, // 'online' or 'offline'
+                    time: event.timestamp
+                });
+            });
+        }
+     });
+
+     // Sort by time descending
+     return activityList.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()).slice(0, 6);
+  }, [employees]);
+
+
   // Stats Calculation
   const stats = useMemo(() => {
     const totalRevenue = filteredTrips.reduce((sum, t) => sum + (Number(t.totalPrice) || 0), 0);
     const totalTrips = filteredTrips.length;
     const completedTrips = filteredTrips.filter(t => t.bookingStatus === 'Completed').length;
-    const activeStaff = filteredEmployees.filter(e => e.status !== 'Inactive').length;
+    
+    const activeStaffList = filteredEmployees.filter(e => e.status !== 'Inactive');
+    const activeStaffCount = activeStaffList.length;
 
-    return { totalRevenue, totalTrips, completedTrips, activeStaff };
+    // Calculate Today's Attendance
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    
+    const presentToday = activeStaffList.reduce((count, emp) => {
+       // Get attendance records for this employee for current month
+       // Note: In a real app, optimize this to not read storage inside reduce if possible, 
+       // but getEmployeeAttendance is fast for small datasets.
+       const attendance = getEmployeeAttendance(emp, today.getFullYear(), today.getMonth());
+       const todayRecord = attendance.find(a => a.date === todayStr);
+       
+       if (todayRecord && (todayRecord.status === AttendanceStatus.PRESENT || todayRecord.status === AttendanceStatus.HALF_DAY)) {
+           return count + 1;
+       }
+       return count;
+    }, 0);
+
+    return { totalRevenue, totalTrips, completedTrips, activeStaff: activeStaffCount, presentToday };
   }, [filteredTrips, filteredEmployees]);
 
   const revenueData = useMemo(() => {
-    // Group by day for the selected month or just show the selected day
     if (filterType === 'Daily') {
-        // For Daily view, breakdown by transport type
         const typeCounts: Record<string, number> = {};
         filteredTrips.forEach(t => {
             typeCounts[t.transportType] = (typeCounts[t.transportType] || 0) + (Number(t.totalPrice) || 0);
         });
         return Object.keys(typeCounts).map(k => ({ name: k, value: typeCounts[k] }));
     } else {
-        // Monthly view: Group by day
         const daysInMonth = new Date(parseInt(selectedMonth.split('-')[0]), parseInt(selectedMonth.split('-')[1]), 0).getDate();
         const data = [];
         for (let i = 1; i <= daysInMonth; i++) {
@@ -207,8 +304,11 @@ const Dashboard: React.FC = () => {
         </div>
         <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
            <div>
-              <p className="text-xs font-bold text-gray-500 uppercase">Active Staff</p>
-              <h3 className="text-2xl font-bold text-purple-600">{stats.activeStaff}</h3>
+              <p className="text-xs font-bold text-gray-500 uppercase">Staff Attendance</p>
+              <h3 className="text-2xl font-bold text-purple-600 flex items-baseline gap-1">
+                 {stats.presentToday} <span className="text-sm text-gray-400 font-normal">/ {stats.activeStaff}</span>
+              </h3>
+              <p className="text-[10px] text-emerald-600 font-bold mt-1">Present Today</p>
            </div>
            <div className="p-3 bg-purple-50 text-purple-600 rounded-lg"><Users className="w-6 h-6"/></div>
         </div>
@@ -221,6 +321,103 @@ const Dashboard: React.FC = () => {
            </div>
            <div className="p-3 bg-orange-50 text-orange-600 rounded-lg"><Activity className="w-6 h-6"/></div>
         </div>
+      </div>
+
+      {/* QUICK ACCESS & ACTIVITY ROW */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        {/* Pending Approvals */}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col h-80">
+           <div className="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+              <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                 <CheckCircle className="w-5 h-5 text-orange-500" /> Pending Approvals
+              </h3>
+              <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-full font-bold">
+                 {pendingRequests.length} New
+              </span>
+           </div>
+           <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {pendingRequests.length === 0 ? (
+                 <div className="h-full flex flex-col items-center justify-center text-gray-400 text-sm">
+                    <CheckCircle className="w-8 h-8 mb-2 opacity-20" />
+                    All caught up! No pending requests.
+                 </div>
+              ) : (
+                 pendingRequests.map(req => (
+                    <div key={req.id + req.type} className="flex items-center justify-between p-3 border border-gray-100 rounded-lg hover:bg-gray-50 transition-colors">
+                       <div className="flex items-center gap-3">
+                          <div className={`p-2 rounded-lg ${req.type === 'Leave' ? 'bg-blue-50 text-blue-600' : 'bg-green-50 text-green-600'}`}>
+                             {req.type === 'Leave' ? <FileText className="w-4 h-4"/> : <CreditCard className="w-4 h-4"/>}
+                          </div>
+                          <div>
+                             <p className="text-sm font-bold text-gray-800">{req.personName}</p>
+                             <p className="text-xs text-gray-500">{req.title} • {req.subtitle}</p>
+                          </div>
+                       </div>
+                       <button 
+                         onClick={() => navigate(req.link)}
+                         className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 bg-blue-50 px-3 py-1.5 rounded hover:bg-blue-100 transition-colors"
+                       >
+                         View <ArrowRight className="w-3 h-3" />
+                       </button>
+                    </div>
+                 ))
+              )}
+           </div>
+        </div>
+
+        {/* Recent Staff Activity (Login/Logout) */}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col h-80">
+            <div className="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+              <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                 <Clock className="w-5 h-5 text-purple-500" /> Recent Staff Activity
+              </h3>
+              <button 
+                onClick={() => navigate('/admin/tracking')}
+                className="text-xs text-gray-500 hover:text-purple-600 font-medium"
+              >
+                 View All
+              </button>
+           </div>
+           <div className="flex-1 overflow-y-auto p-0">
+               {recentStaffActivity.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-gray-400 text-sm">
+                     <Users className="w-8 h-8 mb-2 opacity-20" />
+                     No recent activity logged.
+                  </div>
+               ) : (
+                  <table className="w-full text-left text-sm">
+                     <tbody className="divide-y divide-gray-50">
+                        {recentStaffActivity.map((activity, idx) => (
+                           <tr key={idx} className="hover:bg-gray-50/50">
+                              <td className="px-4 py-3">
+                                 <div className="flex items-center gap-3">
+                                    <div className="relative">
+                                       <img src={activity.avatar} alt="" className="w-8 h-8 rounded-full border border-gray-100" />
+                                       <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white ${activity.status === 'online' ? 'bg-emerald-500' : 'bg-gray-400'}`}></span>
+                                    </div>
+                                    <div>
+                                       <p className="font-medium text-gray-900">{activity.name}</p>
+                                       <p className="text-[10px] text-gray-500">{activity.role}</p>
+                                    </div>
+                                 </div>
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                 <p className={`text-xs font-bold ${activity.status === 'online' ? 'text-emerald-600' : 'text-gray-500'}`}>
+                                    {activity.status === 'online' ? 'Logged In' : 'Logged Out'}
+                                 </p>
+                                 <p className="text-[10px] text-gray-400">
+                                    {new Date(activity.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                 </p>
+                              </td>
+                           </tr>
+                        ))}
+                     </tbody>
+                  </table>
+               )}
+           </div>
+        </div>
+
       </div>
 
       {/* Charts */}

@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  Users, Search, Plus, Filter, Edit2, Trash2, 
-  MapPin, Phone, Mail, UserCheck, UserX, Building2,
-  MoreVertical, CheckCircle
+  Users, Search, Plus, Edit2, Trash2, 
+  MapPin, Phone, Mail, Building2,
+  X, Save, Briefcase, Shield, User, CreditCard, Lock, Eye, EyeOff, AlertCircle
 } from 'lucide-react';
 import { Employee, CorporateAccount } from '../../types';
 import { MOCK_EMPLOYEES } from '../../constants';
@@ -26,11 +27,26 @@ const getRandomColor = (name: string) => {
   return colors[Math.abs(hash) % colors.length];
 };
 
+const MODULE_PERMISSIONS = [
+  { id: 'customer_care', label: 'Customer Care' },
+  { id: 'live_tracking', label: 'Live Tracking' },
+  { id: 'attendance', label: 'Attendance (Admin View)' },
+  { id: 'staff_management', label: 'Staff Management' },
+  { id: 'vendor_attachment', label: 'Vendor Attachment' },
+  { id: 'expenses', label: 'Finance & Expenses' },
+  { id: 'trip_booking', label: 'Trip Booking' },
+  { id: 'tasks', label: 'Tasks' },
+  { id: 'branches', label: 'Branches' },
+  { id: 'documents', label: 'Documents' },
+  { id: 'payroll', label: 'Payroll' },
+];
+
 const StaffList: React.FC = () => {
   // State
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [corporates, setCorporates] = useState<CorporateAccount[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
+  const [shifts, setShifts] = useState<any[]>([]);
   
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCorporate, setFilterCorporate] = useState('All');
@@ -40,6 +56,50 @@ const StaffList: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   
+  // Password Visibility
+  const [showPassword, setShowPassword] = useState(false);
+
+  const initialFormState: Partial<Employee> = {
+    name: '',
+    email: '',
+    phone: '',
+    password: '',
+    role: '',
+    department: '',
+    branch: '',
+    joiningDate: new Date().toISOString().split('T')[0],
+    salary: '',
+    status: 'Active',
+    corporateId: isSuperAdmin() ? '' : getSessionId(),
+    // Personal
+    dob: '',
+    gender: '',
+    bloodGroup: '',
+    maritalStatus: '',
+    homeAddress: '',
+    // Emergency
+    emergencyContactName: '',
+    emergencyContactPhone: '',
+    emergencyContactRelationship: '',
+    // Banking
+    accountNumber: '',
+    ifsc: '',
+    aadhar: '',
+    pan: '',
+    upiId: '',
+    // Config
+    allowedModules: [],
+    attendanceConfig: {
+      gpsGeofencing: false,
+      qrScan: false,
+      manualPunch: true
+    },
+    workingHours: '' // Shift ID
+  };
+
+  const [formData, setFormData] = useState<Partial<Employee>>(initialFormState);
+  const [confirmPassword, setConfirmPassword] = useState('');
+
   // Data Loading Helper
   const getListFromStorage = (key: string, defaultValue: any[] = []) => {
       try {
@@ -57,6 +117,23 @@ const StaffList: React.FC = () => {
   };
 
   // Load Data
+  const loadEmployees = () => {
+      let allEmployees: Employee[] = [];
+      if (isSuperAdmin()) {
+          const adminStaff = getListFromStorage('staff_data');
+          allEmployees = [...adminStaff];
+          const loadedCorps = getListFromStorage('corporate_accounts');
+          loadedCorps.forEach((c: any) => {
+             const cStaff = getListFromStorage(`staff_data_${c.email}`);
+             allEmployees = [...allEmployees, ...cStaff.map((s: any) => ({ ...s, corporateId: c.email, corporateName: c.companyName }))];
+          });
+      } else {
+          const key = `staff_data_${getSessionId()}`;
+          allEmployees = getListFromStorage(key);
+      }
+      setEmployees(allEmployees.length ? allEmployees : (isSuperAdmin() ? MOCK_EMPLOYEES : []));
+  };
+
   useEffect(() => {
     try {
       // Load Corporates
@@ -67,37 +144,23 @@ const StaffList: React.FC = () => {
       let allBranchesList: any[] = [];
       if (isSuperAdmin()) {
           const adminBranches = getListFromStorage('branches_data');
-          allBranchesList = [...adminBranches];
+          allBranchesList = [...adminBranches.map((b:any) => ({...b, owner: 'admin'}))];
           loadedCorporates.forEach((c: any) => {
              const cBranches = getListFromStorage(`branches_data_${c.email}`);
-             allBranchesList = [...allBranchesList, ...cBranches];
+             allBranchesList = [...allBranchesList, ...cBranches.map((b:any) => ({...b, owner: c.email}))];
           });
       } else {
           const key = `branches_data_${getSessionId()}`;
-          allBranchesList = getListFromStorage(key);
+          allBranchesList = getListFromStorage(key).map((b:any) => ({...b, owner: getSessionId()}));
       }
       setBranches(allBranchesList);
 
-      // Load Employees
-      const loadEmployees = () => {
-          let allEmployees: Employee[] = [];
-          if (isSuperAdmin()) {
-              const adminStaff = getListFromStorage('staff_data');
-              allEmployees = [...adminStaff];
-              loadedCorporates.forEach((c: any) => {
-                 const cStaff = getListFromStorage(`staff_data_${c.email}`);
-                 allEmployees = [...allEmployees, ...cStaff.map((s: any) => ({ ...s, corporateId: c.email, corporateName: c.companyName }))];
-              });
-          } else {
-              const key = `staff_data_${getSessionId()}`;
-              allEmployees = getListFromStorage(key);
-          }
-          setEmployees(allEmployees.length ? allEmployees : (isSuperAdmin() ? MOCK_EMPLOYEES : []));
-      };
+      // Load Shifts
+      const loadedShifts = getListFromStorage(isSuperAdmin() ? 'company_shifts' : `company_shifts_${getSessionId()}`);
+      setShifts(loadedShifts.length ? loadedShifts : [{name: 'General Shift (09:30-18:30)'}]);
 
       loadEmployees();
       
-      // Listen for storage changes to auto-refresh
       window.addEventListener('storage', loadEmployees);
       return () => window.removeEventListener('storage', loadEmployees);
 
@@ -110,22 +173,18 @@ const StaffList: React.FC = () => {
   const filteredEmployees = useMemo(() => {
     let list = employees;
 
-    // Corporate Filter
     if (isSuperAdmin() && filterCorporate !== 'All') {
         list = list.filter(emp => emp && emp.corporateId === filterCorporate);
     } 
 
-    // Branch Filter
     if (filterBranch !== 'All') {
         list = list.filter(emp => emp && emp.branch === filterBranch);
     }
 
-    // Status Filter
     if (filterStatus !== 'All') {
         list = list.filter(emp => emp && emp.status === filterStatus);
     }
 
-    // Search Term Filter
     if (searchTerm) {
       list = list.filter(emp => 
         emp && (
@@ -138,6 +197,110 @@ const StaffList: React.FC = () => {
     return list;
   }, [employees, filterCorporate, filterBranch, filterStatus, searchTerm]);
 
+  // Form Handlers
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+      const { name, value } = e.target;
+      setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleModuleToggle = (moduleId: string) => {
+      const currentModules = formData.allowedModules || [];
+      if (currentModules.includes(moduleId)) {
+          setFormData(prev => ({ ...prev, allowedModules: currentModules.filter(id => id !== moduleId) }));
+      } else {
+          setFormData(prev => ({ ...prev, allowedModules: [...currentModules, moduleId] }));
+      }
+  };
+
+  const handleAttendanceConfigChange = (key: keyof typeof initialFormState.attendanceConfig) => {
+      setFormData(prev => ({
+          ...prev,
+          attendanceConfig: {
+              ...prev.attendanceConfig!,
+              [key]: !prev.attendanceConfig![key]
+          }
+      }));
+  };
+
+  const handleOpenAdd = () => {
+      setEditingId(null);
+      setFormData(initialFormState);
+      setConfirmPassword('');
+      setIsModalOpen(true);
+  };
+
+  const handleEdit = (emp: Employee) => {
+      setEditingId(emp.id);
+      setFormData({
+          ...initialFormState, // Ensure structure
+          ...emp,
+          // Ensure nested objects exist
+          attendanceConfig: emp.attendanceConfig || { gpsGeofencing: false, qrScan: false, manualPunch: true },
+          allowedModules: emp.allowedModules || []
+      });
+      setConfirmPassword(emp.password || '');
+      setIsModalOpen(true);
+  };
+
+  const handleDelete = (id: string, corporateId?: string) => {
+      if(!window.confirm("Delete this employee?")) return;
+
+      const targetCorpId = corporateId || 'admin';
+      const storageKey = targetCorpId === 'admin' ? 'staff_data' : `staff_data_${targetCorpId}`;
+      
+      const currentList = getListFromStorage(storageKey);
+      const updatedList = currentList.filter((e: any) => e.id !== id);
+      
+      localStorage.setItem(storageKey, JSON.stringify(updatedList));
+      loadEmployees();
+  };
+
+  const handleSave = (e: React.FormEvent) => {
+      e.preventDefault();
+      
+      if (!formData.name || !formData.phone) {
+          alert("Name and Phone are required.");
+          return;
+      }
+
+      if (formData.password && formData.password !== confirmPassword) {
+          alert("Passwords do not match.");
+          return;
+      }
+
+      let ownerId = 'admin';
+      if (isSuperAdmin()) {
+          if (formData.corporateId && formData.corporateId !== 'admin') {
+              ownerId = formData.corporateId;
+          }
+      } else {
+          ownerId = getSessionId();
+      }
+
+      const storageKey = ownerId === 'admin' ? 'staff_data' : `staff_data_${ownerId}`;
+      const currentList = getListFromStorage(storageKey);
+
+      if (editingId) {
+          const updatedList = currentList.map((emp: any) => emp.id === editingId ? { ...emp, ...formData } : emp);
+          localStorage.setItem(storageKey, JSON.stringify(updatedList));
+      } else {
+          const newEmployee: Employee = {
+              id: `EMP-${Date.now()}`,
+              name: formData.name || '',
+              role: formData.role || 'Staff',
+              department: formData.department || 'General',
+              avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(formData.name || 'User')}&background=random`,
+              joiningDate: formData.joiningDate || new Date().toISOString(),
+              ...formData
+          } as Employee;
+          
+          localStorage.setItem(storageKey, JSON.stringify([...currentList, newEmployee]));
+      }
+      
+      setIsModalOpen(false);
+      loadEmployees();
+  };
+
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-20">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -148,7 +311,7 @@ const StaffList: React.FC = () => {
           <p className="text-gray-500">Manage your team members and access.</p>
         </div>
         <button 
-          onClick={() => { setEditingId(null); setIsModalOpen(true); }}
+          onClick={handleOpenAdd}
           className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 shadow-sm transition-colors"
         >
           <Plus className="w-5 h-5" /> Add Employee
@@ -209,7 +372,7 @@ const StaffList: React.FC = () => {
             const avatarColor = getRandomColor(emp.name);
 
             return (
-              <div key={emp.id} className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm hover:shadow-md transition-shadow relative flex flex-col">
+              <div key={emp.id} className={`bg-white rounded-xl border p-5 shadow-sm hover:shadow-md transition-shadow relative flex flex-col ${emp.status === 'Inactive' ? 'border-red-100 opacity-75' : 'border-gray-200'}`}>
                  
                  {/* Card Header: Avatar & Actions */}
                  <div className="flex justify-between items-start mb-3">
@@ -217,10 +380,10 @@ const StaffList: React.FC = () => {
                        {initials}
                     </div>
                     <div className="flex gap-1">
-                        <button className="text-gray-400 hover:text-blue-600 p-1.5 hover:bg-blue-50 rounded transition-colors" title="Edit">
+                        <button onClick={() => handleEdit(emp)} className="text-gray-400 hover:text-blue-600 p-1.5 hover:bg-blue-50 rounded transition-colors" title="Edit">
                            <Edit2 className="w-4 h-4"/>
                         </button>
-                        <button className="text-gray-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded transition-colors" title="Delete">
+                        <button onClick={() => handleDelete(emp.id, emp.corporateId)} className="text-gray-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded transition-colors" title="Delete">
                            <Trash2 className="w-4 h-4"/>
                         </button>
                     </div>
@@ -263,12 +426,12 @@ const StaffList: React.FC = () => {
                  {/* Footer: Status & Indicator */}
                  <div className="pt-4 mt-auto border-t border-gray-100 flex justify-between items-center">
                     <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${
-                       emp.status === 'Active' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-600 border-gray-200'
+                       emp.status === 'Active' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-600 border-red-200'
                     }`}>
                        {emp.status}
                     </span>
                     
-                    {/* Online/Offline Indicator or simple dot */}
+                    {/* Online/Offline Indicator */}
                     <div className="relative">
                         {emp.isOnline ? (
                             <span className="w-2.5 h-2.5 bg-green-500 rounded-full block" title="Online"></span>
@@ -283,24 +446,291 @@ const StaffList: React.FC = () => {
          })}
       </div>
 
-      {filteredEmployees.length === 0 && (
-          <div className="text-center py-12 text-gray-500 bg-white rounded-xl border border-dashed border-gray-300">
-             <div className="flex flex-col items-center">
-                 <Users className="w-12 h-12 text-gray-300 mb-3" />
-                 <p className="text-lg font-medium text-gray-600">No employees found</p>
-                 <p className="text-sm">Try adjusting your filters or search query.</p>
-             </div>
-          </div>
-      )}
-      
-      {/* Modal Placeholder (Simplified for fix) */}
+      {/* COMPREHENSIVE ADD/EDIT MODAL */}
       {isModalOpen && (
-         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-xl p-6 w-full max-w-lg shadow-xl">
-               <h3 className="text-xl font-bold mb-4">Add Employee</h3>
-               <p className="text-gray-500 mb-6">This feature requires full modal implementation. This is a placeholder to resolve compilation.</p>
-               <div className="flex justify-end">
-                  <button onClick={() => setIsModalOpen(false)} className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">Close</button>
+         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+            <div className="bg-white rounded-xl w-full max-w-4xl shadow-2xl flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-200 overflow-hidden">
+               {/* Header */}
+               <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50 shrink-0">
+                  <h3 className="text-xl font-bold text-gray-800">{editingId ? 'Edit Employee' : 'Add New Employee'}</h3>
+                  <div className="flex items-center gap-4">
+                      {/* Active/Inactive Toggle - Prominent in Header */}
+                      <div className="flex bg-gray-200 rounded-lg p-1">
+                         <button 
+                            type="button" 
+                            onClick={() => setFormData(p => ({...p, status: 'Active'}))} 
+                            className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${formData.status === 'Active' ? 'bg-white text-emerald-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                         >
+                            Active
+                         </button>
+                         <button 
+                            type="button" 
+                            onClick={() => setFormData(p => ({...p, status: 'Inactive'}))} 
+                            className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${formData.status === 'Inactive' ? 'bg-white text-red-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                         >
+                            Inactive
+                         </button>
+                      </div>
+                      <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600 p-1 hover:bg-gray-200 rounded-full transition-colors"><X className="w-6 h-6"/></button>
+                  </div>
+               </div>
+               
+               {/* Scrollable Form Content */}
+               <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-8 space-y-8 bg-white custom-scrollbar">
+                   
+                   {/* 1. Professional Details */}
+                   <div className="space-y-4">
+                       <h4 className="text-sm font-bold text-gray-900 border-b pb-2 flex items-center gap-2">
+                           <Briefcase className="w-4 h-4 text-emerald-600"/> Professional Details
+                       </h4>
+                       
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                           <div className="space-y-1">
+                               <label className="text-xs font-bold text-gray-500">Full Name</label>
+                               <input name="name" value={formData.name} onChange={handleInputChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500" required />
+                           </div>
+                           <div className="space-y-1">
+                               <label className="text-xs font-bold text-gray-500">Email</label>
+                               <input name="email" type="email" value={formData.email} onChange={handleInputChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500" />
+                           </div>
+                           <div className="space-y-1">
+                               <label className="text-xs font-bold text-gray-500">Phone</label>
+                               <input name="phone" type="tel" value={formData.phone} onChange={handleInputChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500" required />
+                           </div>
+                           
+                           {/* Password Field */}
+                           <div className="space-y-1">
+                               <label className="text-xs font-bold text-gray-500">Password</label>
+                               <div className="relative">
+                                   <input 
+                                     name="password" 
+                                     type={showPassword ? "text" : "password"} 
+                                     value={formData.password} 
+                                     onChange={handleInputChange} 
+                                     className="w-full p-2.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500" 
+                                     placeholder={editingId ? "Leave blank to keep current" : "Min 6 chars"}
+                                   />
+                                   <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                       {showPassword ? <EyeOff className="w-4 h-4"/> : <Eye className="w-4 h-4"/>}
+                                   </button>
+                               </div>
+                           </div>
+
+                           {/* Confirm Password - Only show if password field has value */}
+                           {formData.password && (
+                               <div className="space-y-1 md:col-span-2">
+                                   <label className="text-xs font-bold text-gray-500">Confirm Password</label>
+                                   <input 
+                                     type="password" 
+                                     value={confirmPassword} 
+                                     onChange={(e) => setConfirmPassword(e.target.value)} 
+                                     className={`w-full p-2.5 border rounded-lg text-sm outline-none focus:ring-2 ${confirmPassword && formData.password !== confirmPassword ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-emerald-500'}`} 
+                                     placeholder="Re-enter password"
+                                   />
+                                   {confirmPassword && formData.password !== confirmPassword && (
+                                       <p className="text-xs text-red-500 mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3"/> Passwords do not match</p>
+                                   )}
+                               </div>
+                           )}
+
+                           {isSuperAdmin() && (
+                               <div className="space-y-1 md:col-span-2">
+                                   <label className="text-xs font-bold text-gray-500">Assign Corporate</label>
+                                   <div className="relative">
+                                       <select name="corporateId" value={formData.corporateId || 'admin'} onChange={handleInputChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-emerald-500 appearance-none">
+                                           <option value="admin">Head Office</option>
+                                           {corporates.map(c => <option key={c.id} value={c.email}>{c.companyName}</option>)}
+                                       </select>
+                                       <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500"><Building2 className="w-4 h-4"/></div>
+                                   </div>
+                               </div>
+                           )}
+
+                           <div className="space-y-1">
+                               <label className="text-xs font-bold text-gray-500">Branch</label>
+                               <select name="branch" value={formData.branch} onChange={handleInputChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-emerald-500">
+                                   <option value="">Select Branch</option>
+                                   {branches.filter(b => b.owner === (formData.corporateId || 'admin')).map((b: any, i:number) => <option key={i} value={b.name}>{b.name}</option>)}
+                               </select>
+                           </div>
+
+                           <div className="space-y-1">
+                               <label className="text-xs font-bold text-gray-500">Department</label>
+                               <select name="department" value={formData.department} onChange={handleInputChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-emerald-500">
+                                   <option value="">Select</option>
+                                   <option>Sales</option><option>HR</option><option>IT</option><option>Operations</option>
+                               </select>
+                           </div>
+
+                           <div className="space-y-1">
+                               <label className="text-xs font-bold text-gray-500">Role</label>
+                               <select name="role" value={formData.role} onChange={handleInputChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-emerald-500">
+                                   <option value="">Select</option>
+                                   <option>Manager</option><option>Team Lead</option><option>Staff</option><option>Driver</option>
+                               </select>
+                           </div>
+
+                           <div className="space-y-1">
+                               <label className="text-xs font-bold text-gray-500">Monthly Salary (₹)</label>
+                               <input type="number" name="salary" value={formData.salary} onChange={handleInputChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500" placeholder="0" />
+                           </div>
+
+                           <div className="space-y-1 md:col-span-2">
+                               <label className="text-xs font-bold text-gray-500">Shift</label>
+                               <select name="workingHours" value={formData.workingHours} onChange={handleInputChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-emerald-500">
+                                   <option value="">Select Shift</option>
+                                   {shifts.map((s: any, i: number) => (
+                                       <option key={i} value={s.name}>{s.name} {s.start ? `(${s.start}-${s.end})` : ''}</option>
+                                   ))}
+                               </select>
+                           </div>
+                       </div>
+                   </div>
+
+                   {/* 2. Access & Configuration */}
+                   <div className="space-y-4">
+                       <h4 className="text-sm font-bold text-gray-900 border-b pb-2 flex items-center gap-2"><Shield className="w-4 h-4 text-emerald-600"/> Access & Configuration</h4>
+                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 bg-blue-50/50 p-6 rounded-xl border border-blue-100">
+                           
+                           {/* Permissions */}
+                           <div>
+                               <label className="text-xs font-bold text-blue-600 uppercase mb-4 block flex items-center gap-2"><Lock className="w-3 h-3"/> Extra Access Permissions</label>
+                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                   {MODULE_PERMISSIONS.map(mod => (
+                                       <label key={mod.id} className="flex items-center gap-3 text-sm text-gray-700 cursor-pointer hover:bg-white p-2 rounded-lg transition-colors border border-transparent hover:border-blue-100">
+                                           <input 
+                                             type="checkbox" 
+                                             checked={(formData.allowedModules || []).includes(mod.id)} 
+                                             onChange={() => handleModuleToggle(mod.id)}
+                                             className="w-4 h-4 text-emerald-600 rounded border-gray-300 focus:ring-emerald-500"
+                                           />
+                                           <span className="truncate" title={mod.label}>{mod.label}</span>
+                                       </label>
+                                   ))}
+                               </div>
+                           </div>
+
+                           {/* Attendance Config */}
+                           <div className="lg:border-l lg:border-blue-200 lg:pl-8">
+                               <label className="text-xs font-bold text-orange-600 uppercase mb-4 block flex items-center gap-2"><MapPin className="w-3 h-3"/> Attendance Config</label>
+                               <div className="space-y-4">
+                                   <div className="flex items-center justify-between bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
+                                       <span className="text-sm text-gray-700 font-medium">GPS Geofencing</span>
+                                       <div 
+                                         className={`relative inline-flex h-6 w-11 items-center rounded-full cursor-pointer transition-colors ${formData.attendanceConfig?.gpsGeofencing ? 'bg-emerald-500' : 'bg-gray-300'}`}
+                                         onClick={() => handleAttendanceConfigChange('gpsGeofencing')}
+                                       >
+                                           <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.attendanceConfig?.gpsGeofencing ? 'translate-x-6' : 'translate-x-1'}`} />
+                                       </div>
+                                   </div>
+                                   <div className="flex items-center justify-between bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
+                                       <span className="text-sm text-gray-700 font-medium">QR Scan</span>
+                                       <div 
+                                         className={`relative inline-flex h-6 w-11 items-center rounded-full cursor-pointer transition-colors ${formData.attendanceConfig?.qrScan ? 'bg-emerald-500' : 'bg-gray-300'}`}
+                                         onClick={() => handleAttendanceConfigChange('qrScan')}
+                                       >
+                                           <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.attendanceConfig?.qrScan ? 'translate-x-6' : 'translate-x-1'}`} />
+                                       </div>
+                                   </div>
+                                   <div className="flex items-center justify-between bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
+                                       <span className="text-sm text-gray-700 font-medium">Manual Punch (Web)</span>
+                                       <div 
+                                         className={`relative inline-flex h-6 w-11 items-center rounded-full cursor-pointer transition-colors ${formData.attendanceConfig?.manualPunch ? 'bg-emerald-500' : 'bg-gray-300'}`}
+                                         onClick={() => handleAttendanceConfigChange('manualPunch')}
+                                       >
+                                           <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.attendanceConfig?.manualPunch ? 'translate-x-6' : 'translate-x-1'}`} />
+                                       </div>
+                                   </div>
+                               </div>
+                           </div>
+                       </div>
+                   </div>
+
+                   {/* 3. Personal Details */}
+                   <div className="space-y-4">
+                       <h4 className="text-sm font-bold text-gray-900 border-b pb-2 flex items-center gap-2"><User className="w-4 h-4 text-purple-600"/> Personal Details</h4>
+                       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                           <div className="space-y-1">
+                               <label className="text-xs font-bold text-gray-500">Date of Birth</label>
+                               <input type="date" name="dob" value={formData.dob} onChange={handleInputChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500" />
+                           </div>
+                           <div className="space-y-1">
+                               <label className="text-xs font-bold text-gray-500">Gender</label>
+                               <select name="gender" value={formData.gender} onChange={handleInputChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-emerald-500">
+                                   <option value="">Select</option><option>Male</option><option>Female</option><option>Other</option>
+                               </select>
+                           </div>
+                           <div className="space-y-1">
+                               <label className="text-xs font-bold text-gray-500">Blood Group</label>
+                               <input name="bloodGroup" value={formData.bloodGroup} onChange={handleInputChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500" placeholder="e.g. O+" />
+                           </div>
+                           <div className="space-y-1 md:col-span-3">
+                               <label className="text-xs font-bold text-gray-500">Marital Status</label>
+                               <select name="maritalStatus" value={formData.maritalStatus} onChange={handleInputChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-emerald-500">
+                                   <option value="">Select</option><option>Single</option><option>Married</option>
+                               </select>
+                           </div>
+                           <div className="space-y-1 md:col-span-3">
+                               <label className="text-xs font-bold text-gray-500">Home Address</label>
+                               <textarea name="homeAddress" value={formData.homeAddress} onChange={handleInputChange} rows={3} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm outline-none resize-none focus:ring-2 focus:ring-emerald-500" />
+                           </div>
+                       </div>
+                   </div>
+
+                   {/* 4. Emergency Contact */}
+                   <div className="space-y-4">
+                       <h4 className="text-sm font-bold text-gray-900 border-b pb-2 flex items-center gap-2"><Phone className="w-4 h-4 text-red-500"/> Emergency Contact</h4>
+                       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                           <div className="space-y-1">
+                               <label className="text-xs font-bold text-gray-500">Contact Name</label>
+                               <input name="emergencyContactName" value={formData.emergencyContactName} onChange={handleInputChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500" />
+                           </div>
+                           <div className="space-y-1">
+                               <label className="text-xs font-bold text-gray-500">Contact Phone</label>
+                               <input name="emergencyContactPhone" value={formData.emergencyContactPhone} onChange={handleInputChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500" />
+                           </div>
+                           <div className="space-y-1">
+                               <label className="text-xs font-bold text-gray-500">Relationship</label>
+                               <input name="emergencyContactRelationship" value={formData.emergencyContactRelationship} onChange={handleInputChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500" placeholder="e.g. Spouse, Father" />
+                           </div>
+                       </div>
+                   </div>
+
+                   {/* 5. Banking & KYC */}
+                   <div className="space-y-4">
+                       <h4 className="text-sm font-bold text-gray-900 border-b pb-2 flex items-center gap-2"><CreditCard className="w-4 h-4 text-indigo-500"/> Banking & KYC</h4>
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                           <div className="space-y-1">
+                               <label className="text-xs font-bold text-gray-500">Aadhar Number</label>
+                               <input name="aadhar" value={formData.aadhar} onChange={handleInputChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500" />
+                           </div>
+                           <div className="space-y-1">
+                               <label className="text-xs font-bold text-gray-500">PAN Number</label>
+                               <input name="pan" value={formData.pan} onChange={handleInputChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm outline-none uppercase focus:ring-2 focus:ring-emerald-500" />
+                           </div>
+                           <div className="space-y-1">
+                               <label className="text-xs font-bold text-gray-500">Bank Account No.</label>
+                               <input name="accountNumber" value={formData.accountNumber} onChange={handleInputChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500" />
+                           </div>
+                           <div className="space-y-1">
+                               <label className="text-xs font-bold text-gray-500">IFSC Code</label>
+                               <input name="ifsc" value={formData.ifsc} onChange={handleInputChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm outline-none uppercase focus:ring-2 focus:ring-emerald-500" />
+                           </div>
+                           <div className="space-y-1 md:col-span-2">
+                               <label className="text-xs font-bold text-gray-500">UPI ID</label>
+                               <input name="upiId" value={formData.upiId} onChange={handleInputChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500" placeholder="e.g. name@upi" />
+                           </div>
+                       </div>
+                   </div>
+
+               </form>
+
+               {/* Footer */}
+               <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex justify-end gap-3 shrink-0">
+                   <button onClick={() => setIsModalOpen(false)} className="px-6 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-700 font-medium hover:bg-white transition-colors">Cancel</button>
+                   <button onClick={handleSave} className="px-8 py-2.5 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 transition-colors shadow-sm flex items-center gap-2">
+                       <Save className="w-4 h-4" /> Save Employee
+                   </button>
                </div>
             </div>
          </div>

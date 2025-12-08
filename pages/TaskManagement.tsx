@@ -50,12 +50,12 @@ const TaskManagement: React.FC<TaskManagementProps> = ({ role }) => {
     let staff: Employee[] = [];
     if (isSuperAdmin) {
        // Load all staff for Admin
-       const adminStaff = JSON.parse(localStorage.getItem('staff_data') || '[]');
+       const adminStaff = JSON.parse(localStorage.getItem('staff_data') || '[]').filter((s: any) => s && typeof s === 'object');
        staff = [...adminStaff.map((s:any) => ({...s, corporateId: 'admin'}))];
        try {
          const corps = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
          corps.forEach((c: any) => {
-            const cStaff = JSON.parse(localStorage.getItem(`staff_data_${c.email}`) || '[]');
+            const cStaff = JSON.parse(localStorage.getItem(`staff_data_${c.email}`) || '[]').filter((s: any) => s && typeof s === 'object');
             staff = [...staff, ...cStaff.map((s:any) => ({...s, corporateId: c.email}))];
          });
        } catch(e) {}
@@ -63,32 +63,31 @@ const TaskManagement: React.FC<TaskManagementProps> = ({ role }) => {
        // Load specific staff for Corporate/Employee
        const key = `staff_data_${sessionId}`; 
        const saved = localStorage.getItem(key);
-       if (saved) staff = JSON.parse(saved).map((s:any) => ({...s, corporateId: sessionId}));
+       if (saved) staff = JSON.parse(saved).filter((s: any) => s && typeof s === 'object').map((s:any) => ({...s, corporateId: sessionId}));
        else if (role === UserRole.EMPLOYEE) {
            // For employee role without existing data, load from MOCK_EMPLOYEES
-           // (This usually means the employee hasn't been set up in local storage yet,
-           // but `findEmployeeById` below will handle it based on session ID)
        }
     }
-    return staff;
+    // Filter out nulls immediately to prevent issues downstream
+    return staff.filter(s => s && typeof s === 'object');
   });
 
   const [allBranches, setAllBranches] = useState<Branch[]>(() => {
       let branches: Branch[] = [];
       if (isSuperAdmin) {
-          const adminBranches = JSON.parse(localStorage.getItem('branches_data') || '[]');
+          const adminBranches = JSON.parse(localStorage.getItem('branches_data') || '[]').filter((b: any) => b && typeof b === 'object');
           branches = [...adminBranches.map((b: any) => ({...b, owner: 'admin'}))];
           const corps = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
           corps.forEach((c: any) => {
-             const cBranches = JSON.parse(localStorage.getItem(`branches_data_${c.email}`) || '[]');
+             const cBranches = JSON.parse(localStorage.getItem(`branches_data_${c.email}`) || '[]').filter((b: any) => b && typeof b === 'object');
              branches = [...branches, ...cBranches.map((b: any) => ({...b, owner: c.email}))];
           });
       } else {
           const key = `branches_data_${sessionId}`;
           const saved = localStorage.getItem(key);
-          if (saved) branches = JSON.parse(saved).map((b: any) => ({...b, owner: sessionId}));
+          if (saved) branches = JSON.parse(saved).filter((b: any) => b && typeof b === 'object').map((b: any) => ({...b, owner: sessionId}));
       }
-      return branches;
+      return branches.filter(b => b);
   });
 
   const [corporates] = useState<any[]>(() => {
@@ -160,33 +159,35 @@ const TaskManagement: React.FC<TaskManagementProps> = ({ role }) => {
     const targetCorpId = isSuperAdmin ? formData.corporateId : sessionId;
     
     if (targetCorpId === 'admin') {
-        staff = staff.filter(s => s.corporateId === 'admin');
+        staff = staff.filter(s => s && s.corporateId === 'admin');
     } else {
-        staff = staff.filter(s => s.corporateId === targetCorpId);
+        staff = staff.filter(s => s && s.corporateId === targetCorpId);
     }
     
     if (formData.branch) {
-        staff = staff.filter(s => s.branch === formData.branch);
+        // Safety check for s to prevent "reading 'branch' of null"
+        staff = staff.filter(s => s && s.branch === formData.branch);
     }
     
     // Filter out inactive staff
-    return staff.filter(s => s.status !== 'Inactive');
+    return staff.filter(s => s && s.status !== 'Inactive');
   }, [allStaff, formData.corporateId, formData.branch, isSuperAdmin, sessionId, role, loggedInEmployee]);
 
   const availableBranchesForForm = useMemo(() => {
       if (role === UserRole.EMPLOYEE && loggedInEmployee) {
           // For employee, only their branch is relevant
-          return allBranches.filter(b => b.name === loggedInEmployee.branch);
+          return allBranches.filter(b => b && b.name === loggedInEmployee.branch);
       }
 
       const targetCorpId = isSuperAdmin ? formData.corporateId : sessionId;
       if (targetCorpId === 'admin') {
-          return allBranches.filter(b => b.owner === 'admin');
+          return allBranches.filter(b => b && b.owner === 'admin');
       }
-      return allBranches.filter(b => b.owner === targetCorpId);
+      return allBranches.filter(b => b && b.owner === targetCorpId);
   }, [allBranches, formData.corporateId, isSuperAdmin, sessionId, role, loggedInEmployee]);
 
   const filteredTasks = tasks.filter(t => {
+      if (!t) return false;
       if (role === UserRole.EMPLOYEE && t.assignedTo !== sessionId) return false;
       if (role === UserRole.CORPORATE && t.corporateId !== sessionId) return false;
 
@@ -216,7 +217,7 @@ const TaskManagement: React.FC<TaskManagementProps> = ({ role }) => {
           corporateIdentifier = loggedInEmployee.corporateId || sessionId;
           branchIdentifier = loggedInEmployee.branch;
       } else {
-          assignedStaff = allStaff.find(s => s.id === formData.assignedTo);
+          assignedStaff = allStaff.find(s => s && s.id === formData.assignedTo);
           assignedToId = formData.assignedTo;
           assignedToName = assignedStaff ? assignedStaff.name : 'Unknown';
           corporateIdentifier = isSuperAdmin ? formData.corporateId : sessionId;

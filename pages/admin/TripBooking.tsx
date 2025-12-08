@@ -36,7 +36,8 @@ const TripEarning: React.FC = () => {
         
         try {
             const adminData = JSON.parse(localStorage.getItem('trips_data') || '[]');
-            allTrips = [...allTrips, ...adminData.map((t: any) => ({...t, ownerId: 'admin', ownerName: 'Head Office'}))];
+            // Filter nulls first
+            allTrips = [...allTrips, ...adminData.filter((t: any) => t && typeof t === 'object').map((t: any) => ({...t, ownerId: 'admin', ownerName: 'Head Office'}))];
         } catch(e) {}
 
         try {
@@ -45,7 +46,8 @@ const TripEarning: React.FC = () => {
                 const cData = localStorage.getItem(`trips_data_${c.email}`);
                 if (cData) {
                     const parsed = JSON.parse(cData);
-                    const tagged = parsed.map((t: any) => ({...t, ownerId: c.email, ownerName: c.companyName}));
+                    // Filter nulls first
+                    const tagged = parsed.filter((t: any) => t && typeof t === 'object').map((t: any) => ({...t, ownerId: c.email, ownerName: c.companyName}));
                     allTrips = [...allTrips, ...tagged];
                 }
             });
@@ -57,7 +59,8 @@ const TripEarning: React.FC = () => {
         try {
             const saved = localStorage.getItem(key);
             const parsed = saved ? JSON.parse(saved) : [];
-            return parsed.map((t: any) => ({...t, ownerId: sessionId, ownerName: 'My Branch'}));
+            // Filter nulls first
+            return parsed.filter((t: any) => t && typeof t === 'object').map((t: any) => ({...t, ownerId: sessionId, ownerName: 'My Branch'}));
         } catch (e) { return []; }
     }
   });
@@ -170,18 +173,18 @@ const TripEarning: React.FC = () => {
 
       let loadedBranches: any[] = [];
       if (isSuperAdmin) {
-          const adminBranches = JSON.parse(localStorage.getItem('branches_data') || '[]');
+          const adminBranches = JSON.parse(localStorage.getItem('branches_data') || '[]').filter((b: any) => b && typeof b === 'object');
           loadedBranches = [...adminBranches.map((b: any) => ({...b, owner: 'admin', ownerName: 'Head Office'}))]; 
           
           corps.forEach((c: any) => {
-             const cBranches = JSON.parse(localStorage.getItem(`branches_data_${c.email}`) || '[]');
+             const cBranches = JSON.parse(localStorage.getItem(`branches_data_${c.email}`) || '[]').filter((b: any) => b && typeof b === 'object');
              loadedBranches = [...loadedBranches, ...cBranches.map((b: any) => ({...b, owner: c.email, ownerName: c.companyName}))];
           });
       } else {
           const key = `branches_data_${sessionId}`;
           const saved = localStorage.getItem(key);
           if (saved) {
-              const parsed = JSON.parse(saved);
+              const parsed = JSON.parse(saved).filter((b: any) => b && typeof b === 'object');
               loadedBranches = parsed.map((b: any) => ({...b, owner: sessionId}));
           }
       }
@@ -196,29 +199,33 @@ const TripEarning: React.FC = () => {
   useEffect(() => {
     if (isSuperAdmin) {
         // 1. Save Head Office Trips
-        const headOfficeTrips = trips.filter(t => t.ownerId === 'admin');
+        const headOfficeTrips = trips.filter(t => t && t.ownerId === 'admin');
         const cleanAdminTrips = headOfficeTrips.map(({ownerId, ownerName, ...rest}) => rest);
         localStorage.setItem('trips_data', JSON.stringify(cleanAdminTrips));
 
         // 2. Save Corporate Trips (Distribute updates/deletes)
         if (corporates.length > 0) {
             corporates.forEach((corp: any) => {
-                const corpTrips = trips.filter(t => t.ownerId === corp.email);
+                const corpTrips = trips.filter(t => t && t.ownerId === corp.email);
                 const cleanCorpTrips = corpTrips.map(({ownerId, ownerName, ...rest}) => rest);
                 localStorage.setItem(`trips_data_${corp.email}`, JSON.stringify(cleanCorpTrips));
             });
         }
     } else {
         const key = `trips_data_${sessionId}`;
-        const cleanTrips = trips.map(({ownerId, ownerName, ...rest}) => rest);
+        // Filter nulls before mapping
+        const cleanTrips = trips.filter(t => t).map(({ownerId, ownerName, ...rest}) => rest);
         localStorage.setItem(key, JSON.stringify(cleanTrips));
     }
   }, [trips, isSuperAdmin, sessionId, corporates]);
 
   const filteredTrips = useMemo(() => {
     return trips.filter(t => {
+      // Safety check: skip null/undefined trips
+      if (!t) return false;
+
       const matchesSearch = 
-        t.tripId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (t.tripId && t.tripId.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (t.userName && t.userName.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (t.userMobile && t.userMobile.includes(searchTerm));
       
@@ -247,26 +254,26 @@ const TripEarning: React.FC = () => {
   // --- Chart Data Logic ---
   const bookingTypeData = useMemo(() => {
       const counts: Record<string, number> = {};
-      filteredTrips.forEach(t => { counts[t.bookingType] = (counts[t.bookingType] || 0) + 1; });
+      filteredTrips.forEach(t => { if(t) counts[t.bookingType] = (counts[t.bookingType] || 0) + 1; });
       return Object.keys(counts).map((key, idx) => ({ name: key, value: counts[key], color: COLORS[idx % COLORS.length] }));
   }, [filteredTrips]);
 
   const transportTypeData = useMemo(() => {
       const counts: Record<string, number> = {};
-      filteredTrips.forEach(t => { counts[t.transportType] = (counts[t.transportType] || 0) + 1; });
+      filteredTrips.forEach(t => { if(t) counts[t.transportType] = (counts[t.transportType] || 0) + 1; });
       return Object.keys(counts).map((key, idx) => ({ name: key, value: counts[key], color: COLORS[idx % COLORS.length] }));
   }, [filteredTrips]);
 
   const tripCategoryData = useMemo(() => {
       const counts: Record<string, number> = {};
-      filteredTrips.forEach(t => { counts[t.tripCategory] = (counts[t.tripCategory] || 0) + 1; });
+      filteredTrips.forEach(t => { if(t) counts[t.tripCategory] = (counts[t.tripCategory] || 0) + 1; });
       return Object.keys(counts).map((key, idx) => ({ name: key, value: counts[key], color: COLORS[idx % COLORS.length] }));
   }, [filteredTrips]);
 
   const commissionData = useMemo(() => {
       const counts: Record<string, number> = {};
       filteredTrips.forEach(t => { 
-          counts[t.tripCategory] = (counts[t.tripCategory] || 0) + (t.adminCommission || 0); 
+          if(t) counts[t.tripCategory] = (counts[t.tripCategory] || 0) + (t.adminCommission || 0); 
       });
       return Object.keys(counts).map((key, idx) => ({ 
           name: key, 
@@ -308,7 +315,7 @@ const TripEarning: React.FC = () => {
 
   const formAvailableBranches = useMemo(() => {
       const targetOwner = formData.ownerId;
-      return allBranches.filter(b => b.owner === targetOwner);
+      return allBranches.filter(b => b && b.owner === targetOwner);
   }, [allBranches, formData.ownerId]);
 
   const handleSave = (e: React.FormEvent) => {
@@ -415,7 +422,7 @@ const TripEarning: React.FC = () => {
       alert("No trips to export.");
       return;
     }
-    const headers = ["Trip ID", "Date", "Owner", "Branch", "Booking Type", "Customer", "Driver", "Transport", "Comm %", "Comm Amt", "Total", "Status"];
+    const headers = ["Trip ID", "Date", "Owner", "Branch", "Booking Type", "Transport", "Comm %", "Comm Amt", "Total", "Status"];
     const escapeCsv = (val: any) => {
         if (val === null || val === undefined) return '';
         const stringVal = String(val);
@@ -431,7 +438,7 @@ const TripEarning: React.FC = () => {
         const percent = base > 0 ? (commBase / base) * 100 : 0;
         
         return [
-            t.tripId, formatDateForDisplay(t.date), t.ownerName || '-', t.branch, t.bookingType, t.userName, t.driverName || '-', 
+            t.tripId, formatDateForDisplay(t.date), t.ownerName || '-', t.branch, t.bookingType, 
             `${t.tripCategory} - ${t.transportType}`, `${percent.toFixed(1)}%`, t.adminCommission, t.totalPrice, t.bookingStatus
         ].map(escapeCsv);
     });
@@ -457,9 +464,6 @@ const TripEarning: React.FC = () => {
           <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
               <ReceiptIndianRupee className="w-8 h-8 text-emerald-600" /> Trip Earning
           </h2>
-          <p className="text-gray-500">
-             Financial analytics and booking management
-          </p>
         </div>
         <div className="flex gap-2">
             <button 
@@ -478,7 +482,7 @@ const TripEarning: React.FC = () => {
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
                   <input 
                       type="text" 
-                      placeholder="Search Trip ID, Name or Mobile..." 
+                      placeholder="Search Trip ID..." 
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                       className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
@@ -838,7 +842,7 @@ const TripEarning: React.FC = () => {
               
               <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-6">
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Column 1: Trip Basic Info */}
+                    {/* Column 1: Trip Info */}
                     <div className="space-y-4">
                        <h4 className="text-sm font-bold text-gray-900 border-b pb-2 flex items-center gap-2"><MapPin className="w-4 h-4 text-emerald-500"/> Trip Info</h4>
                        
@@ -1069,7 +1073,7 @@ const TripEarning: React.FC = () => {
                                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cancel Chg.</label>
                                  <input type="number" name="cancellationCharge" value={formData.cancellationCharge || ''} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="0" />
                                </div>
-                               <div>
+                               <div className="col-span-2">
                                   <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Discount</label>
                                   <input type="number" name="discount" value={formData.discount || ''} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm text-red-600" placeholder="0" />
                                </div>

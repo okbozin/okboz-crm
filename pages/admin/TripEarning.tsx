@@ -1,13 +1,14 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Plus, Search, Download, X, Save,
   MapPin, Trash2, Edit2, 
   Building2, RefreshCcw, Calculator, Filter,
   AlertTriangle, ReceiptIndianRupee, Printer,
-  PieChart as PieChartIcon, Loader2
+  PieChart as PieChartIcon, Loader2, Car, User
 } from 'lucide-react';
 import { 
-  PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend
+  PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, Label
 } from 'recharts';
 import Autocomplete from '../../components/Autocomplete';
 import { Trip } from '../../types';
@@ -35,6 +36,7 @@ const TripEarning: React.FC = () => {
         
         try {
             const adminData = JSON.parse(localStorage.getItem('trips_data') || '[]');
+            // SAFETY FILTER: Ensure no nulls
             allTrips = [...allTrips, ...adminData.filter((t: any) => t && typeof t === 'object').map((t: any) => ({...t, ownerId: 'admin', ownerName: 'Head Office'}))];
         } catch(e) {}
 
@@ -55,6 +57,7 @@ const TripEarning: React.FC = () => {
         const key = `trips_data_${sessionId}`;
         try {
             const saved = localStorage.getItem(key);
+            // SAFETY FILTER: Ensure no nulls
             const parsed = saved ? JSON.parse(saved).filter((t: any) => t && typeof t === 'object') : [];
             return parsed.map((t: any) => ({...t, ownerId: sessionId, ownerName: 'My Branch'}));
         } catch (e) { return []; }
@@ -96,7 +99,7 @@ const TripEarning: React.FC = () => {
     tripCategory: 'Local',
     bookingStatus: 'Confirmed',
     cancelBy: '',
-    userName: '', // Kept for type compatibility but not used in form
+    userName: '', // Retained for type compatibility, not shown in UI
     userMobile: '',
     driverName: '',
     driverMobile: '',
@@ -216,7 +219,9 @@ const TripEarning: React.FC = () => {
 
   const filteredTrips = useMemo(() => {
     return trips.filter(t => {
+      // Safety check: skip null/undefined trips
       if (!t) return false;
+
       const matchesSearch = 
         (t.tripId && t.tripId.toLowerCase().includes(searchTerm.toLowerCase()));
       
@@ -455,9 +460,6 @@ const TripEarning: React.FC = () => {
           <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
               <ReceiptIndianRupee className="w-8 h-8 text-emerald-600" /> Trip Earning
           </h2>
-          <p className="text-gray-500">
-             Financial analytics and booking management
-          </p>
         </div>
         <div className="flex gap-2">
             <button 
@@ -647,6 +649,33 @@ const TripEarning: React.FC = () => {
 
         <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
             <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <Car className="w-5 h-5 text-red-500" /> Transport Type
+            </h3>
+            <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                        <Pie
+                            data={transportTypeData}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={60}
+                            outerRadius={80}
+                            paddingAngle={5}
+                            dataKey="value"
+                        >
+                            {transportTypeData.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                        </Pie>
+                        <Tooltip />
+                        <Legend />
+                    </PieChart>
+                </ResponsiveContainer>
+            </div>
+        </div>
+
+        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+            <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
                 <MapPin className="w-5 h-5 text-orange-500" /> Trip Category
             </h3>
             <div className="h-64">
@@ -691,6 +720,12 @@ const TripEarning: React.FC = () => {
                             {commissionData.map((entry, index) => (
                                 <Cell key={`cell-${index}`} fill={entry.color} />
                             ))}
+                            <Label 
+                                value={`₹${commissionData.reduce((sum, item) => sum + item.value, 0).toLocaleString()}`} 
+                                position="center" 
+                                className="fill-gray-700 font-bold text-lg"
+                                style={{ fontSize: '18px', fontWeight: 'bold', fill: '#374151' }}
+                            />
                         </Pie>
                         <Tooltip formatter={(value: number) => `₹${value.toFixed(0)}`} />
                         <Legend />
@@ -924,12 +959,60 @@ const TripEarning: React.FC = () => {
                        </div>
                     </div>
 
-                    {/* Column 2: Financials */}
+                    {/* Column 2: People Info */}
                     <div className="space-y-4">
+                       <h4 className="text-sm font-bold text-gray-900 border-b pb-2 flex items-center gap-2"><User className="w-4 h-4 text-blue-500"/> People</h4>
+                       
+                       <div className="space-y-3">
+                          <div>
+                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">User Name *</label>
+                             <input type="text" name="userName" value={formData.userName} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="Customer Name" required />
+                          </div>
+                          <div>
+                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">User Mobile *</label>
+                             <input type="tel" name="userMobile" value={formData.userMobile} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="+91..." required />
+                          </div>
+                          {/* Pickup Location - Added to Form */}
+                          <div>
+                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Pickup Location</label>
+                              {!isMapReady ? (
+                                <div className="p-2 bg-gray-100 text-gray-500 text-sm rounded flex items-center gap-2">
+                                    <Loader2 className="w-4 h-4 animate-spin" /> Map Loading...
+                                </div>
+                              ) : (
+                                <Autocomplete 
+                                    placeholder="Search Pickup Location"
+                                    onAddressSelect={(addr) => setFormData(prev => ({ ...prev, pickup: addr }))}
+                                    defaultValue={formData.pickup}
+                                />
+                              )}
+                              {mapError && <p className="text-xs text-red-500 mt-1">{mapError}</p>}
+                          </div>
+                       </div>
+
+                       <div className="pt-2 space-y-3">
+                          <div>
+                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Driver Name</label>
+                             <input type="text" name="driverName" value={formData.driverName} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="Driver Name" />
+                          </div>
+                          <div>
+                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Driver Mobile</label>
+                             <input type="tel" name="driverMobile" value={formData.driverMobile} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="+91..." />
+                          </div>
+                       </div>
+
+                       <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Remarks</label>
+                          <textarea name="remarks" rows={3} value={formData.remarks} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm resize-none" placeholder="Any special notes..." />
+                       </div>
+                    </div>
+
+                    {/* Column 3: Financials */}
+                    <div className="space-y-4 md:col-span-2">
                        <h4 className="text-sm font-bold text-gray-900 border-b pb-2 flex items-center gap-2"><Calculator className="w-4 h-4 text-purple-500"/> Financials</h4>
                        
-                       <div className="grid grid-cols-2 gap-4">
-                           <div className="col-span-2">
+                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                           <div>
                               <label className="block text-xs font-bold text-gray-500 uppercase mb-1">{formData.bookingStatus === 'Cancelled' ? 'Cancellation Fee (Trip Price Field)' : 'Trip Price (₹) *'}</label>
                               <input type="number" name="tripPrice" value={formData.tripPrice || ''} onChange={(e) => {
                                   const price = parseFloat(e.target.value) || 0;
@@ -976,7 +1059,7 @@ const TripEarning: React.FC = () => {
                            
                            {/* Fields visible when Cancelled */}
                            {formData.bookingStatus === 'Cancelled' && (
-                               <div className="col-span-2">
+                               <div>
                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cancellation Charge (Addt'l)</label>
                                    <input type="number" name="cancellationCharge" value={formData.cancellationCharge || ''} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="0" />
                                </div>
@@ -1050,11 +1133,6 @@ const TripEarning: React.FC = () => {
                        )}
                        
                        <p className="text-[10px] text-gray-400 mt-1">Calculated on (Trip + Wait) + Cancel</p>
-                       
-                       <div className="mt-4">
-                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Remarks</label>
-                          <textarea name="remarks" rows={2} value={formData.remarks} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm resize-none" placeholder="Any special notes..." />
-                       </div>
                     </div>
                  </div>
 
