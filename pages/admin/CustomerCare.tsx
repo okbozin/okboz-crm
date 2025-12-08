@@ -197,6 +197,7 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
   // Distance Calculation Effect
   useEffect(() => {
     // We need map ready, pickup coords, and either drop or dest coords
+    // Also ensuring user is in Transport mode
     if (!window.google || !pickupCoords || formData.enquiryCategory !== 'Transport') return;
 
     try {
@@ -213,7 +214,9 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
                     if (status === "OK" && response.rows[0].elements[0].status === "OK") {
                         const distanceInMeters = response.rows[0].elements[0].distance.value;
                         let distanceInKm = distanceInMeters / 1000;
+                        
                         if (isRoundTrip) distanceInKm = distanceInKm * 2; 
+
                         const formattedDist = distanceInKm.toFixed(1);
 
                         if (isOutstation) {
@@ -222,8 +225,11 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
                             // Automatically update estimated KM for Local trips
                             setFormData(prev => ({ ...prev, estKm: formattedDist }));
                         }
-                    } else if (status === 'REQUEST_DENIED' || status === 'OVER_QUERY_LIMIT') {
-                        setMapError("Google Maps Billing Error.");
+                    } else {
+                       console.warn("Distance Matrix Error or Billing issue:", status);
+                       if (status === 'REQUEST_DENIED' || status === 'OVER_QUERY_LIMIT') {
+                           setMapError("Google Maps Billing Error. Manual entry required.");
+                       }
                     }
                 }
             );
@@ -235,7 +241,9 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
             const isRoundTrip = formData.outstationSubType === 'RoundTrip';
             calculateDistance(destCoords, isRoundTrip, true); 
         }
-    } catch (error) { console.error(error); }
+    } catch (error) { 
+        console.error("Map calculation error:", error);
+    }
   }, [pickupCoords, dropCoords, destCoords, formData.tripType, formData.outstationSubType, formData.enquiryCategory]);
 
   // Pricing Calculation Effect
@@ -344,6 +352,7 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
           details: formData.notes,
           status: 'New',
           createdAt: new Date().toLocaleString(),
+          date: formData.followUpDate || new Date().toISOString().split('T')[0], // Store for scheduling
           enquiryCategory: formData.enquiryCategory,
           tripType: formData.tripType,
           vehicleType: formData.vehicleType,
@@ -361,6 +370,7 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
           },
           estimatedPrice: formData.estimate,
           assignedTo: formData.assignStaff,
+          nextFollowUp: formData.followUpDate, // Add follow up
           history: [],
           priority: formData.priority as any
       };
@@ -402,289 +412,474 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
       <div className="flex flex-col md:flex-row justify-between items-center gap-4">
         <div>
           <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-             <Headset className="w-8 h-8 text-emerald-600" /> Customer Care
+             <Headset className="w-8 h-8 text-indigo-600" /> Customer Care
           </h2>
           <p className="text-gray-500">Manage transport requests, estimates, and general enquiries</p>
         </div>
+        
         {role !== UserRole.EMPLOYEE && (
             <button 
                 onClick={() => setShowSettings(!showSettings)}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${showSettings ? 'bg-slate-800 text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}`}
             >
-                <Edit2 className="w-4 h-4" /> {showSettings ? 'Hide Rates' : 'Fare Configuration'}
+                <Edit2 className="w-4 h-4" /> {showSettings ? 'Hide Rates' : 'Fire Configuration'}
             </button>
         )}
       </div>
 
       {/* FARE CONFIGURATION PANEL */}
-      {showSettings && role !== UserRole.EMPLOYEE && (
-        <div className="bg-white p-6 rounded-xl border border-gray-200 animate-in fade-in slide-in-from-top-2 mb-6 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-             <h3 className="font-bold text-gray-800 flex items-center gap-2"><Edit2 className="w-4 h-4" /> Fare Configuration</h3>
-             <div className="bg-gray-100 rounded-lg p-1 flex">
-                <button onClick={() => setSettingsVehicleType('Sedan')} className={`px-4 py-1 text-xs font-bold rounded transition-colors ${settingsVehicleType === 'Sedan' ? 'bg-emerald-500 text-white' : 'text-gray-600'}`}>Sedan</button>
-                <button onClick={() => setSettingsVehicleType('SUV')} className={`px-4 py-1 text-xs font-bold rounded transition-colors ${settingsVehicleType === 'SUV' ? 'bg-emerald-500 text-white' : 'text-gray-600'}`}>SUV</button>
+      {showSettings && (
+        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 animate-in fade-in slide-in-from-top-4 mb-6 shadow-inner">
+          <div className="flex items-center justify-between mb-6">
+             <h3 className="font-bold text-slate-800 flex items-center gap-2 text-lg"><Edit2 className="w-5 h-5 text-indigo-500" /> Fare Configuration</h3>
+             
+             {/* Vehicle Type Toggle */}
+             <div className="bg-white border border-slate-300 rounded-lg p-1 flex shadow-sm">
+                <button 
+                   onClick={() => setSettingsVehicleType('Sedan')}
+                   className={`px-6 py-1.5 text-sm font-bold rounded-md transition-all ${settingsVehicleType === 'Sedan' ? 'bg-emerald-500 text-white shadow' : 'text-gray-600 hover:bg-gray-50'}`}
+                >
+                   Sedan
+                </button>
+                <button 
+                   onClick={() => setSettingsVehicleType('SUV')}
+                   className={`px-6 py-1.5 text-sm font-bold rounded-md transition-all ${settingsVehicleType === 'SUV' ? 'bg-emerald-500 text-white shadow' : 'text-gray-600 hover:bg-gray-50'}`}
+                >
+                   SUV
+                </button>
              </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Local Rules */}
-            <div className="space-y-3 bg-white p-4 rounded-lg border border-gray-200">
-              <h4 className="text-sm font-bold text-emerald-600 uppercase mb-2">Local Rules ({settingsVehicleType})</h4>
-              <div className="space-y-2">
-                  <div><label className="text-xs text-gray-500">Base Fare (₹)</label><input type="number" name="localBaseFare" value={pricing[settingsVehicleType].localBaseFare} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm"/></div>
-                  <div><label className="text-xs text-gray-500">Base Km Included</label><input type="number" name="localBaseKm" value={pricing[settingsVehicleType].localBaseKm} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm"/></div>
-                  <div><label className="text-xs text-gray-500">Extra Km Rate (₹/km)</label><input type="number" name="localPerKmRate" value={pricing[settingsVehicleType].localPerKmRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm"/></div>
-                  <div><label className="text-xs text-gray-500">Waiting Charge (₹/min)</label><input type="number" name="localWaitingRate" value={pricing[settingsVehicleType].localWaitingRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm"/></div>
+            <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+              <h4 className="text-xs font-bold text-emerald-600 uppercase tracking-widest border-b border-gray-100 pb-3 mb-4">LOCAL RULES ({settingsVehicleType})</h4>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs font-bold text-gray-500 block mb-1">Base Fare (₹)</label>
+                  <input type="number" name="localBaseFare" value={pricing[settingsVehicleType].localBaseFare} onChange={handlePricingChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-500 block mb-1">Base Km Included</label>
+                  <input type="number" name="localBaseKm" value={pricing[settingsVehicleType].localBaseKm} onChange={handlePricingChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-500 block mb-1">Extra Km Rate (₹/km)</label>
+                  <input type="number" name="localPerKmRate" value={pricing[settingsVehicleType].localPerKmRate} onChange={handlePricingChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-500 block mb-1">Waiting Charge (₹/min)</label>
+                  <input type="number" name="localWaitingRate" value={pricing[settingsVehicleType].localWaitingRate} onChange={handlePricingChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none" />
+                </div>
               </div>
             </div>
 
             {/* Outstation Rules */}
-            <div className="space-y-3 bg-white p-4 rounded-lg border border-gray-200">
-              <h4 className="text-sm font-bold text-orange-600 uppercase mb-2">Outstation Rules ({settingsVehicleType})</h4>
-              <div className="space-y-2">
-                  <div><label className="text-xs text-gray-500">Min Km / Day</label><input type="number" name="outstationMinKmPerDay" value={pricing[settingsVehicleType].outstationMinKmPerDay} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm"/></div>
-                  <div><label className="text-xs text-gray-500">Per Km Rate (₹/km)</label><input type="number" name="outstationExtraKmRate" value={pricing[settingsVehicleType].outstationExtraKmRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm"/></div>
-                  <div><label className="text-xs text-gray-500">Base Rate (One Way Only)</label><input type="number" name="outstationBaseRate" value={pricing[settingsVehicleType].outstationBaseRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm"/></div>
-                  <div><label className="text-xs text-gray-500">Driver Allowance (₹/day)</label><input type="number" name="outstationDriverAllowance" value={pricing[settingsVehicleType].outstationDriverAllowance} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm"/></div>
-                  <div><label className="text-xs text-gray-500">Driver Night Allowance (₹/night)</label><input type="number" name="outstationNightAllowance" value={pricing[settingsVehicleType].outstationNightAllowance} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm"/></div>
+            <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+              <h4 className="text-xs font-bold text-orange-600 uppercase tracking-widest border-b border-gray-100 pb-3 mb-4">OUTSTATION RULES ({settingsVehicleType})</h4>
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <label className="text-xs font-bold text-gray-500 block mb-1">Min Km / Day</label>
+                        <input type="number" name="outstationMinKmPerDay" value={pricing[settingsVehicleType].outstationMinKmPerDay} onChange={handlePricingChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 outline-none" />
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-gray-500 block mb-1">Per Km Rate (₹/km)</label>
+                        <input type="number" name="outstationExtraKmRate" value={pricing[settingsVehicleType].outstationExtraKmRate} onChange={handlePricingChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 outline-none" />
+                    </div>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-500 block mb-1">Base Rate (One Way Only)</label>
+                  <input type="number" name="outstationBaseRate" value={pricing[settingsVehicleType].outstationBaseRate} onChange={handlePricingChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 outline-none" placeholder="Not used for Round Trip" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-500 block mb-1">Driver Allowance (₹/day)</label>
+                  <input type="number" name="outstationDriverAllowance" value={pricing[settingsVehicleType].outstationDriverAllowance} onChange={handlePricingChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 outline-none" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-500 block mb-1">Driver Night Allowance (₹/night)</label>
+                  <input type="number" name="outstationNightAllowance" value={pricing[settingsVehicleType].outstationNightAllowance} onChange={handlePricingChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 outline-none" />
+                </div>
               </div>
             </div>
 
             {/* Rental Rules */}
-            <div className="space-y-3 bg-white p-4 rounded-lg border border-gray-200">
-              <h4 className="text-sm font-bold text-blue-600 uppercase mb-2">Rental Rules ({settingsVehicleType})</h4>
-              <div className="grid grid-cols-2 gap-2">
-                  <div><label className="text-xs text-gray-500">Extra Hr (₹)</label><input type="number" name="rentalExtraHrRate" value={pricing[settingsVehicleType].rentalExtraHrRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm"/></div>
-                  <div><label className="text-xs text-gray-500">Extra Km (₹)</label><input type="number" name="rentalExtraKmRate" value={pricing[settingsVehicleType].rentalExtraKmRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm"/></div>
-              </div>
-              <div className="mt-4 border-t border-gray-100 pt-2">
-                  <div className="flex justify-between items-center mb-2">
-                      <label className="text-xs font-bold text-gray-700">Packages</label>
-                      <button onClick={() => setShowAddPackage(!showAddPackage)} className="text-[10px] bg-blue-50 text-blue-600 px-2 py-1 rounded border border-blue-100 font-bold">+ New</button>
+            <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow flex flex-col">
+              <h4 className="text-xs font-bold text-blue-600 uppercase tracking-widest border-b border-gray-100 pb-3 mb-4">RENTAL RULES ({settingsVehicleType})</h4>
+              
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="text-xs font-bold text-gray-500 block mb-1">Extra Hr (₹)</label>
+                    <input type="number" name="rentalExtraHrRate" value={pricing[settingsVehicleType].rentalExtraHrRate} onChange={handlePricingChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
                   </div>
+                  <div>
+                    <label className="text-xs font-bold text-gray-500 block mb-1">Extra Km (₹)</label>
+                    <input type="number" name="rentalExtraKmRate" value={pricing[settingsVehicleType].rentalExtraKmRate} onChange={handlePricingChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                  </div>
+              </div>
+
+              <div className="flex-1 border-t border-gray-100 pt-4">
+                  <div className="flex justify-between items-center mb-3">
+                      <label className="text-xs font-bold text-gray-700">Rental Packages</label>
+                      <button 
+                        onClick={() => setShowAddPackage(!showAddPackage)}
+                        className="text-[10px] bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg border border-blue-100 hover:bg-blue-100 flex items-center gap-1 font-bold transition-colors"
+                      >
+                        <Plus className="w-3 h-3" /> New
+                      </button>
+                  </div>
+                  
                   {showAddPackage && (
-                      <div className="bg-blue-50 p-2 rounded border border-blue-100 mb-2 space-y-2">
-                          <input placeholder="Pkg Name" className="w-full p-1.5 text-xs border rounded" value={newPackage.name} onChange={e => setNewPackage({...newPackage, name: e.target.value})} />
+                      <div className="bg-blue-50 p-3 rounded-xl border border-blue-100 mb-3 space-y-3 animate-in fade-in slide-in-from-top-2">
+                          <input placeholder="Pkg Name (e.g. 10hr/100km)" className="w-full p-2 text-xs border rounded-lg outline-none focus:ring-2 focus:ring-blue-500" value={newPackage.name} onChange={e => setNewPackage({...newPackage, name: e.target.value})} />
                           <div className="flex gap-2">
-                              <input placeholder="S: ₹" type="number" className="w-1/2 p-1.5 text-xs border rounded" value={newPackage.priceSedan} onChange={e => setNewPackage({...newPackage, priceSedan: e.target.value})} />
-                              <input placeholder="X: ₹" type="number" className="w-1/2 p-1.5 text-xs border rounded" value={newPackage.priceSuv} onChange={e => setNewPackage({...newPackage, priceSuv: e.target.value})} />
+                              <input placeholder="Hrs" type="number" className="w-full p-2 text-xs border rounded-lg outline-none" value={newPackage.hours} onChange={e => setNewPackage({...newPackage, hours: e.target.value})} />
+                              <input placeholder="Km" type="number" className="w-full p-2 text-xs border rounded-lg outline-none" value={newPackage.km} onChange={e => setNewPackage({...newPackage, km: e.target.value})} />
                           </div>
-                          <button onClick={() => { setRentalPackages([...rentalPackages, {...newPackage, id: `pkg-${Date.now()}`} as any]); setShowAddPackage(false); }} className="w-full bg-blue-600 text-white text-xs font-bold py-1.5 rounded">Save</button>
+                          <div className="flex gap-2">
+                              <input placeholder="Sedan ₹" type="number" className="w-full p-2 text-xs border rounded-lg outline-none" value={newPackage.priceSedan} onChange={e => setNewPackage({...newPackage, priceSedan: e.target.value})} />
+                              <input placeholder="SUV ₹" type="number" className="w-full p-2 text-xs border rounded-lg outline-none" value={newPackage.priceSuv} onChange={e => setNewPackage({...newPackage, priceSuv: e.target.value})} />
+                          </div>
+                          <button onClick={handleAddPackage} className="w-full bg-blue-600 text-white text-xs font-bold py-2 rounded-lg hover:bg-blue-700 transition-colors shadow-sm">Save Package</button>
                       </div>
                   )}
-                  <div className="space-y-1 max-h-40 overflow-y-auto custom-scrollbar">
+
+                  <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar pr-1">
                       {rentalPackages.map(pkg => (
-                          <div key={pkg.id} className="flex justify-between items-center p-2 hover:bg-gray-50 rounded border border-transparent hover:border-gray-200">
-                              <div className="text-xs">
-                                  <div className="font-bold">{pkg.name}</div>
-                                  <div className="text-gray-500">{pkg.hours}hr / {pkg.km}km</div>
+                          <div key={pkg.id} className="flex justify-between items-center p-3 hover:bg-gray-50 rounded-lg border border-transparent hover:border-gray-200 group transition-all">
+                              <div>
+                                  <div className="text-xs font-bold text-gray-800">{pkg.name}</div>
+                                  <div className="text-[10px] text-gray-500 font-medium">{pkg.hours}hr / {pkg.km}km</div>
                               </div>
-                              <div className="text-[10px] text-right font-mono">
-                                  <div>S: {pkg.priceSedan}</div>
-                                  <div>X: {pkg.priceSuv}</div>
+                              <div className="text-right flex items-center gap-3">
+                                  <div className="text-[10px] text-gray-600 font-mono text-right">
+                                      <div><span className="text-gray-400">S:</span> {pkg.priceSedan}</div>
+                                      <div><span className="text-gray-400">X:</span> {pkg.priceSuv}</div>
+                                  </div>
+                                  <button onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (window.confirm('Remove package?')) setRentalPackages(prev => prev.filter(p => p.id !== pkg.id));
+                                  }} className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-red-50">
+                                      <Trash2 className="w-3 h-3" />
+                                  </button>
                               </div>
                           </div>
                       ))}
                   </div>
-                  <div className="pt-4 mt-auto">
-                     <button onClick={() => setShowSettings(false)} className="w-full bg-slate-800 text-white py-2 rounded text-sm font-medium hover:bg-slate-900 transition-colors">Close</button>
-                  </div>
               </div>
             </div>
           </div>
+          
+          <div className="mt-6 flex justify-end">
+             <button 
+                onClick={() => setShowSettings(false)} 
+                className="bg-slate-800 text-white px-8 py-2.5 rounded-lg text-sm font-bold hover:bg-slate-900 transition-all shadow-md"
+             >
+                Close Configuration
+             </button>
+          </div>
         </div>
       )}
-      
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Left Column: Form */}
-          <div className="space-y-6">
-              <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-                  <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-                      <User className="w-4 h-4 text-gray-400" /> Customer Info
-                  </h3>
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                      <input name="name" value={formData.name} onChange={handleInputChange} placeholder="Name" className="p-2 border rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-emerald-500"/>
-                      <input name="phone" value={formData.phone} onChange={handleInputChange} placeholder="Phone" className="p-2 border rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-emerald-500"/>
-                  </div>
-                  
-                  {/* Category Toggle */}
-                  <div className="flex bg-gray-100 p-1 rounded-lg mb-4">
-                      <button onClick={() => setFormData(p => ({...p, enquiryCategory: 'Transport'}))} className={`flex-1 py-2 text-sm font-bold rounded-md transition-colors ${formData.enquiryCategory === 'Transport' ? 'bg-white text-emerald-600 shadow-sm' : 'text-gray-500'}`}>Transport</button>
-                      <button onClick={() => setFormData(p => ({...p, enquiryCategory: 'General'}))} className={`flex-1 py-2 text-sm font-bold rounded-md transition-colors ${formData.enquiryCategory === 'General' ? 'bg-white text-emerald-600 shadow-sm' : 'text-gray-500'}`}>General</button>
-                  </div>
 
-                  {formData.enquiryCategory === 'Transport' && (
-                      <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
-                          <div className="flex justify-between items-center">
-                              <h4 className="text-xs font-bold text-gray-500 uppercase">Trip Details</h4>
-                              <div className="flex gap-1">
-                                  <button onClick={() => setFormData(p => ({...p, vehicleType: 'Sedan'}))} className={`px-2 py-1 text-xs border rounded ${formData.vehicleType === 'Sedan' ? 'bg-slate-800 text-white' : 'bg-white'}`}>Sedan</button>
-                                  <button onClick={() => setFormData(p => ({...p, vehicleType: 'SUV'}))} className={`px-2 py-1 text-xs border rounded ${formData.vehicleType === 'SUV' ? 'bg-slate-800 text-white' : 'bg-white'}`}>SUV</button>
-                              </div>
-                          </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        
+        {/* LEFT COLUMN: ENQUIRY FORM */}
+        <div className="space-y-6">
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+                <h3 className="text-lg font-bold text-gray-800 mb-6 flex items-center gap-2">
+                    <User className="w-5 h-5 text-gray-500" /> Customer Info
+                </h3>
+                
+                <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm text-gray-500 mb-1">Name</label>
+                            <input 
+                                value={formData.name}
+                                onChange={e => setFormData({...formData, name: e.target.value})}
+                                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                                placeholder="Client Name"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm text-gray-500 mb-1">Phone</label>
+                            <input 
+                                type="tel"
+                                value={formData.phone}
+                                onChange={e => setFormData({...formData, phone: e.target.value})}
+                                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                                placeholder="+91..."
+                            />
+                        </div>
+                    </div>
 
-                          <div className="flex border-b border-gray-200">
-                              {['Local', 'Rental', 'Outstation'].map(t => (
-                                  <button key={t} onClick={() => setFormData(p => ({...p, tripType: t as TripType}))} className={`flex-1 py-2 text-sm font-medium ${formData.tripType === t ? 'text-emerald-600 border-b-2 border-emerald-600' : 'text-gray-500'}`}>{t}</button>
-                              ))}
-                          </div>
+                    {/* Enquiry Type Toggle */}
+                    <div className="bg-gray-100 p-1.5 rounded-xl flex gap-1">
+                        <button 
+                            onClick={() => setFormData({...formData, enquiryCategory: 'Transport'})}
+                            className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${formData.enquiryCategory === 'Transport' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                        >
+                            <Car className="w-4 h-4" /> Transport
+                        </button>
+                        <button 
+                            onClick={() => setFormData({...formData, enquiryCategory: 'General'})}
+                            className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${formData.enquiryCategory === 'General' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                        >
+                            General
+                        </button>
+                    </div>
 
-                          <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-3">
-                              {/* Local Inputs */}
-                              {formData.tripType === 'Local' && (
-                                  <>
-                                    <div className="grid grid-cols-1 gap-2">
-                                        <Autocomplete placeholder="Pickup Location" onAddressSelect={(a) => setFormData(p => ({...p, pickup: a}))} setNewPlace={setPickupCoords} defaultValue={formData.pickup} />
-                                        <Autocomplete placeholder="Drop Location" onAddressSelect={(a) => setFormData(p => ({...p, drop: a}))} setNewPlace={setDropCoords} defaultValue={formData.drop} />
+                    {/* Transport Specific Inputs */}
+                    {formData.enquiryCategory === 'Transport' && (
+                        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
+                            <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                                Trip Details
+                                <div className="ml-auto flex bg-gray-100 p-1 rounded-lg">
+                                    <button onClick={() => setFormData({...formData, vehicleType: 'Sedan'})} className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${formData.vehicleType === 'Sedan' ? 'bg-white text-slate-800 shadow-sm' : 'text-gray-500'}`}>Sedan</button>
+                                    <button onClick={() => setFormData({...formData, vehicleType: 'SUV'})} className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${formData.vehicleType === 'SUV' ? 'bg-white text-slate-800 shadow-sm' : 'text-gray-500'}`}>SUV</button>
+                                </div>
+                            </h3>
+
+                            {/* Trip Type Tabs */}
+                            <div className="flex border-b border-gray-200">
+                                {['Local', 'Rental', 'Outstation'].map(type => (
+                                    <button
+                                        key={type}
+                                        onClick={() => setFormData({...formData, tripType: type as TripType})}
+                                        className={`flex-1 pb-3 text-sm font-bold transition-all border-b-2 ${formData.tripType === type ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+                                    >
+                                        {type}
+                                    </button>
+                                ))}
+                            </div>
+
+                            <div className="space-y-4 pt-2">
+                                <div className="space-y-1">
+                                    <label className="block text-xs font-bold text-gray-500 uppercase">Pickup Location</label>
+                                    <Autocomplete 
+                                        placeholder="Search Pickup"
+                                        onAddressSelect={(addr) => setFormData(prev => ({...prev, pickup: addr}))}
+                                        setNewPlace={(place) => setPickupCoords(place)}
+                                        defaultValue={formData.pickup}
+                                    />
+                                </div>
+
+                                {formData.tripType === 'Local' && (
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="col-span-2 space-y-1">
+                                            <label className="block text-xs font-bold text-gray-500 uppercase">Drop Location</label>
+                                            <Autocomplete 
+                                                placeholder="Search Drop"
+                                                onAddressSelect={(addr) => setFormData(prev => ({...prev, drop: addr}))}
+                                                setNewPlace={(place) => setDropCoords(place)}
+                                                defaultValue={formData.drop}
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="block text-xs font-bold text-gray-500 uppercase">Est Km</label>
+                                            <input type="number" value={formData.estKm} onChange={e => setFormData({...formData, estKm: e.target.value})} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none text-sm" placeholder="0" />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="block text-xs font-bold text-gray-500 uppercase">Wait Mins</label>
+                                            <input type="number" value={formData.waitingMins} onChange={e => setFormData({...formData, waitingMins: e.target.value})} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none text-sm" placeholder="0" />
+                                        </div>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <input type="number" placeholder="Est Km" value={formData.estKm} onChange={e => setFormData({...formData, estKm: e.target.value})} className="p-2 border rounded text-sm"/>
-                                        <input type="number" placeholder="Wait Mins" value={formData.waitingMins} onChange={e => setFormData({...formData, waitingMins: e.target.value})} className="p-2 border rounded text-sm"/>
+                                )}
+
+                                {formData.tripType === 'Rental' && (
+                                    <div className="space-y-3">
+                                        <label className="block text-xs font-bold text-gray-500 uppercase">Select Package</label>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            {rentalPackages.map(pkg => (
+                                                <div 
+                                                    key={pkg.id} 
+                                                    onClick={() => setFormData({...formData, packageId: pkg.id})}
+                                                    className={`p-3 rounded-xl border-2 cursor-pointer transition-all ${formData.packageId === pkg.id ? 'border-indigo-600 bg-indigo-50' : 'border-gray-200 hover:border-indigo-200'}`}
+                                                >
+                                                    <div className="text-xs font-bold text-gray-800">{pkg.name}</div>
+                                                    <div className="text-[10px] text-gray-500 mt-1">{pkg.hours}hr / {pkg.km}km</div>
+                                                    <div className="text-xs font-bold text-indigo-600 mt-2">₹{formData.vehicleType === 'Sedan' ? pkg.priceSedan : pkg.priceSuv}</div>
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
-                                  </>
-                              )}
+                                )}
 
-                              {/* Rental Inputs */}
-                              {formData.tripType === 'Rental' && (
-                                  <>
-                                    <Autocomplete placeholder="Pickup Location" onAddressSelect={(a) => setFormData(p => ({...p, pickup: a}))} defaultValue={formData.pickup} />
-                                    <select value={formData.packageId} onChange={e => setFormData({...formData, packageId: e.target.value})} className="w-full p-2 border rounded text-sm bg-white">
-                                        <option value="">Select Package</option>
-                                        {rentalPackages.map(p => <option key={p.id} value={p.id}>{p.name} - ₹{formData.vehicleType === 'Sedan' ? p.priceSedan : p.priceSuv}</option>)}
-                                    </select>
-                                  </>
-                              )}
-
-                              {/* Outstation Inputs */}
-                              {formData.tripType === 'Outstation' && (
-                                  <>
-                                    <div className="flex gap-2 mb-2">
-                                        <button onClick={() => setFormData(p => ({...p, outstationSubType: 'RoundTrip'}))} className={`flex-1 py-1 text-xs rounded border ${formData.outstationSubType === 'RoundTrip' ? 'bg-emerald-500 text-white' : 'bg-white'}`}>Round Trip</button>
-                                        <button onClick={() => setFormData(p => ({...p, outstationSubType: 'OneWay'}))} className={`flex-1 py-1 text-xs rounded border ${formData.outstationSubType === 'OneWay' ? 'bg-emerald-500 text-white' : 'bg-white'}`}>One Way</button>
+                                {formData.tripType === 'Outstation' && (
+                                    <div className="space-y-4">
+                                        <div className="flex bg-gray-100 p-1 rounded-lg">
+                                            <button onClick={() => setFormData({...formData, outstationSubType: 'OneWay'})} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${formData.outstationSubType === 'OneWay' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-500'}`}>One Way</button>
+                                            <button onClick={() => setFormData({...formData, outstationSubType: 'RoundTrip'})} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${formData.outstationSubType === 'RoundTrip' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-500'}`}>Round Trip</button>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="block text-xs font-bold text-gray-500 uppercase">Destination</label>
+                                            <Autocomplete 
+                                                placeholder="Search Destination"
+                                                onAddressSelect={(addr) => setFormData(prev => ({...prev, destination: addr}))}
+                                                setNewPlace={(place) => setDestCoords(place)}
+                                                defaultValue={formData.destination}
+                                            />
+                                        </div>
+                                        <div className="grid grid-cols-3 gap-3">
+                                            <div className="space-y-1">
+                                                <label className="block text-xs font-bold text-gray-500 uppercase">Days</label>
+                                                <input type="number" value={formData.days} onChange={e => setFormData({...formData, days: e.target.value})} className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg outline-none text-sm text-center" />
+                                            </div>
+                                            {formData.outstationSubType === 'RoundTrip' && (
+                                                <div className="space-y-1">
+                                                    <label className="block text-xs font-bold text-gray-500 uppercase">Nights</label>
+                                                    <input type="number" value={formData.nights} onChange={e => setFormData({...formData, nights: e.target.value})} className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg outline-none text-sm text-center" />
+                                                </div>
+                                            )}
+                                            <div className="space-y-1">
+                                                <label className="block text-xs font-bold text-gray-500 uppercase">Total Km</label>
+                                                <input type="number" value={formData.estTotalKm} onChange={e => setFormData({...formData, estTotalKm: e.target.value})} className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg outline-none text-sm text-center" />
+                                            </div>
+                                        </div>
                                     </div>
-                                    <Autocomplete placeholder="Destination" onAddressSelect={(a) => setFormData(p => ({...p, destination: a}))} setNewPlace={setDestCoords} defaultValue={formData.destination} />
-                                    {formData.outstationSubType === 'OneWay' && (
-                                        <Autocomplete placeholder="Pickup Location" onAddressSelect={(a) => setFormData(p => ({...p, pickup: a}))} setNewPlace={setPickupCoords} defaultValue={formData.pickup} />
-                                    )}
-                                    <div className="grid grid-cols-3 gap-2">
-                                        <input placeholder="Days" type="number" value={formData.days} onChange={e => setFormData({...formData, days: e.target.value})} className="p-2 border rounded text-sm"/>
-                                        <input placeholder="Km" type="number" value={formData.estTotalKm} onChange={e => setFormData({...formData, estTotalKm: e.target.value})} className="p-2 border rounded text-sm"/>
-                                        {formData.outstationSubType === 'RoundTrip' && (
-                                            <input placeholder="Nights" type="number" value={formData.nights} onChange={e => setFormData({...formData, nights: e.target.value})} className="p-2 border rounded text-sm"/>
-                                        )}
-                                    </div>
-                                  </>
-                              )}
-                              
-                              {mapError && <div className="text-red-500 text-xs flex items-center gap-1"><AlertTriangle className="w-3 h-3"/> {mapError}</div>}
-                          </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
 
-                          <div className="bg-slate-900 text-white p-4 rounded-xl flex justify-between items-center">
-                              <div>
-                                  <p className="text-[10px] font-bold uppercase text-slate-400">ESTIMATED COST</p>
-                                  <h3 className="text-2xl font-bold">₹{formData.estimate}</h3>
-                              </div>
-                              <Calculator className="w-8 h-8 text-slate-600" />
-                          </div>
-                          
-                          <p className="text-xs text-gray-500 italic">Includes basic fare calculations. Tolls & Parking extra.</p>
-                      </div>
-                  )}
+            {/* Requirement / Notes */}
+            <div className="space-y-2">
+                <label className="block text-xs font-bold text-gray-500 uppercase pl-2">Requirement Details</label>
+                <textarea 
+                    rows={3}
+                    value={formData.notes}
+                    onChange={e => setFormData({...formData, notes: e.target.value})}
+                    className="w-full p-4 bg-white border border-gray-200 rounded-2xl shadow-sm focus:ring-2 focus:ring-indigo-500 outline-none resize-none text-sm"
+                    placeholder={formData.enquiryCategory === 'Transport' ? "Trip details auto-populate here..." : "Enter general requirement details..."}
+                />
+            </div>
 
-                  {formData.enquiryCategory === 'General' && (
-                      <textarea 
-                          name="notes"
-                          value={formData.notes}
-                          onChange={handleInputChange}
-                          placeholder="Enter general enquiry details..."
-                          rows={4}
-                          className="w-full p-3 border rounded-lg text-sm bg-gray-50 outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
-                      />
-                  )}
-              </div>
-              
-              {/* Assignment Section */}
-              <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-                  <div className="mb-4">
-                      <label className="block text-xs font-bold text-gray-500 uppercase mb-2 flex items-center gap-1"><Building2 className="w-3 h-3"/> ASSIGN ENQUIRY TO</label>
-                      <div className="flex gap-2">
-                          <select name="assignBranch" value={formData.assignBranch} onChange={handleInputChange} className="flex-1 p-2 border rounded-lg text-sm bg-white outline-none">
-                              <option>All Branches</option>
-                              {allBranches.filter(b => b.owner === (formData.assignCorporate === 'admin' ? 'admin' : formData.assignCorporate)).map(b => (
-                                  <option key={b.id} value={b.name}>{b.name}</option>
-                              ))}
-                          </select>
-                          <select name="assignStaff" value={formData.assignStaff} onChange={handleInputChange} className="flex-1 p-2 border rounded-lg text-sm bg-white outline-none">
-                              <option value="">Select Staff</option>
-                              {availableStaff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                          </select>
-                      </div>
-                  </div>
+            {/* Assignment & Actions */}
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+                <div className="flex items-center gap-2 text-xs font-bold text-gray-400 uppercase mb-4">
+                    <Building2 className="w-4 h-4" /> Assign Enquiry To
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+                    {/* Simplified Assignment UI */}
+                    <select 
+                        className="p-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none"
+                        value={formData.assignCorporate}
+                        onChange={e => setFormData({...formData, assignCorporate: e.target.value})}
+                    >
+                        <option value="admin">Head Office</option>
+                        {corporates.map(c => <option key={c.id} value={c.email}>{c.companyName}</option>)}
+                    </select>
+                    <select 
+                        className="p-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none"
+                        value={formData.assignBranch}
+                        onChange={e => setFormData({...formData, assignBranch: e.target.value})}
+                    >
+                        <option>All Branches</option>
+                        {allBranches.filter(b => b.owner === formData.assignCorporate).map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
+                    </select>
+                    <select 
+                        className="p-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none"
+                        value={formData.assignStaff}
+                        onChange={e => setFormData({...formData, assignStaff: e.target.value})}
+                    >
+                        <option value="">Select Staff</option>
+                        {allStaff.filter(s => s.corporateId === (formData.assignCorporate === 'admin' ? 'admin' : formData.assignCorporate)).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+                </div>
 
-                  <div className="flex gap-4">
-                      <button className="flex-1 bg-white border border-blue-500 text-blue-600 py-2 rounded-lg font-bold text-sm hover:bg-blue-50 flex items-center justify-center gap-2">
-                          <Calendar className="w-4 h-4" /> Schedule
-                      </button>
-                      <button onClick={handleSaveEnquiry} className="flex-[2] bg-emerald-600 text-white py-2 rounded-lg font-bold hover:bg-emerald-700 shadow-sm transition-colors flex items-center justify-center gap-2">
-                          <ArrowRight className="w-4 h-4" /> Book Now
-                      </button>
-                  </div>
-                  
-                  <div className="flex justify-between mt-4">
-                      <button className="text-xs text-gray-400 hover:text-red-500 flex items-center gap-1"><X className="w-3 h-3"/> Cancel</button>
-                      <button onClick={handleSaveEnquiry} className="text-xs text-emerald-600 font-bold flex items-center gap-1 hover:underline"><Save className="w-3 h-3"/> Save Enquiry</button>
-                  </div>
-              </div>
-          </div>
+                <div className="grid grid-cols-2 gap-4 pt-2">
+                    <button className="py-3 border border-indigo-200 text-indigo-700 font-bold rounded-xl hover:bg-indigo-50 transition-colors flex items-center justify-center gap-2">
+                        <Calendar className="w-4 h-4" /> Schedule
+                    </button>
+                    <button 
+                        onClick={handleSaveEnquiry}
+                        className="py-3 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 shadow-lg shadow-emerald-200 transition-colors flex items-center justify-center gap-2"
+                    >
+                        <CheckCircle className="w-4 h-4" /> Book Now
+                    </button>
+                </div>
+            </div>
+        </div>
 
-          {/* Right Column: Generated Message Preview (Sticky) */}
-          <div className="space-y-6">
-              <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 sticky top-6">
-                  <div className="flex justify-between items-center mb-4">
-                      <h3 className="font-bold text-gray-800 flex items-center gap-2">
-                          <MessageCircle className="w-4 h-4 text-emerald-500" /> Generated Message
-                      </h3>
-                      <button 
-                        onClick={() => navigator.clipboard.writeText(formData.notes)}
-                        className="text-xs text-blue-600 hover:underline flex items-center gap-1"
-                      >
-                          <Copy className="w-3 h-3" /> Copy
-                      </button>
-                  </div>
-                  
-                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-100 text-sm text-gray-700 whitespace-pre-wrap font-sans min-h-[200px]">
-                      {formData.enquiryCategory === 'Transport' ? (
-                          <>
-Hello {formData.name || 'Customer'},
-Here is your {formData.tripType} estimate from OK BOZ! 🚕
+        {/* RIGHT COLUMN: PREVIEW & TOOLS */}
+        <div className="space-y-6">
+            
+            {/* Estimate Display */}
+            {formData.enquiryCategory === 'Transport' && (
+                <div className="bg-gradient-to-br from-slate-900 to-slate-800 p-8 rounded-3xl text-white shadow-xl relative overflow-hidden">
+                    <div className="relative z-10">
+                        <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Estimated Cost</p>
+                        <h3 className="text-5xl font-bold mb-6">₹{formData.estimate.toLocaleString()}</h3>
+                        <p className="text-slate-400 text-sm border-t border-slate-700 pt-4 mt-4">
+                            Includes basic fare calculations. Tolls & Parking extra.
+                        </p>
+                    </div>
+                    <div className="absolute right-0 bottom-0 opacity-10 transform translate-x-1/4 translate-y-1/4">
+                        <DollarSign size={200} />
+                    </div>
+                </div>
+            )}
 
-*Trip Estimate*
-🚘 Vehicle: {formData.vehicleType}
-{formData.tripType === 'Local' && `📍 Pickup: ${formData.pickup || 'TBD'}\n📍 Drop: ${formData.drop || 'TBD'}`}
-{formData.tripType === 'Rental' && `📦 Package: ${rentalPackages.find(p => p.id === formData.packageId)?.name || '-'}\n📍 Pickup: ${formData.pickup || 'TBD'}`}
-{formData.tripType === 'Outstation' && `🌍 Destination: ${formData.destination}\n📅 Duration: ${formData.days} Days`}
+            {/* Generated Message Preview */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                <div className="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+                    <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                        <MessageCircle className="w-4 h-4 text-emerald-500" /> Generated Message
+                    </h3>
+                    <button 
+                        onClick={() => {navigator.clipboard.writeText(formData.notes); alert("Copied!");}}
+                        className="text-xs text-blue-600 font-medium hover:underline flex items-center gap-1"
+                    >
+                        <Copy className="w-3 h-3" /> Copy
+                    </button>
+                </div>
+                <div className="p-6 bg-gray-50/50">
+                    <div className="bg-white p-4 rounded-xl rounded-tl-none border border-gray-100 shadow-sm text-sm text-gray-700 leading-relaxed whitespace-pre-wrap relative">
+                        <div className="absolute -left-2 top-0 w-0 h-0 border-t-[10px] border-t-white border-l-[10px] border-l-transparent"></div>
+                        <p className="font-bold text-gray-900 mb-2">Hello {formData.name || 'Customer'},</p>
+                        <p>{formData.notes || "Estimate details will appear here..."}</p>
+                    </div>
+                </div>
+                <div className="p-4 bg-white border-t border-gray-100 flex gap-3">
+                    <button 
+                        onClick={() => window.open(`https://wa.me/${formData.phone.replace(/\D/g,'')}?text=${encodeURIComponent(formData.notes)}`, '_blank')}
+                        className="flex-1 py-2.5 bg-green-500 hover:bg-green-600 text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-colors"
+                    >
+                        <MessageCircle className="w-4 h-4" /> WhatsApp
+                    </button>
+                    <button 
+                        onClick={() => window.location.href = `mailto:?body=${encodeURIComponent(formData.notes)}`}
+                        className="flex-1 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-colors"
+                    >
+                        <Mail className="w-4 h-4" /> Email
+                    </button>
+                </div>
+            </div>
 
-💰 Total Est: ₹{formData.estimate}
-                          </>
-                      ) : (
-                          formData.notes || 'Enter details to generate message...'
-                      )}
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3 mt-4">
-                      <button className="bg-green-500 hover:bg-green-600 text-white py-2 rounded-lg font-medium flex items-center justify-center gap-2">
-                          <MessageCircle className="w-4 h-4" /> WhatsApp
-                      </button>
-                      <button className="bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-lg font-medium flex items-center justify-center gap-2">
-                          <Mail className="w-4 h-4" /> Email
-                      </button>
-                  </div>
-              </div>
-          </div>
+        </div>
       </div>
     </div>
   );
 };
+
+// Simple Icon Component for Display
+const DollarSign = ({ size = 24 }: { size?: number }) => (
+    <svg 
+      xmlns="http://www.w3.org/2000/svg" 
+      width={size} 
+      height={size} 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      stroke="currentColor" 
+      strokeWidth="2" 
+      strokeLinecap="round" 
+      strokeLinejoin="round"
+    >
+      <line x1="12" y1="1" x2="12" y2="23"></line>
+      <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+    </svg>
+);
 
 export default CustomerCare;

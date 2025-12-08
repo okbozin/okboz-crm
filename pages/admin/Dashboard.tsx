@@ -3,13 +3,14 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Users, DollarSign, TrendingUp, Calendar, MapPin, 
-  Building2, Car, Activity, Briefcase, Clock, FileText, CreditCard, CheckCircle, ArrowRight
+  Building2, Car, Activity, Briefcase, Clock, FileText, CreditCard, CheckCircle, ArrowRight,
+  ClipboardList, BellRing
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
   LineChart, Line, PieChart, Pie, Cell, AreaChart, Area 
 } from 'recharts';
-import { Employee, Trip, CorporateAccount, LeaveRequest, SalaryAdvanceRequest, AttendanceStatus } from '../../types';
+import { Employee, Trip, CorporateAccount, LeaveRequest, SalaryAdvanceRequest, AttendanceStatus, Enquiry } from '../../types';
 import { MOCK_EMPLOYEES, getEmployeeAttendance } from '../../constants';
 
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
@@ -29,6 +30,7 @@ const Dashboard: React.FC = () => {
   // Data State
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [trips, setTrips] = useState<Trip[]>([]);
+  const [enquiries, setEnquiries] = useState<Enquiry[]>([]); // Added Enquiries State
   const [corporates, setCorporates] = useState<CorporateAccount[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
@@ -39,6 +41,10 @@ const Dashboard: React.FC = () => {
     try {
       const loadedCorporates = JSON.parse(localStorage.getItem('corporate_accounts') || '[]').filter((c: any) => c && typeof c === 'object');
       setCorporates(loadedCorporates);
+
+      // Load Enquiries (Global)
+      const allEnquiriesData = JSON.parse(localStorage.getItem('global_enquiries_data') || '[]');
+      setEnquiries(allEnquiriesData);
 
       let allEmployees: Employee[] = [];
       let allTrips: Trip[] = [];
@@ -51,14 +57,13 @@ const Dashboard: React.FC = () => {
         const adminStaff = JSON.parse(localStorage.getItem('staff_data') || '[]').filter((item: any) => item && typeof item === 'object');
         const adminTrips = JSON.parse(localStorage.getItem('trips_data') || '[]').filter((item: any) => item && typeof item === 'object');
         const adminBranches = JSON.parse(localStorage.getItem('branches_data') || '[]').filter((item: any) => item && typeof item === 'object');
-        // Note: Global lists like leave_history often store all, but if namespaced:
         const adminLeaves = JSON.parse(localStorage.getItem('leave_history') || '[]'); 
         const adminAdvances = JSON.parse(localStorage.getItem('salary_advances') || '[]');
 
         allEmployees = [...adminStaff];
         allTrips = [...adminTrips];
         allBranches = [...adminBranches];
-        allLeaves = [...adminLeaves]; // Assuming centralized storage for simplicity in this demo structure
+        allLeaves = [...adminLeaves]; 
         allAdvances = [...adminAdvances];
 
         // Load Corporate Data
@@ -78,7 +83,6 @@ const Dashboard: React.FC = () => {
         allTrips = JSON.parse(localStorage.getItem(`trips_data${keySuffix}`) || '[]').filter((item: any) => item && typeof item === 'object');
         allBranches = JSON.parse(localStorage.getItem(`branches_data${keySuffix}`) || '[]').filter((item: any) => item && typeof item === 'object');
         
-        // Filter global arrays for current session if not separated
         const globalLeaves = JSON.parse(localStorage.getItem('leave_history') || '[]');
         allLeaves = globalLeaves.filter((l: any) => l.corporateId === sessionId);
         
@@ -155,50 +159,54 @@ const Dashboard: React.FC = () => {
     }).slice(0, 5); // Top 5
   }, [leaves, advances, employees]);
 
-  // --- NEW: Recent Staff Login Logic ---
-  const recentStaffActivity = useMemo(() => {
-     // Flatten onlineHistory from all employees
-     const activityList: { id: string; name: string; role: string; avatar: string; status: 'online' | 'offline'; time: string; }[] = [];
-     
-     employees.forEach(emp => {
-        if (emp.onlineHistory && emp.onlineHistory.length > 0) {
-            // Get the last 3 events for each employee to build a feed
-            const events = [...emp.onlineHistory].reverse().slice(0, 3);
-            events.forEach(event => {
-                activityList.push({
-                    id: emp.id + event.timestamp,
-                    name: emp.name,
-                    role: emp.role,
-                    avatar: emp.avatar,
-                    status: event.status, // 'online' or 'offline'
-                    time: event.timestamp
-                });
-            });
-        }
-     });
-
-     // Sort by time descending
-     return activityList.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()).slice(0, 6);
-  }, [employees]);
-
-  // --- NEW: Schedule & Booking Logic ---
+  // --- NEW: Schedule & Booking Logic (Merged Enquiries & Trips) ---
   const scheduleData = useMemo(() => {
       const todayStr = new Date().toISOString().split('T')[0];
-      // Filter for Today's Scheduled Trips
-      const todayTrips = trips.filter(t => t && t.date === todayStr);
-      // Filter for Upcoming (Future) Trips
-      const upcomingTrips = trips.filter(t => t && t.date > todayStr);
       
-      // Sort upcoming by date ascending (soonest first)
-      upcomingTrips.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      // 1. Process Trips (Confirmed Bookings)
+      const tripItems = trips.filter(t => t).map(t => ({
+          id: t.id,
+          type: 'Trip',
+          name: t.userName || t.driverName || 'Customer',
+          date: t.date,
+          route: t.tripCategory === 'Local' ? `${t.pickup?.split(',')[0] || 'Pickup'} -> ${t.drop?.split(',')[0] || 'Drop'}` : t.tripCategory,
+          status: t.bookingStatus,
+          isTrip: true
+      }));
+
+      // 2. Process Enquiries (Potential / Scheduled Follow-ups)
+      // Filter enquiries that have a future date or follow-up date
+      const enquiryItems = enquiries.filter(e => e.date || e.nextFollowUp).map(e => {
+          // Determine effective date for schedule
+          const effectiveDate = e.date || e.nextFollowUp || ''; 
+          
+          return {
+              id: e.id,
+              type: 'Enquiry',
+              name: e.name,
+              date: effectiveDate,
+              route: e.transportData?.pickup ? `${e.transportData.pickup.split(',')[0]} -> ${e.transportData.drop?.split(',')[0] || '?'}` : (e.tripType || 'General Enquiry'),
+              status: e.status,
+              isTrip: false
+          };
+      });
+
+      // 3. Combine & Filter
+      const allItems = [...tripItems, ...enquiryItems];
+
+      // Today's List
+      const todayList = allItems.filter(i => i.date === todayStr);
+      
+      // Upcoming List
+      const upcomingList = allItems.filter(i => i.date > todayStr).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
       return {
-          todayCount: todayTrips.length,
-          upcomingCount: upcomingTrips.length,
-          todayList: todayTrips,
-          upcomingList: upcomingTrips.slice(0, 5) // Show next 5
+          todayCount: todayList.length,
+          upcomingCount: upcomingList.length,
+          todayList,
+          upcomingList: upcomingList.slice(0, 10) // Show next 10
       };
-  }, [trips]);
+  }, [trips, enquiries]);
 
 
   // Stats Calculation
@@ -215,9 +223,6 @@ const Dashboard: React.FC = () => {
     const todayStr = today.toISOString().split('T')[0];
     
     const presentToday = activeStaffList.reduce((count, emp) => {
-       // Get attendance records for this employee for current month
-       // Note: In a real app, optimize this to not read storage inside reduce if possible, 
-       // but getEmployeeAttendance is fast for small datasets.
        const attendance = getEmployeeAttendance(emp, today.getFullYear(), today.getMonth());
        const todayRecord = attendance.find(a => a.date === todayStr);
        
@@ -346,40 +351,49 @@ const Dashboard: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
         {/* Schedule & Bookings Widget */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col h-80">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col h-[400px]">
            <div className="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
               <h3 className="font-bold text-gray-800 flex items-center gap-2">
                  <Calendar className="w-5 h-5 text-indigo-500" /> Schedules & Bookings
               </h3>
               <div className="flex gap-2">
-                  <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full font-bold">
+                  <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full font-bold">
                      Today: {scheduleData.todayCount}
                   </span>
-                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full font-bold">
+                  <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full font-bold">
                      Upcoming: {scheduleData.upcomingCount}
                   </span>
               </div>
            </div>
-           <div className="flex-1 overflow-y-auto p-4 space-y-4">
+           <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
               {scheduleData.todayList.length === 0 && scheduleData.upcomingList.length === 0 ? (
                  <div className="h-full flex flex-col items-center justify-center text-gray-400 text-sm">
                     <Calendar className="w-8 h-8 mb-2 opacity-20" />
-                    No scheduled trips found.
+                    No scheduled trips or enquiries found.
                  </div>
               ) : (
                  <>
                     {/* Today's Section */}
                     {scheduleData.todayList.length > 0 && (
                         <div>
-                            <h4 className="text-xs font-bold text-emerald-600 uppercase mb-2">Today's Schedule</h4>
+                            <h4 className="text-xs font-bold text-emerald-600 uppercase mb-2 flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Today's Schedule
+                            </h4>
                             <div className="space-y-2">
-                                {scheduleData.todayList.map(t => (
-                                    <div key={t.id} className="p-2 border border-emerald-100 bg-emerald-50/50 rounded-lg flex justify-between items-center text-sm">
+                                {scheduleData.todayList.map((t, idx) => (
+                                    <div key={`${t.id}-${idx}`} className={`p-3 border rounded-lg flex justify-between items-center text-sm ${t.isTrip ? 'border-emerald-100 bg-emerald-50/30' : 'border-orange-100 bg-orange-50/30'}`}>
                                         <div>
-                                            <p className="font-bold text-gray-800">{t.userName}</p>
-                                            <p className="text-xs text-gray-500">{t.pickup} → {t.drop || 'Drop'}</p>
+                                            <div className="flex items-center gap-2">
+                                                <p className="font-bold text-gray-800">{t.name}</p>
+                                                {!t.isTrip && <span className="text-[10px] bg-orange-100 text-orange-700 px-1.5 rounded border border-orange-200">Enquiry</span>}
+                                            </div>
+                                            <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
+                                                <MapPin className="w-3 h-3" /> {t.route}
+                                            </p>
                                         </div>
-                                        <span className="text-xs font-bold text-emerald-700 bg-white px-2 py-1 rounded border border-emerald-100">{t.bookingStatus}</span>
+                                        <span className={`text-xs font-bold px-2 py-1 rounded border ${t.isTrip ? 'text-emerald-700 bg-white border-emerald-100' : 'text-orange-700 bg-white border-orange-100'}`}>
+                                            {t.status}
+                                        </span>
                                     </div>
                                 ))}
                             </div>
@@ -389,15 +403,27 @@ const Dashboard: React.FC = () => {
                     {/* Upcoming Section */}
                     {scheduleData.upcomingList.length > 0 && (
                         <div>
-                            <h4 className="text-xs font-bold text-gray-500 uppercase mb-2 mt-4">Upcoming</h4>
+                            <h4 className="text-xs font-bold text-blue-600 uppercase mb-2 mt-4 flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full bg-blue-500"></span> Upcoming Bookings
+                            </h4>
                             <div className="space-y-2">
-                                {scheduleData.upcomingList.map(t => (
-                                    <div key={t.id} className="p-2 border border-gray-100 rounded-lg flex justify-between items-center text-sm hover:bg-gray-50">
+                                {scheduleData.upcomingList.map((t, idx) => (
+                                    <div key={`${t.id}-${idx}`} className="p-3 border border-gray-100 rounded-lg flex justify-between items-center text-sm hover:bg-gray-50 transition-colors">
                                         <div>
-                                            <p className="font-bold text-gray-800">{t.userName} <span className="text-gray-400 font-normal text-xs">({new Date(t.date).toLocaleDateString()})</span></p>
-                                            <p className="text-xs text-gray-500">{t.tripCategory} - {t.transportType}</p>
+                                            <div className="flex items-center gap-2">
+                                                <p className="font-bold text-gray-800">{t.name}</p>
+                                                <span className="text-gray-400 font-normal text-xs bg-gray-100 px-1.5 rounded">
+                                                    {new Date(t.date).toLocaleDateString(undefined, {month:'short', day:'numeric'})}
+                                                </span>
+                                            </div>
+                                            <p className="text-xs text-gray-500 mt-0.5">{t.route}</p>
                                         </div>
-                                        <button onClick={() => navigate('/admin/trip-earning')} className="text-xs text-blue-600 hover:underline">View</button>
+                                        <button 
+                                            onClick={() => navigate(t.isTrip ? '/admin/trip-earning' : '/admin/customer-care')} 
+                                            className="text-xs text-blue-600 hover:underline flex items-center gap-1 font-medium"
+                                        >
+                                            View <ArrowRight className="w-3 h-3" />
+                                        </button>
                                     </div>
                                 ))}
                             </div>
@@ -409,7 +435,7 @@ const Dashboard: React.FC = () => {
         </div>
 
         {/* Pending Approvals (Kept from original) */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col h-80">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col h-[400px]">
            <div className="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
               <h3 className="font-bold text-gray-800 flex items-center gap-2">
                  <CheckCircle className="w-5 h-5 text-orange-500" /> Pending Approvals
@@ -418,7 +444,7 @@ const Dashboard: React.FC = () => {
                  {pendingRequests.length} New
               </span>
            </div>
-           <div className="flex-1 overflow-y-auto p-4 space-y-3">
+           <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
               {pendingRequests.length === 0 ? (
                  <div className="h-full flex flex-col items-center justify-center text-gray-400 text-sm">
                     <CheckCircle className="w-8 h-8 mb-2 opacity-20" />
