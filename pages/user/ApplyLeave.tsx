@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { Calendar, Clock, CheckCircle, XCircle, AlertCircle, Send, FileText, PieChart } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { Calendar, Clock, CheckCircle, XCircle, AlertCircle, Send, FileText, PieChart, RefreshCw } from 'lucide-react';
 import { Employee, LeaveRequest, UserRole } from '../../types';
 import { MOCK_EMPLOYEES } from '../../constants';
 import { sendSystemNotification } from '../../services/cloudService'; // Import notification service
@@ -9,6 +9,7 @@ import { sendSystemNotification } from '../../services/cloudService'; // Import 
 export default function ApplyLeave() {
   const [user, setUser] = useState<Employee | null>(null);
   const [leaveTypes, setLeaveTypes] = useState<any[]>([]);
+  const [isLoadingSettings, setIsLoadingSettings] = useState(false);
   
   const [formData, setFormData] = useState({
     type: '',
@@ -72,52 +73,69 @@ export default function ApplyLeave() {
       }
   }, []);
 
-  // 2. Load Leave Settings based on User's Corporate ID (Strict Match)
-  useEffect(() => {
-      if (user) {
-          // Determine the correct key for leave settings
-          // If the user belongs to a corporate, fetch THAT corporate's settings.
-          // Fallback to admin ONLY if explicitly admin or undefined.
-          const corpId = user.corporateId || 'admin';
-          const key = corpId === 'admin' ? 'company_leave_types' : `company_leave_types_${corpId}`;
-          
-          console.log(`Loading leave settings for: ${corpId} (Key: ${key})`);
+  // 2. Load Leave Settings
+  const fetchLeaveSettings = useCallback(() => {
+      if (!user) return;
+      setIsLoadingSettings(true);
 
-          let loadedTypes = [];
-          const saved = localStorage.getItem(key);
-          
-          if (saved) {
-              try {
-                  loadedTypes = JSON.parse(saved).filter((item: any) => item && typeof item === 'object');
-              } catch(e) { console.error("Error parsing leave types", e); }
-          }
+      const corpId = user.corporateId || 'admin';
+      const key = corpId === 'admin' ? 'company_leave_types' : `company_leave_types_${corpId}`;
+      
+      console.log(`Fetching leave settings for: ${corpId} (Key: ${key})`);
 
-          // Fallback if no specific settings found, verify if global defaults exist
-          if (loadedTypes.length === 0) {
-              // Try loading global defaults if not found for specific corp
-              const globalSaved = localStorage.getItem('company_leave_types');
-              if (globalSaved) {
-                 try { loadedTypes = JSON.parse(globalSaved).filter((item: any) => item && typeof item === 'object'); } catch(e) {}
-              }
-          }
+      let loadedTypes = [];
+      const saved = localStorage.getItem(key);
+      
+      if (saved) {
+          try {
+              loadedTypes = JSON.parse(saved).filter((item: any) => item && typeof item === 'object');
+          } catch(e) { console.error("Error parsing leave types", e); }
+      }
 
-          // Ultimate Fallback
-          if (loadedTypes.length === 0) {
-              loadedTypes = [
-                  { id: 'cl', name: 'Casual Leave', quota: 12 },
-                  { id: 'sl', name: 'Sick Leave', quota: 8 },
-                  { id: 'pl', name: 'Privilege Leave', quota: 15 }
-              ];
-          }
-          
-          setLeaveTypes(loadedTypes);
-          
-          // Set default type for form
-          if (loadedTypes.length > 0) {
-              setFormData(prev => ({ ...prev, type: loadedTypes[0].name }));
+      // Fallback: If corporate settings are empty, try inheriting global admin settings
+      if (loadedTypes.length === 0 && corpId !== 'admin') {
+          const globalSaved = localStorage.getItem('company_leave_types');
+          if (globalSaved) {
+             try { loadedTypes = JSON.parse(globalSaved).filter((item: any) => item && typeof item === 'object'); } catch(e) {}
           }
       }
+
+      // Ultimate Fallback: Default hardcoded list
+      if (loadedTypes.length === 0) {
+          loadedTypes = [
+              { id: 'cl', name: 'Casual Leave', quota: 12 },
+              { id: 'sl', name: 'Sick Leave', quota: 8 },
+              { id: 'pl', name: 'Privilege Leave', quota: 15 }
+          ];
+      }
+      
+      setLeaveTypes(loadedTypes);
+      
+      // Update form default if current selection is invalid
+      setFormData(prev => {
+          if (!prev.type || !loadedTypes.find((t: any) => t.name === prev.type)) {
+              return { ...prev, type: loadedTypes[0]?.name || '' };
+          }
+          return prev;
+      });
+      
+      setIsLoadingSettings(false);
   }, [user]);
+
+  // Initial Fetch & Listener
+  useEffect(() => {
+      fetchLeaveSettings();
+
+      // Listen for changes in other tabs
+      const handleStorageChange = (e: StorageEvent) => {
+          if (e.key && e.key.includes('company_leave_types')) {
+              fetchLeaveSettings();
+          }
+      };
+      
+      window.addEventListener('storage', handleStorageChange);
+      return () => window.removeEventListener('storage', handleStorageChange);
+  }, [fetchLeaveSettings]);
 
   // Persist rawHistory to localStorage whenever it changes
   useEffect(() => {
@@ -147,6 +165,7 @@ export default function ApplyLeave() {
               type: lt.name,
               available: Math.max(0, lt.quota - used),
               total: lt.quota,
+              used: used,
               color: style.text,
               bg: style.bg,
               bar: style.bar
@@ -225,9 +244,18 @@ export default function ApplyLeave() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-8">
-      <div>
-        <h2 className="text-2xl font-bold text-gray-800">Leave Management</h2>
-        <p className="text-gray-500">Check your balances and apply for new leaves</p>
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-800">Leave Management</h2>
+          <p className="text-gray-500">Check your balances and apply for new leaves</p>
+        </div>
+        <button 
+            onClick={fetchLeaveSettings} 
+            className="flex items-center gap-1 text-sm text-blue-600 hover:bg-blue-50 px-3 py-2 rounded-lg transition-colors"
+            title="Refresh Leave Types"
+        >
+            <RefreshCw className={`w-4 h-4 ${isLoadingSettings ? 'animate-spin' : ''}`} /> Refresh Balances
+        </button>
       </div>
 
       {/* Leave Balances Grid */}
@@ -245,13 +273,13 @@ export default function ApplyLeave() {
             </div>
             <div className="z-10">
               <div className="flex justify-between text-xs text-gray-400 mb-1">
-                <span>Used: {bal.total - bal.available}</span>
+                <span>Used: {bal.used}</span>
                 <span>Total: {bal.total}</span>
               </div>
               <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
                 <div 
                   className={`h-full rounded-full ${bal.bar}`} 
-                  style={{ width: `${(bal.available / bal.total) * 100}%` }}
+                  style={{ width: bal.total > 0 ? `${(bal.available / bal.total) * 100}%` : '0%' }}
                 />
               </div>
             </div>
@@ -259,7 +287,7 @@ export default function ApplyLeave() {
         ))}
         {balances.length === 0 && (
             <div className="col-span-full p-6 text-center bg-gray-50 rounded-xl border border-gray-200 border-dashed text-gray-500">
-                No leave types configured. Contact Admin.
+                No leave types configured. Please contact your Admin.
             </div>
         )}
       </div>

@@ -463,9 +463,16 @@ Book now with OK BOZ Transport!`;
     }));
   };
 
-  const handleSaveEnquiry = () => {
+  const handleSaveEnquiry = (targetStatus?: string) => {
+      const statusToUse = typeof targetStatus === 'string' ? targetStatus : undefined;
+
       if (!formData.name || !formData.phone) {
           alert("Name and Phone are required.");
+          return;
+      }
+
+      if (statusToUse === 'Scheduled' && !formData.followUpDate) {
+          alert("Please select a Follow-up Date to schedule.");
           return;
       }
 
@@ -497,7 +504,8 @@ Book now with OK BOZ Transport!`;
                       details: formData.notes,
                       assignedTo: formData.assignStaff,
                       nextFollowUp: formData.followUpDate,
-                      priority: formData.priority as any
+                      priority: formData.priority as any,
+                      status: statusToUse ? (statusToUse as any) : enq.status
                   };
               }
               return enq;
@@ -511,7 +519,7 @@ Book now with OK BOZ Transport!`;
               phone: formData.phone,
               city: '',
               details: formData.notes,
-              status: 'New',
+              status: statusToUse ? (statusToUse as any) : 'New',
               createdAt: new Date().toLocaleString(),
               date: formData.followUpDate || new Date().toISOString().split('T')[0],
               enquiryCategory: formData.enquiryCategory,
@@ -547,9 +555,9 @@ Book now with OK BOZ Transport!`;
           ...prev, 
           name: '', phone: '', pickup: '', drop: '', destination: '', 
           estKm: '', estTotalKm: '', notes: '', estimate: 0,
-          assignStaff: ''
+          assignStaff: '', followUpDate: '', followUpTime: ''
       }));
-      alert(editingEnquiryId ? "Enquiry Updated!" : "Enquiry Created Successfully!");
+      alert(editingEnquiryId ? "Enquiry Updated!" : (statusToUse === 'Scheduled' ? "Enquiry Scheduled!" : "Enquiry Created Successfully!"));
   };
 
   const handleEditEnquiry = (enq: Enquiry) => {
@@ -1144,12 +1152,37 @@ Book now with OK BOZ Transport!`;
                     </select>
                 </div>
 
+                {/* NEW DATE INPUTS */}
+                <div className="grid grid-cols-2 gap-3 mb-4 p-3 bg-gray-50 rounded-xl border border-gray-100">
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Follow-up Date</label>
+                        <input 
+                            type="date" 
+                            value={formData.followUpDate} 
+                            onChange={e => setFormData({...formData, followUpDate: e.target.value})} 
+                            className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Time</label>
+                        <input 
+                            type="time" 
+                            value={formData.followUpTime} 
+                            onChange={e => setFormData({...formData, followUpTime: e.target.value})} 
+                            className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                    </div>
+                </div>
+
                 <div className="grid grid-cols-2 gap-4 pt-2">
-                    <button className="py-3 border border-indigo-200 text-indigo-700 font-bold rounded-xl hover:bg-indigo-50 transition-colors flex items-center justify-center gap-2">
+                    <button 
+                        onClick={() => handleSaveEnquiry('Scheduled')}
+                        className="py-3 border border-indigo-200 text-indigo-700 font-bold rounded-xl hover:bg-indigo-50 transition-colors flex items-center justify-center gap-2"
+                    >
                         <Calendar className="w-4 h-4" /> Schedule
                     </button>
                     <button 
-                        onClick={handleSaveEnquiry}
+                        onClick={() => handleSaveEnquiry()}
                         className={`py-3 text-white font-bold rounded-xl shadow-lg transition-colors flex items-center justify-center gap-2 ${editingEnquiryId ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200' : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200'}`}
                     >
                         {editingEnquiryId ? <RefreshCcw className="w-4 h-4"/> : <CheckCircle className="w-4 h-4" />} 
