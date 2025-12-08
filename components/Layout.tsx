@@ -247,6 +247,7 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
     if (link.id === 'leads' && role === UserRole.CORPORATE) return false;
     if (link.id === 'employee-settings' && role === UserRole.CORPORATE) return false;
     if (link.id === 'settings' && role === UserRole.CORPORATE) return false;
+    if (link.id === 'email-marketing' && role === UserRole.CORPORATE) return false;
     if (link.id === 'finance-and-expenses' && role === UserRole.EMPLOYEE) return false;
     if (link.id === 'cms' && role !== UserRole.ADMIN) return false;
     return true;
@@ -270,6 +271,10 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
           // Customer Care
           if (currentEmployee.allowedModules.includes('customer_care')) {
               baseLinks.splice(1, 0, { id: 'customer_care', path: '/user/customer-care', label: 'Customer Care', icon: Headset });
+          }
+          // Trip Booking
+          if (currentEmployee.allowedModules.includes('trip_booking')) {
+              baseLinks.splice(1, 0, { id: 'trip_booking', path: '/admin/trips', label: 'Trip Booking', icon: Map });
           }
           // Live Tracking
           if (currentEmployee.allowedModules.includes('live_tracking')) {
