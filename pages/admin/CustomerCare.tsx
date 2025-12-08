@@ -622,7 +622,7 @@ Book now with OK BOZ Transport!`;
           <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
              <Headset className="w-8 h-8 text-indigo-600" /> Customer Care
           </h2>
-          <p className="text-gray-500">Manage transport requests, estimates, and general enquiries</p>
+          <p className="text-gray-500">Manage customer enquiries and follow-ups</p>
         </div>
         
         {role !== UserRole.EMPLOYEE && (
@@ -778,7 +778,7 @@ Book now with OK BOZ Transport!`;
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
                   <input 
                       type="text" 
-                      placeholder="Search Orders (ID, Name, Phone)..." 
+                      placeholder="Search enquiries..." 
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                       className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
@@ -820,6 +820,7 @@ Book now with OK BOZ Transport!`;
                           <th className="px-6 py-4">Customer</th>
                           <th className="px-6 py-4">Trip/Enquiry Info</th>
                           <th className="px-6 py-4">Assigned To</th>
+                          <th className="px-6 py-4">Follow-up Date</th>
                           <th className="px-6 py-4">Status</th>
                           <th className="px-6 py-4 text-right">Actions</th>
                       </tr>
@@ -841,27 +842,39 @@ Book now with OK BOZ Transport!`;
                                       <div className="font-bold text-gray-800">{enq.name}</div>
                                       <div className="text-xs text-gray-500">{enq.phone}</div>
                                   </td>
-                                  <td className="px-6 py-4 max-w-xs truncate text-gray-600" title={enq.details}>
+                                  <td className="px-6 py-4">
                                       {enq.enquiryCategory === 'Transport' ? (
                                           <div>
-                                              <span className="font-medium">{tripInfo}</span>
-                                              {enq.transportData?.pickup && (
-                                                  <div className="text-xs text-gray-400 mt-0.5 truncate">
-                                                      {enq.transportData.pickup} &rarr; {enq.transportData.drop || enq.transportData.destination}
-                                                  </div>
-                                              )}
+                                              <div className="font-medium text-gray-900">
+                                                  {enq.tripType} ({enq.vehicleType}). Est: ₹{enq.estimatedPrice}
+                                              </div>
+                                              <div className="text-xs text-gray-500 mt-0.5">
+                                                 {enq.transportData?.pickup?.split(',')[0]} &rarr; {enq.transportData?.drop?.split(',')[0] || enq.transportData?.destination}
+                                              </div>
                                           </div>
                                       ) : (
-                                          enq.details || 'No details'
+                                          <div className="text-gray-600 max-w-xs truncate" title={enq.details}>
+                                             {enq.details || 'No details'}
+                                          </div>
                                       )}
                                   </td>
                                   <td className="px-6 py-4 text-gray-600">
                                       {assignedName}
                                   </td>
                                   <td className="px-6 py-4">
-                                      <span className={`px-2 py-1 rounded-full text-xs font-bold border ${
+                                      {enq.nextFollowUp ? (
+                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-orange-50 text-orange-700 border border-orange-100">
+                                          <Calendar className="w-3 h-3" />
+                                          {new Date(enq.nextFollowUp).toLocaleDateString()}
+                                        </span>
+                                      ) : (
+                                        <span className="text-gray-400">-</span>
+                                      )}
+                                  </td>
+                                  <td className="px-6 py-4">
+                                      <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${
                                           enq.status === 'New' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                                          enq.status === 'Completed' ? 'bg-green-50 text-green-700 border-green-200' :
+                                          enq.status === 'Completed' ? 'bg-green-100 text-green-800 border-green-200' :
                                           enq.status === 'Cancelled' ? 'bg-red-50 text-red-700 border-red-200' :
                                           'bg-gray-100 text-gray-600 border-gray-200'
                                       }`}>
@@ -869,40 +882,20 @@ Book now with OK BOZ Transport!`;
                                       </span>
                                   </td>
                                   <td className="px-6 py-4 text-right">
-                                      <div className="flex items-center justify-end gap-2">
-                                          <button 
-                                              onClick={() => handleEditEnquiry(enq)}
-                                              className="text-gray-400 hover:text-indigo-600 p-1.5 hover:bg-indigo-50 rounded transition-colors"
-                                              title="Edit / Assign"
-                                          >
-                                              <Edit2 className="w-4 h-4" />
-                                          </button>
-                                          <button 
-                                              className="bg-blue-50 text-blue-600 hover:bg-blue-100 px-2 py-1 rounded text-xs font-bold transition-colors"
-                                              onClick={() => handleEditEnquiry(enq)} // Re-using edit to focus on form for assignment
-                                          >
-                                              Assign Driver
-                                          </button>
-                                          <button 
-                                              onClick={() => updateStatus(enq.id, 'Completed')}
-                                              className="bg-green-50 text-green-600 hover:bg-green-100 px-2 py-1 rounded text-xs font-bold transition-colors"
-                                          >
-                                              Complete
-                                          </button>
-                                          <button 
-                                              onClick={() => updateStatus(enq.id, 'Cancelled')}
-                                              className="bg-red-50 text-red-600 hover:bg-red-100 px-2 py-1 rounded text-xs font-bold transition-colors"
-                                          >
-                                              Cancel
-                                          </button>
-                                      </div>
+                                      <button 
+                                          onClick={() => handleEditEnquiry(enq)}
+                                          className="text-gray-400 hover:text-indigo-600 p-1.5 hover:bg-indigo-50 rounded transition-colors"
+                                          title="Edit / Assign"
+                                      >
+                                          <Edit2 className="w-4 h-4" />
+                                      </button>
                                   </td>
                               </tr>
                           );
                       })}
                       {filteredEnquiries.length === 0 && (
                           <tr>
-                              <td colSpan={6} className="py-12 text-center text-gray-500">
+                              <td colSpan={7} className="py-12 text-center text-gray-500">
                                   No enquiries found matching filters.
                               </td>
                           </tr>
