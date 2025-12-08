@@ -2,7 +2,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Calendar as CalendarIcon, Clock, MapPin, User, Download, ChevronLeft, ChevronRight, 
-  Search, Filter, X, CheckCircle, AlertTriangle, LogIn, LogOut, RefreshCw, Fingerprint 
+  Search, Filter, X, CheckCircle, AlertTriangle, LogIn, LogOut, RefreshCw, Fingerprint,
+  CheckSquare, XSquare
 } from 'lucide-react';
 import AttendanceCalendar from '../../components/AttendanceCalendar';
 import { 
@@ -60,6 +61,9 @@ export default function UserAttendance({ isAdmin = false }: UserAttendanceProps)
   const [isPunching, setIsPunching] = useState(false);
   const [todayStatus, setTodayStatus] = useState<'In' | 'Out'>('Out');
   const [lastPunchTime, setLastPunchTime] = useState<string | null>(null);
+  
+  // State for forcing refresh
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     const loadData = () => {
@@ -175,7 +179,7 @@ export default function UserAttendance({ isAdmin = false }: UserAttendanceProps)
   const attendanceData = useMemo(() => {
       if (!selectedEmployee) return [];
       return getEmployeeAttendance(selectedEmployee, currentDate.getFullYear(), currentDate.getMonth());
-  }, [selectedEmployee, currentDate, todayStatus]); // Add todayStatus dependency to refresh on punch
+  }, [selectedEmployee, currentDate, todayStatus, refreshKey]); // Add refreshKey dependency
 
   const stats = useMemo(() => {
       const present = attendanceData.filter(d => d.status === AttendanceStatus.PRESENT).length;
@@ -208,8 +212,93 @@ export default function UserAttendance({ isAdmin = false }: UserAttendanceProps)
 
   const handleSaveAdminAttendanceEdit = () => {
       if (!selectedEmployee || !editModalData) return;
-      alert(`Updated attendance for ${selectedEmployee.name} on ${editModalData.date}. (Mock Save)`);
+      
+      const year = currentDate.getFullYear();
+      const month = currentDate.getMonth();
+      const key = `attendance_data_${selectedEmployee.id}_${year}_${month}`;
+      
+      // Get existing
+      let currentMonthData = attendanceData;
+      
+      // Update specific day
+      const updatedData = currentMonthData.map(d => {
+          if (d.date === editModalData.date) {
+              return {
+                  ...d,
+                  status: editModalData.status,
+                  checkIn: editModalData.checkIn,
+                  checkOut: editModalData.checkOut,
+                  isLate: editModalData.isLate
+              };
+          }
+          return d;
+      });
+
+      // If day didn't exist (unlikely with mock gen), add it
+      if (!updatedData.find(d => d.date === editModalData.date)) {
+          updatedData.push(editModalData as DailyAttendance);
+      }
+
+      localStorage.setItem(key, JSON.stringify(updatedData));
+      setRefreshKey(prev => prev + 1); // Force Refresh
       setIsEditModalOpen(false);
+  };
+
+  // --- BULK ACTION HANDLER ---
+  const handleBulkAction = (status: AttendanceStatus) => {
+      if (!selectedEmployee) return;
+      if (!window.confirm(`Mark ${selectedEmployee.name} as ${status === AttendanceStatus.PRESENT ? 'PRESENT' : 'ABSENT'} for all applicable days in ${currentMonthYearLabel}?`)) return;
+
+      const year = currentDate.getFullYear();
+      const month = currentDate.getMonth();
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      
+      const newAttendance: DailyAttendance[] = [];
+      const employeeWeekOff = selectedEmployee.weekOff || 'Sunday'; // Default Sunday
+
+      for (let i = 1; i <= daysInMonth; i++) {
+          const currentDayDate = new Date(year, month, i);
+          const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+          const dayName = currentDayDate.toLocaleDateString('en-US', { weekday: 'long' });
+          currentDayDate.setHours(0, 0, 0, 0);
+
+          // Check for Joining Date
+          const joiningDate = new Date(selectedEmployee.joiningDate);
+          joiningDate.setHours(0,0,0,0);
+          
+          if (currentDayDate < joiningDate) {
+              // Pre-joining
+              newAttendance.push({ date: dateStr, status: AttendanceStatus.NOT_MARKED });
+              continue;
+          }
+
+          // Is it a Week Off?
+          if (dayName === employeeWeekOff) {
+              newAttendance.push({ date: dateStr, status: AttendanceStatus.WEEK_OFF });
+              continue;
+          }
+
+          // Apply Status
+          if (status === AttendanceStatus.PRESENT) {
+              newAttendance.push({
+                  date: dateStr,
+                  status: AttendanceStatus.PRESENT,
+                  checkIn: '09:30 AM',
+                  checkOut: '06:30 PM',
+                  isLate: false
+              });
+          } else {
+              newAttendance.push({
+                  date: dateStr,
+                  status: AttendanceStatus.ABSENT,
+              });
+          }
+      }
+
+      // Save
+      const key = `attendance_data_${selectedEmployee.id}_${year}_${month}`;
+      localStorage.setItem(key, JSON.stringify(newAttendance));
+      setRefreshKey(prev => prev + 1);
   };
 
   // --- PUNCH HANDLER ---
@@ -459,6 +548,25 @@ export default function UserAttendance({ isAdmin = false }: UserAttendanceProps)
 
         {/* Right Column: Calendar / Muster Roll */}
         <div className="lg:col-span-2 space-y-6">
+            
+            {/* Bulk Actions Toolbar (Admin Only) */}
+            {isAdmin && viewMode === 'Individual' && selectedEmployee && (
+                <div className="flex gap-2 justify-end">
+                    <button 
+                        onClick={() => handleBulkAction(AttendanceStatus.PRESENT)}
+                        className="flex items-center gap-1.5 px-4 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg text-sm font-bold border border-emerald-200 transition-colors"
+                    >
+                        <CheckSquare className="w-4 h-4" /> Mark All Present
+                    </button>
+                    <button 
+                        onClick={() => handleBulkAction(AttendanceStatus.ABSENT)}
+                        className="flex items-center gap-1.5 px-4 py-2 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg text-sm font-bold border border-red-200 transition-colors"
+                    >
+                        <XSquare className="w-4 h-4" /> Mark All Absent
+                    </button>
+                </div>
+            )}
+
             {isAdmin && viewMode === 'Individual' && selectedEmployee && (
                 <AttendanceCalendar
                     data={attendanceData}
