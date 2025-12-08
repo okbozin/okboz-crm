@@ -1,19 +1,14 @@
-
 // Centralized API Service
 
 // Helper to safely get the API URL
 const getApiUrl = () => {
-  // 1. Try to get from Vite environment variables
-  try {
-    // @ts-ignore
-    if (import.meta && import.meta.env && import.meta.env.VITE_API_URL) {
-        // @ts-ignore
-        return import.meta.env.VITE_API_URL;
-    }
-  } catch (e) {
-    // Ignore error if import.meta is not available
+  // 1. Try to get from Node.js/Vite environment variables (if defined)
+  // @ts-ignore - process is not defined in browser, but usually injected by bundlers.
+  if (typeof process !== 'undefined' && process.env && process.env.VITE_API_URL) {
+      // @ts-ignore
+      return process.env.VITE_API_URL;
   }
-
+  
   // 2. Default to relative path (uses Vite proxy in dev, or same domain in prod)
   return '/api';
 };

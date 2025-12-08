@@ -4,42 +4,27 @@ import {
   Plus, Search, Download, X, Save,
   User, Car, MapPin, DollarSign, Trash2, Edit2, 
   PieChart as PieChartIcon, TrendingUp, Building2, RefreshCcw, Calculator, Filter,
-  Loader2, AlertTriangle, ReceiptIndianRupee, Printer
+  Loader2, AlertTriangle, ReceiptIndianRupee, Printer, ArrowLeft, ArrowRight, NotebookPen
 } from 'lucide-react';
 import { 
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, 
   BarChart, Bar, XAxis, YAxis, CartesianGrid 
 } from 'recharts';
 import Autocomplete from '../../components/Autocomplete';
-
-interface Trip {
-  id: string;
-  tripId: string;
-  date: string;
-  branch: string;
-  bookingType: string;
-  transportType: string;
-  tripCategory: string;
-  bookingStatus: string;
-  cancelBy?: string;
-  userName?: string;
-  userMobile?: string;
-  driverName?: string;
-  driverMobile?: string;
-  pickup?: string;
-  tripPrice: number;
-  adminCommission: number;
-  tax: number;
-  waitingCharge: number;
-  discount: number;
-  cancellationCharge: number;
-  totalPrice: number;
-  remarks?: string;
-  ownerId?: string;
-  ownerName?: string;
-}
+import { Trip } from '../../types';
 
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#6366f1'];
+
+// Helper function to format date from YYYY-MM-DD to DD-MM-YYYY
+const formatDateForDisplay = (isoDateString: string): string => {
+  if (!isoDateString) return '';
+  try {
+    const [year, month, day] = isoDateString.split('-');
+    return `${day}-${month}-${year}`;
+  } catch (e) {
+    return isoDateString; // Fallback if format is unexpected
+  }
+};
 
 const TripEarning: React.FC = () => {
   const sessionId = localStorage.getItem('app_session_id') || 'admin';
@@ -87,7 +72,7 @@ const TripEarning: React.FC = () => {
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  
+
   // Filter State
   const [showFilters, setShowFilters] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -118,17 +103,20 @@ const TripEarning: React.FC = () => {
     tripCategory: 'Local',
     bookingStatus: 'Confirmed',
     cancelBy: '',
-    userName: '',
-    userMobile: '',
-    driverName: '',
+    // Removed userName, userMobile, driverName, driverMobile from form for UI, but kept in Trip interface
+    // Setting default values to avoid issues if not passed.
+    userName: '', 
+    userMobile: '', 
+    driverName: '', 
     driverMobile: '',
-    pickup: '',
+    pickup: '', // Now moved to Trip Info
     tripPrice: 0,
     adminCommission: 0,
     tax: 0,
     waitingCharge: 0,
     discount: 0,
     cancellationCharge: 0,
+    totalPrice: 0,
     remarks: ''
   };
 
@@ -337,7 +325,7 @@ const TripEarning: React.FC = () => {
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.tripId || !formData.date) {
+    if (!formData.tripId || !formData.date || !formData.pickup) { // Pickup is now required in UI
       alert("Please fill required fields (*)");
       return;
     }
@@ -455,7 +443,7 @@ const TripEarning: React.FC = () => {
         const percent = base > 0 ? (commBase / base) * 100 : 0;
         
         return [
-            t.tripId, t.date, t.ownerName || '-', t.branch, t.bookingType, t.userName, t.driverName || '-', 
+            t.tripId, formatDateForDisplay(t.date), t.ownerName || '-', t.branch, t.bookingType, t.userName, t.driverName || '-', 
             `${t.tripCategory} - ${t.transportType}`, `${percent.toFixed(1)}%`, t.adminCommission, t.totalPrice, t.bookingStatus
         ].map(escapeCsv);
     });
@@ -783,7 +771,7 @@ const TripEarning: React.FC = () => {
                     <tr key={trip.id} className="hover:bg-gray-50 transition-colors">
                        <td className="px-6 py-4">
                           <div className="font-bold text-gray-900">{trip.tripId}</div>
-                          <div className="text-xs text-gray-500">{trip.date}</div>
+                          <div className="text-xs text-gray-500">{formatDateForDisplay(trip.date)}</div>
                        </td>
                        {isSuperAdmin && (
                            <td className="px-6 py-4">
@@ -854,7 +842,7 @@ const TripEarning: React.FC = () => {
       {/* Add/Edit Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-           <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col animate-in fade-in zoom-in duration-200">
+           <div className="bg-white rounded-2xl shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col animate-in fade-in zoom-in duration-200">
               <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-2xl">
                  <h3 className="font-bold text-gray-800 text-xl">{editingId ? 'Edit Trip' : 'New Trip Entry'}</h3>
                  <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600"><X className="w-6 h-6"/></button>
@@ -862,179 +850,180 @@ const TripEarning: React.FC = () => {
               
               <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-6">
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Column 1: Trip Basic Info */}
-                    <div className="space-y-4">
-                       <h4 className="text-sm font-bold text-gray-900 border-b pb-2 flex items-center gap-2"><MapPin className="w-4 h-4 text-emerald-500"/> Trip Info</h4>
-                       
-                       {/* Super Admin: Select Owner first */}
-                       {isSuperAdmin && (
+                    {/* Left Column: Trip Info & Customer/Driver Details & Remarks */}
+                    <div className="space-y-6">
+                       <div className="space-y-4">
+                           <h4 className="text-sm font-bold text-gray-900 border-b pb-2 flex items-center gap-2"><MapPin className="w-4 h-4 text-emerald-500"/> Trip Info</h4>
+                           
+                           {isSuperAdmin && (
+                               <div>
+                                   <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Assign to (Corporate/HO)</label>
+                                   <select 
+                                       name="ownerId" 
+                                       value={formData.ownerId} 
+                                       onChange={(e) => setFormData({...formData, ownerId: e.target.value, branch: ''})} 
+                                       className="w-full p-2 border border-gray-300 rounded-lg outline-none bg-white text-sm"
+                                   >
+                                       <option value="admin">Head Office</option>
+                                       {corporates.map((c: any) => (
+                                           <option key={c.email} value={c.email}>{c.companyName} ({c.city})</option>
+                                       ))}
+                                   </select>
+                               </div>
+                           )}
+
                            <div>
-                               <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Assign to (Corporate/HO)</label>
-                               <select 
-                                   name="ownerId" 
-                                   value={formData.ownerId} 
-                                   onChange={(e) => setFormData({...formData, ownerId: e.target.value, branch: ''})} 
-                                   className="w-full p-2 border border-gray-300 rounded-lg outline-none bg-white text-sm"
-                               >
-                                   <option value="admin">Head Office</option>
-                                   {corporates.map((c: any) => (
-                                       <option key={c.email} value={c.email}>{c.companyName} ({c.city})</option>
-                                   ))}
-                               </select>
+                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Branch</label>
+                              <select 
+                                  name="branch" 
+                                  value={formData.branch} 
+                                  onChange={handleInputChange} 
+                                  className="w-full p-2 border border-gray-300 rounded-lg outline-none bg-white text-sm"
+                              >
+                                 <option value="">Select Branch</option>
+                                 {formAvailableBranches.map((b: any) => (
+                                    <option key={b.id} value={b.name}>{b.name}</option>
+                                 ))}
+                              </select>
                            </div>
-                       )}
 
-                       <div>
-                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Branch</label>
-                          <select 
-                              name="branch" 
-                              value={formData.branch} 
-                              onChange={handleInputChange} 
-                              className="w-full p-2 border border-gray-300 rounded-lg outline-none bg-white text-sm"
-                          >
-                             <option value="">Select Branch</option>
-                             {formAvailableBranches.map((b: any) => (
-                                <option key={b.id} value={b.name}>{b.name}</option>
-                             ))}
-                          </select>
-                       </div>
+                           <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Trip ID *</label>
+                                 <input 
+                                    type="text" 
+                                    name="tripId" 
+                                    value={formData.tripId} 
+                                    onChange={handleInputChange} 
+                                    className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm font-mono focus:ring-2 focus:ring-emerald-500" 
+                                    placeholder="Enter ID"
+                                    required 
+                                 />
+                              </div>
+                              <div>
+                                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Date *</label>
+                                 <input type="date" name="date" value={formData.date} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" required />
+                              </div>
+                           </div>
 
-                       <div className="grid grid-cols-2 gap-2">
-                          <div>
-                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Trip ID *</label>
-                             <input 
-                                type="text" 
-                                name="tripId" 
-                                value={formData.tripId} 
-                                onChange={handleInputChange} 
-                                className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm font-mono focus:ring-2 focus:ring-emerald-500" 
-                                placeholder="Enter ID"
-                                required 
-                             />
-                          </div>
-                          <div>
-                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Date *</label>
-                             <input type="date" name="date" value={formData.date} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" required />
-                          </div>
-                       </div>
+                           <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Booking Type *</label>
+                                 <select name="bookingType" value={formData.bookingType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none bg-white text-sm">
+                                    <option>Online</option>
+                                    <option>Offline</option>
+                                    <option>Call</option>
+                                    <option>WhatsApp</option>
+                                 </select>
+                              </div>
+                              <div>
+                                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Transport Type *</label>
+                                 <select name="transportType" value={formData.transportType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none bg-white text-sm">
+                                    <option>Sedan</option>
+                                    <option>SUV</option>
+                                    <option>Van</option>
+                                    <option>Mini Bus</option>
+                                 </select>
+                              </div>
+                           </div>
 
-                       <div className="grid grid-cols-2 gap-2">
-                          <div>
-                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Booking Type *</label>
-                             <select name="bookingType" value={formData.bookingType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none bg-white text-sm">
-                                <option>Online</option>
-                                <option>Offline</option>
-                                <option>Call</option>
-                                <option>WhatsApp</option>
-                             </select>
-                          </div>
-                          <div>
-                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Transport Type *</label>
-                             <select name="transportType" value={formData.transportType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none bg-white text-sm">
-                                <option>Sedan</option>
-                                <option>SUV</option>
-                                <option>Van</option>
-                                <option>Mini Bus</option>
-                             </select>
-                          </div>
-                       </div>
+                           <div>
+                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Trip Category *</label>
+                              <select name="tripCategory" value={formData.tripCategory} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none bg-white text-sm">
+                                 <option>Local</option>
+                                 <option>Rental</option>
+                                 <option>Outstation</option>
+                              </select>
+                           </div>
 
-                       <div>
-                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Trip Category *</label>
-                          <select name="tripCategory" value={formData.tripCategory} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none bg-white text-sm">
-                             <option>Local</option>
-                             <option>Rental</option>
-                             <option>Outstation</option>
-                          </select>
-                       </div>
+                           <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Status *</label>
+                                 <select name="bookingStatus" value={formData.bookingStatus} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none bg-white text-sm">
+                                    <option>Pending</option>
+                                    <option>Confirmed</option>
+                                    <option>Completed</option>
+                                    <option>Cancelled</option>
+                                 </select>
+                              </div>
+                              <div>
+                                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cancel By</label>
+                                 <select 
+                                   name="cancelBy" 
+                                   value={formData.cancelBy} 
+                                   onChange={handleInputChange} 
+                                   className="w-full p-2 border border-gray-300 rounded-lg outline-none bg-white text-sm"
+                                   disabled={formData.bookingStatus !== 'Cancelled'}
+                                 >
+                                    <option value="">-</option>
+                                    <option>Head Office Admin</option>
+                                    <option>Branch Admin</option>
+                                    <option>User</option>
+                                    <option>Driver</option>
+                                 </select>
+                              </div>
+                           </div>
+                           
+                           {/* Pickup Location - Moved here */}
+                           <div>
+                               <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Pickup Location *</label>
+                               {!isMapReady ? (
+                                 <div className="p-2 bg-gray-100 text-gray-500 text-sm rounded flex items-center gap-2">
+                                     <Loader2 className="w-4 h-4 animate-spin" /> Map Loading...
+                                 </div>
+                               ) : (
+                                 <Autocomplete 
+                                     placeholder="Search Pickup Location"
+                                     onAddressSelect={(addr) => setFormData(prev => ({ ...prev, pickup: addr }))}
+                                     defaultValue={formData.pickup}
+                                 />
+                               )}
+                               {mapError && <p className="text-xs text-red-500 mt-1">{mapError}</p>}
+                           </div>
 
-                       <div className="grid grid-cols-2 gap-2">
-                          <div>
-                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Status *</label>
-                             <select name="bookingStatus" value={formData.bookingStatus} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none bg-white text-sm">
-                                <option>Pending</option>
-                                <option>Confirmed</option>
-                                <option>Completed</option>
-                                <option>Cancelled</option>
-                             </select>
-                          </div>
-                          <div>
-                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cancel By</label>
-                             <select 
-                               name="cancelBy" 
-                               value={formData.cancelBy} 
-                               onChange={handleInputChange} 
-                               className="w-full p-2 border border-gray-300 rounded-lg outline-none bg-white text-sm"
-                               disabled={formData.bookingStatus !== 'Cancelled'}
-                             >
-                                <option value="">-</option>
-                                <option>Head Office Admin</option>
-                                <option>Branch Admin</option>
-                                <option>User</option>
-                                <option>Driver</option>
-                             </select>
-                          </div>
-                       </div>
+                        </div>
+
+                        <div className="space-y-3 pt-2 border-t border-gray-100">
+                           <h4 className="text-sm font-bold text-gray-900 border-b pb-2 flex items-center gap-2"><NotebookPen className="w-4 h-4 text-orange-500"/> Additional Details</h4>
+                           
+                           {/* User Name */}
+                           <div>
+                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">User Name</label>
+                              <input type="text" name="userName" value={formData.userName} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="Customer Name" />
+                           </div>
+                           {/* User Mobile */}
+                           <div>
+                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">User Mobile</label>
+                              <input type="tel" name="userMobile" value={formData.userMobile} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="+91..." />
+                           </div>
+                           {/* Driver Name */}
+                           <div>
+                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Driver Name</label>
+                              <input type="text" name="driverName" value={formData.driverName} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="Driver Name" />
+                           </div>
+                           {/* Driver Mobile */}
+                           <div>
+                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Driver Mobile</label>
+                              <input type="tel" name="driverMobile" value={formData.driverMobile} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="+91..." />
+                           </div>
+                           {/* Remarks */}
+                           <div>
+                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Remarks</label>
+                              <textarea name="remarks" rows={3} value={formData.remarks} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm resize-none" placeholder="Any special notes..." />
+                           </div>
+                        </div>
+
                     </div>
 
-                    {/* Column 2: People Info */}
-                    <div className="space-y-4">
-                       <h4 className="text-sm font-bold text-gray-900 border-b pb-2 flex items-center gap-2"><User className="w-4 h-4 text-blue-500"/> People</h4>
-                       
-                       <div className="space-y-3">
-                          <div>
-                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">User Name *</label>
-                             <input type="text" name="userName" value={formData.userName} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="Customer Name" required />
-                          </div>
-                          <div>
-                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">User Mobile *</label>
-                             <input type="tel" name="userMobile" value={formData.userMobile} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="+91..." required />
-                          </div>
-                          {/* Pickup Location - Added to Form */}
-                          <div>
-                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Pickup Location</label>
-                              {!isMapReady ? (
-                                <div className="p-2 bg-gray-100 text-gray-500 text-sm rounded flex items-center gap-2">
-                                    <Loader2 className="w-4 h-4 animate-spin" /> Map Loading...
-                                </div>
-                              ) : (
-                                <Autocomplete 
-                                    placeholder="Search Pickup Location"
-                                    onAddressSelect={(addr) => setFormData(prev => ({ ...prev, pickup: addr }))}
-                                    defaultValue={formData.pickup}
-                                />
-                              )}
-                              {mapError && <p className="text-xs text-red-500 mt-1">{mapError}</p>}
-                          </div>
-                       </div>
-
-                       <div className="pt-2 space-y-3">
-                          <div>
-                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Driver Name</label>
-                             <input type="text" name="driverName" value={formData.driverName} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="Driver Name" />
-                          </div>
-                          <div>
-                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Driver Mobile</label>
-                             <input type="tel" name="driverMobile" value={formData.driverMobile} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="+91..." />
-                          </div>
-                       </div>
-
-                       <div>
-                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Remarks</label>
-                          <textarea name="remarks" rows={3} value={formData.remarks} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm resize-none" placeholder="Any special notes..." />
-                       </div>
-                    </div>
-
-                    {/* Column 3: Financials */}
-                    <div className="space-y-4 md:col-span-2">
+                    {/* Right Column: Financials */}
+                    <div className="space-y-6">
                        <h4 className="text-sm font-bold text-gray-900 border-b pb-2 flex items-center gap-2"><Calculator className="w-4 h-4 text-purple-500"/> Financials</h4>
                        
-                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                       <div className="grid grid-cols-2 gap-4">
                            <div>
                               <label className="block text-xs font-bold text-gray-500 uppercase mb-1">{formData.bookingStatus === 'Cancelled' ? 'Cancellation Fee (Trip Price Field)' : 'Trip Price (₹) *'}</label>
                               <input type="number" name="tripPrice" value={formData.tripPrice || ''} onChange={(e) => {
                                   const price = parseFloat(e.target.value) || 0;
-                                  // Only auto-calc tax if NOT cancelled
                                   const taxAmt = formData.bookingStatus !== 'Cancelled' ? (price * parseFloat(taxPercentage)) / 100 : 0;
                                   setFormData(prev => ({ ...prev, tripPrice: price, tax: taxAmt }));
                               }} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm font-medium" placeholder="0" />
@@ -1126,6 +1115,7 @@ const TripEarning: React.FC = () => {
                                      className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm focus:ring-2 focus:ring-emerald-500" 
                                      placeholder="%" 
                                  />
+                                  <p className="text-[10px] text-gray-400 mt-1">Calculated on (Trip + Wait) + Cancel</p>
                               </div>
                               <div>
                                  <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Admin Comm Amt</label>
@@ -1149,10 +1139,9 @@ const TripEarning: React.FC = () => {
                                * Admin Commission is 100% of Total Cancellation Fee.
                            </div>
                        )}
-                       
-                       <p className="text-[10px] text-gray-400 mt-1">Calculated on (Trip + Wait) + Cancel</p>
-                    </div>
-                 </div>
+                        </div>
+                     </div>
+                 )}
 
                  {mapError && (
                     <div className="bg-red-50 text-red-700 p-3 rounded-lg flex items-center gap-2 mt-4 text-sm border border-red-200">
@@ -1160,10 +1149,11 @@ const TripEarning: React.FC = () => {
                     </div>
                  )}
 
+                 {/* Action Buttons */}
                  <div className="pt-6 border-t border-gray-100 mt-6 flex justify-end gap-3">
                     <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-white font-medium">Cancel</button>
                     <button type="submit" className="px-6 py-2 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 shadow-sm transition-colors flex items-center gap-2">
-                       <Save className="w-4 h-4" /> Save Trip
+                       <Save className="w-4 h-4" /> {editingId ? 'Update Trip' : 'Save Trip'}
                     </button>
                  </div>
               </form>

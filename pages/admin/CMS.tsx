@@ -1,32 +1,14 @@
 
-
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { 
   Save, LayoutDashboard, Text, Image, FileText, DollarSign, MessageCircle, 
   Settings, Plus, Trash2, Edit2, Check, ExternalLink, CalendarDays, BarChart3,
   MapPin, Smartphone, Shield, Zap, Globe, Users, Building2, Link, Copy,
-  Sparkles, X, Loader2 // Added missing imports: Sparkles, X, Loader2
+  Sparkles, X, Loader2, CheckCircle // Ensure CheckCircle is imported
 } from 'lucide-react';
 import { LandingPageContent } from '../../types';
 
-// Map icon string names to Lucide-React components
-const ICON_MAP: { [key: string]: React.ElementType } = {
-  Sparkles: Sparkles,
-  MapPin: MapPin,
-  DollarSign: DollarSign,
-  Smartphone: Smartphone,
-  BarChart3: BarChart3,
-  Shield: Shield,
-  Zap: Zap,
-  Globe: Globe,
-  Users: Users,
-  CheckCircle: Check,
-  LayoutDashboard: LayoutDashboard, // Placeholder if needed
-  Pencil: Edit2, // Placeholder
-  // Add other icons as needed for features section
-};
-
-// Default content structure (should match LandingPage.tsx's default and types.ts)
+// Define DEFAULT_CMS_CONTENT within this file
 const DEFAULT_CMS_CONTENT: LandingPageContent = {
   hero: {
     headline: "Manage your staff smarter, not harder.",
@@ -116,10 +98,6 @@ const DEFAULT_CMS_CONTENT: LandingPageContent = {
   }
 };
 
-const AVAILABLE_ICONS = [
-  'Sparkles', 'MapPin', 'DollarSign', 'Smartphone', 'BarChart3', 'Shield', 'Zap', 'Globe', 'Users', 'CheckCircle', 'LayoutDashboard', 'Pencil'
-];
-
 const CMS: React.FC = () => {
   const [cmsContent, setCmsContent] = useState<LandingPageContent>(DEFAULT_CMS_CONTENT);
   const [activeSection, setActiveSection] = useState<keyof LandingPageContent>('hero');
@@ -128,6 +106,34 @@ const CMS: React.FC = () => {
   
   // Debounce ref for auto-saving
   const saveTimeoutRef = useRef<number | null>(null);
+
+  // Memoized ICON_MAP for consistent component references
+  const ICON_MAP = useMemo(() => ({
+    Sparkles: Sparkles,
+    MapPin: MapPin,
+    DollarSign: DollarSign,
+    Smartphone: Smartphone,
+    BarChart3: BarChart3,
+    Shield: Shield,
+    Zap: Zap,
+    Globe: Globe,
+    Users: Users,
+    CheckCircle: CheckCircle, // Use CheckCircle here for consistency
+    LayoutDashboard: LayoutDashboard, // Default fallback icon
+    Pencil: Edit2, // Use Edit2 here
+  }), []);
+
+  // Memoized helper function to get icon component
+  const getIconComponent = useCallback((iconName: string | undefined | null, defaultIcon: React.ElementType = LayoutDashboard) => {
+    if (typeof iconName !== 'string' || !ICON_MAP[iconName]) {
+      console.warn(`Icon "${iconName}" not found or invalid. Using default.`);
+      return defaultIcon;
+    }
+    return ICON_MAP[iconName];
+  }, [ICON_MAP, LayoutDashboard]);
+
+  // Dynamically generate available icons from ICON_MAP keys
+  const AVAILABLE_ICONS = useMemo(() => Object.keys(ICON_MAP), [ICON_MAP]);
 
   // Load content on mount
   useEffect(() => {

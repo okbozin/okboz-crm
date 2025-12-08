@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   CheckSquare, Plus, Search, Filter, Calendar, 
@@ -5,10 +6,33 @@ import {
 } from 'lucide-react';
 import { Task, Employee, UserRole, Branch } from '../types';
 import { MOCK_EMPLOYEES } from '../constants';
+import { sendSystemNotification } from '../services/cloudService'; // Import notification service
 
 interface TaskManagementProps {
   role: UserRole;
 }
+
+// Helper to find employee by ID across all storage locations
+const findEmployeeById = (id: string): Employee | undefined => {
+    // 1. Check Admin Staff
+    try {
+      const adminStaff = JSON.parse(localStorage.getItem('staff_data') || '[]');
+      let found = adminStaff.find((e: any) => e.id === id);
+      if (found) return found;
+    } catch(e) {}
+
+    // 2. Check Corporate Staff
+    try {
+      const corporates = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
+      for (const corp of corporates) {
+          const cStaff = JSON.parse(localStorage.getItem(`staff_data_${corp.email}`) || '[]');
+          const found = cStaff.find((e: any) => e.id === id);
+          if (found) return found;
+      }
+    } catch(e) {}
+
+    return MOCK_EMPLOYEES.find(e => e.id === id);
+};
 
 const TaskManagement: React.FC<TaskManagementProps> = ({ role }) => {
   const sessionId = localStorage.getItem('app_session_id') || 'admin';
@@ -19,6 +43,8 @@ const TaskManagement: React.FC<TaskManagementProps> = ({ role }) => {
     const saved = localStorage.getItem('tasks_data');
     return saved ? JSON.parse(saved) : [];
   });
+
+  const [loggedInEmployee, setLoggedInEmployee] = useState<Employee | null>(null);
 
   const [allStaff, setAllStaff] = useState<Employee[]>(() => {
     let staff: Employee[] = [];
@@ -39,7 +65,9 @@ const TaskManagement: React.FC<TaskManagementProps> = ({ role }) => {
        const saved = localStorage.getItem(key);
        if (saved) staff = JSON.parse(saved).map((s:any) => ({...s, corporateId: sessionId}));
        else if (role === UserRole.EMPLOYEE) {
-           staff = MOCK_EMPLOYEES;
+           // For employee role without existing data, load from MOCK_EMPLOYEES
+           // (This usually means the employee hasn't been set up in local storage yet,
+           // but `findEmployeeById` below will handle it based on session ID)
        }
     }
     return staff;
@@ -71,12 +99,21 @@ const TaskManagement: React.FC<TaskManagementProps> = ({ role }) => {
     localStorage.setItem('tasks_data', JSON.stringify(tasks));
   }, [tasks]);
 
+  // Load logged-in employee data if it's an employee role
+  useEffect(() => {
+      if (role === UserRole.EMPLOYEE) {
+          const foundEmployee = findEmployeeById(sessionId);
+          setLoggedInEmployee(foundEmployee || null);
+      }
+  }, [role, sessionId]);
+
+
   // --- UI State ---
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [filterStatus, setFilterStatus] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   
-  const [formData, setFormData] = useState({
+  const initialFormState = {
     title: '',
     description: '',
     priority: 'Medium' as 'Low' | 'Medium' | 'High',
@@ -85,12 +122,40 @@ const TaskManagement: React.FC<TaskManagementProps> = ({ role }) => {
     branch: '',
     startDate: '',
     endDate: ''
-  });
+  };
+
+  const [formData, setFormData] = useState(initialFormState);
+
+  // Reset form data on modal open/close
+  const handleOpenModal = () => {
+    if (role === UserRole.EMPLOYEE && loggedInEmployee) {
+        setFormData({
+            ...initialFormState,
+            assignedTo: loggedInEmployee.id,
+            corporateId: loggedInEmployee.corporateId || sessionId, // Use employee's corporateId
+            branch: loggedInEmployee.branch || '', // Use employee's branch
+        });
+    } else {
+        setFormData(initialFormState);
+    }
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setFormData(initialFormState); // Reset to initial state
+  };
+
 
   // --- Computed ---
   
   // Filter staff based on selected corporate/branch in modal
   const availableStaffForForm = useMemo(() => {
+    if (role === UserRole.EMPLOYEE && loggedInEmployee) {
+        // For employee, only they can be selected
+        return [loggedInEmployee];
+    }
+
     let staff = allStaff;
     const targetCorpId = isSuperAdmin ? formData.corporateId : sessionId;
     
@@ -106,15 +171,20 @@ const TaskManagement: React.FC<TaskManagementProps> = ({ role }) => {
     
     // Filter out inactive staff
     return staff.filter(s => s.status !== 'Inactive');
-  }, [allStaff, formData.corporateId, formData.branch, isSuperAdmin, sessionId]);
+  }, [allStaff, formData.corporateId, formData.branch, isSuperAdmin, sessionId, role, loggedInEmployee]);
 
   const availableBranchesForForm = useMemo(() => {
+      if (role === UserRole.EMPLOYEE && loggedInEmployee) {
+          // For employee, only their branch is relevant
+          return allBranches.filter(b => b.name === loggedInEmployee.branch);
+      }
+
       const targetCorpId = isSuperAdmin ? formData.corporateId : sessionId;
       if (targetCorpId === 'admin') {
           return allBranches.filter(b => b.owner === 'admin');
       }
       return allBranches.filter(b => b.owner === targetCorpId);
-  }, [allBranches, formData.corporateId, isSuperAdmin, sessionId]);
+  }, [allBranches, formData.corporateId, isSuperAdmin, sessionId, role, loggedInEmployee]);
 
   const filteredTasks = tasks.filter(t => {
       if (role === UserRole.EMPLOYEE && t.assignedTo !== sessionId) return false;
@@ -128,22 +198,41 @@ const TaskManagement: React.FC<TaskManagementProps> = ({ role }) => {
   });
 
   // --- Handlers ---
-  const handleSaveTask = () => {
+  const handleSaveTask = async () => {
       if (!formData.title || !formData.assignedTo) {
           alert("Please fill required fields");
           return;
       }
 
-      const assignedStaff = allStaff.find(s => s.id === formData.assignedTo);
+      let assignedStaff: Employee | undefined;
+      let corporateIdentifier: string | undefined;
+      let branchIdentifier: string | undefined;
+      let assignedToId: string;
+      let assignedToName: string;
+
+      if (role === UserRole.EMPLOYEE && loggedInEmployee) {
+          assignedToId = loggedInEmployee.id;
+          assignedToName = loggedInEmployee.name;
+          corporateIdentifier = loggedInEmployee.corporateId || sessionId;
+          branchIdentifier = loggedInEmployee.branch;
+      } else {
+          assignedStaff = allStaff.find(s => s.id === formData.assignedTo);
+          assignedToId = formData.assignedTo;
+          assignedToName = assignedStaff ? assignedStaff.name : 'Unknown';
+          corporateIdentifier = isSuperAdmin ? formData.corporateId : sessionId;
+          branchIdentifier = formData.branch;
+      }
+
+
       const newTask: Task = {
           id: `TASK-${Date.now()}`,
           title: formData.title,
           description: formData.description,
-          assignedTo: formData.assignedTo,
-          assignedByName: assignedStaff ? assignedStaff.name : 'Unknown',
-          corporateId: isSuperAdmin ? formData.corporateId : sessionId,
-          corporateName: '', 
-          branch: formData.branch,
+          assignedTo: assignedToId,
+          assignedByName: assignedToName,
+          corporateId: corporateIdentifier,
+          corporateName: corporates.find(c => c.email === corporateIdentifier)?.companyName || 'Head Office', // Dynamically get corporate name
+          branch: branchIdentifier,
           status: 'Todo',
           priority: formData.priority,
           startDate: formData.startDate,
@@ -152,11 +241,20 @@ const TaskManagement: React.FC<TaskManagementProps> = ({ role }) => {
       };
 
       setTasks([newTask, ...tasks]);
-      setIsModalOpen(false);
-      setFormData({
-        title: '', description: '', priority: 'Medium', assignedTo: '', 
-        corporateId: isSuperAdmin ? 'admin' : sessionId, branch: '', startDate: '', endDate: ''
-      });
+      handleCloseModal();
+
+      // NEW: Send notification for task creation
+      if (loggedInEmployee) {
+          await sendSystemNotification({
+              type: 'task_created',
+              title: 'New Task Created',
+              message: `${loggedInEmployee.name} has created a new task: "${newTask.title}".`,
+              targetRoles: [UserRole.ADMIN, UserRole.CORPORATE],
+              corporateId: loggedInEmployee.corporateId === 'admin' ? null : loggedInEmployee.corporateId || null,
+              employeeId: loggedInEmployee.id,
+              link: '/admin/tasks'
+          });
+      }
   };
 
   const handleStatusChange = (taskId: string, newStatus: Task['status']) => {
@@ -176,14 +274,13 @@ const TaskManagement: React.FC<TaskManagementProps> = ({ role }) => {
           <h2 className="text-2xl font-bold text-gray-800">Task Management</h2>
           <p className="text-gray-500">Assign and track team tasks</p>
         </div>
-        {(role !== UserRole.EMPLOYEE) && (
-            <button 
-                onClick={() => setIsModalOpen(true)}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 shadow-sm transition-colors"
-            >
-                <Plus className="w-5 h-5" /> New Task
-            </button>
-        )}
+        {/* Removed conditional rendering for the button */}
+        <button 
+            onClick={handleOpenModal}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 shadow-sm transition-colors"
+        >
+            <Plus className="w-5 h-5" /> New Task
+        </button>
       </div>
 
       <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex gap-4">
@@ -278,7 +375,7 @@ const TaskManagement: React.FC<TaskManagementProps> = ({ role }) => {
               <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6">
                   <div className="flex justify-between items-center mb-6">
                       <h3 className="text-lg font-bold text-gray-800">Create New Task</h3>
-                      <button onClick={() => setIsModalOpen(false)}><X className="w-5 h-5 text-gray-500" /></button>
+                      <button onClick={handleCloseModal}><X className="w-5 h-5 text-gray-500" /></button>
                   </div>
                   <div className="space-y-4">
                       <input 
@@ -295,11 +392,12 @@ const TaskManagement: React.FC<TaskManagementProps> = ({ role }) => {
                       />
                       
                       <div className="grid grid-cols-2 gap-4">
-                          {isSuperAdmin && (
+                          {(isSuperAdmin || role === UserRole.CORPORATE) && (
                               <select 
                                   className="w-full p-2 border border-gray-300 rounded-lg outline-none bg-white"
                                   value={formData.corporateId}
                                   onChange={e => setFormData({...formData, corporateId: e.target.value, branch: '', assignedTo: ''})}
+                                  disabled={role === UserRole.EMPLOYEE} // Disable for employee
                               >
                                   <option value="admin">Head Office</option>
                                   {corporates.map((c: any) => <option key={c.email} value={c.email}>{c.companyName}</option>)}
@@ -309,6 +407,7 @@ const TaskManagement: React.FC<TaskManagementProps> = ({ role }) => {
                               className="w-full p-2 border border-gray-300 rounded-lg outline-none bg-white"
                               value={formData.branch}
                               onChange={e => setFormData({...formData, branch: e.target.value, assignedTo: ''})}
+                              disabled={role === UserRole.EMPLOYEE} // Disable for employee
                           >
                               <option value="">All Branches</option>
                               {availableBranchesForForm.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
@@ -319,6 +418,7 @@ const TaskManagement: React.FC<TaskManagementProps> = ({ role }) => {
                           className="w-full p-2 border border-gray-300 rounded-lg outline-none bg-white"
                           value={formData.assignedTo}
                           onChange={e => setFormData({...formData, assignedTo: e.target.value})}
+                          disabled={role === UserRole.EMPLOYEE} // Disable for employee
                       >
                           <option value="">Assign To...</option>
                           {availableStaffForForm.map(s => <option key={s.id} value={s.id}>{s.name} ({s.role})</option>)}

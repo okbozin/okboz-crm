@@ -379,6 +379,20 @@ const Payroll: React.FC = () => {
 
   const totalPayroll = (Object.values(payrollData) as PayrollEntry[]).reduce((sum, entry) => sum + calculateNetPay(entry), 0);
   
+  // NEW: Payslip Modal Logic
+  const handleViewPayslip = (emp: ExtendedEmployee, payrollEntry: PayrollEntry) => {
+    setViewSlip({
+      entry: payrollEntry,
+      name: emp.name,
+      role: emp.role,
+      batchDate: new Date(selectedMonth).toISOString(), // Use selectedMonth for context
+    });
+  };
+
+  const handlePrintPayslip = () => {
+    window.print();
+  };
+
   return (
     <div className="space-y-6">
         {/* CSS for printing */}
@@ -387,10 +401,10 @@ const Payroll: React.FC = () => {
                 body * {
                     visibility: hidden;
                 }
-                .printable-slip, .printable-slip * {
+                .printable-slip-modal, .printable-slip-modal * {
                     visibility: visible;
                 }
-                .printable-slip {
+                .printable-slip-modal {
                     position: absolute;
                     left: 0;
                     top: 0;
@@ -560,7 +574,7 @@ const Payroll: React.FC = () => {
 
                         return (
                             <tr key={emp.id} className="hover:bg-gray-50/50 transition-colors group">
-                                <td className="px-6 py-4">
+                                <td className="px-6 py-4 cursor-pointer" onClick={() => handleViewPayslip(emp, data)}>
                                     <div className="flex items-center gap-3">
                                         <img src={emp.avatar} alt="" className="w-10 h-10 rounded-full border border-gray-200" />
                                         <div>
@@ -626,7 +640,11 @@ const Payroll: React.FC = () => {
                                     </select>
                                 </td>
                                 <td className="px-4 py-4 text-center">
-                                    <button className="text-gray-400 hover:text-emerald-600 p-2" title="Download Payslip">
+                                    <button 
+                                        onClick={() => handleViewPayslip(emp, data)}
+                                        className="text-gray-400 hover:text-emerald-600 p-2" 
+                                        title="Download Payslip"
+                                    >
                                         <Download className="w-5 h-5" />
                                     </button>
                                 </td>
@@ -908,18 +926,18 @@ const Payroll: React.FC = () => {
       {/* Individual Payslip Modal */}
       {viewSlip && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-              <div className="printable-slip bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200">
+              <div className="printable-slip-modal bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200">
                   
                   {/* Header (Visible on screen and print) */}
                   <div className="p-6 border-b border-gray-200 bg-gray-50">
                       <div className="flex justify-between items-start mb-4">
                           <div>
                               <h2 className="text-2xl font-bold text-gray-900">Payslip</h2>
-                              <p className="text-sm text-gray-500">OK BOZ Staff Management</p>
+                              <p className="text-sm text-gray-500">For {new Date(viewSlip.batchDate).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
                           </div>
                           <div className="text-right">
                               <p className="font-mono text-sm font-bold text-gray-800">#{viewSlip.entry.employeeId}</p>
-                              <p className="text-xs text-gray-500">{new Date(viewSlip.batchDate).toLocaleDateString()}</p>
+                              <p className="text-xs text-gray-500">Generated: {new Date().toLocaleDateString()}</p>
                           </div>
                       </div>
                       <div className="flex justify-between items-center bg-white p-3 rounded-lg border border-gray-200">
@@ -990,7 +1008,7 @@ const Payroll: React.FC = () => {
                   </div>
 
                   {/* Footer (Actions - Hidden on Print) */}
-                  <div className="no-print p-5 bg-gray-50 border-t border-gray-200 flex justify-end gap-3">
+                  <div className="no-print p-5 bg-gray-50 border-t border-gray-200 flex justify-end gap-3 rounded-b-2xl">
                       <button 
                           onClick={() => setViewSlip(null)} 
                           className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium hover:bg-white transition-colors"
@@ -998,7 +1016,7 @@ const Payroll: React.FC = () => {
                           Close
                       </button>
                       <button 
-                          onClick={() => window.print()} 
+                          onClick={handlePrintPayslip} 
                           className="px-4 py-2 bg-slate-800 text-white rounded-lg text-sm font-bold hover:bg-slate-900 transition-colors flex items-center gap-2"
                       >
                           <Printer className="w-4 h-4" /> Print Slip

@@ -22,7 +22,7 @@ const SecurityAccount: React.FC = () => {
       try {
         const adminStaff = JSON.parse(localStorage.getItem('staff_data') || '[]');
         let found = adminStaff.find((e: any) => e.id === id);
-        if (found) return found;
+        if (found) return { ...found, corporateId: 'admin' };
       } catch(e) {}
 
       // 2. Check Corporate Staff
@@ -31,7 +31,7 @@ const SecurityAccount: React.FC = () => {
         for (const corp of corporates) {
             const cStaff = JSON.parse(localStorage.getItem(`staff_data_${corp.email}`) || '[]');
             const found = cStaff.find((e: any) => e.id === id);
-            if (found) return found;
+            if (found) return { ...found, corporateId: corp.email };
         }
       } catch(e) {}
 
@@ -41,17 +41,24 @@ const SecurityAccount: React.FC = () => {
   // Load user data on mount
   useEffect(() => {
       const storedSessionId = localStorage.getItem('app_session_id');
+
       if (storedSessionId) {
-          const found = findEmployeeById(storedSessionId);
-          setUser(found || MOCK_EMPLOYEES[0]);
+          let foundUser = findEmployeeById(storedSessionId); 
+          setUser(foundUser || null); // Set user, or null if not found
       } else {
-          setUser(MOCK_EMPLOYEES[0]);
+          // If no session ID, user is not "logged in" in the app's context.
+          // This component should ideally not be accessible.
+          // Provide a null user, which will trigger the loading state message.
+          setUser(null);
       }
-  }, []);
+  }, []); // Empty dependency array, runs once on mount
 
   const handleChangePassword = async (e: React.FormEvent) => {
       e.preventDefault();
-      if (!user) return;
+      if (!user) {
+          setMessage({ type: 'error', text: 'User data not found. Cannot update password.' });
+          return;
+      }
 
       setMessage(null); // Clear previous messages
 
@@ -74,8 +81,8 @@ const SecurityAccount: React.FC = () => {
       let updated = false;
       
       // Determine the correct storage key based on user's corporateId
-      const isSuperAdmin = (user.corporateId === 'admin' || !user.corporateId); // User added by admin
-      const storageKey = isSuperAdmin ? 'staff_data' : `staff_data_${user.corporateId}`;
+      // Ensure corporateId is handled correctly (can be 'admin' string)
+      const storageKey = (user.corporateId === 'admin' || !user.corporateId) ? 'staff_data' : `staff_data_${user.corporateId}`;
 
       try {
         const existingStaff: Employee[] = JSON.parse(localStorage.getItem(storageKey) || '[]');
@@ -102,7 +109,7 @@ const SecurityAccount: React.FC = () => {
               title: 'Password Changed',
               message: `${user.name} has updated their password.`,
               targetRoles: [UserRole.ADMIN, UserRole.CORPORATE],
-              corporateId: user.corporateId === 'admin' ? undefined : user.corporateId, // If admin managed, send global, else to specific corporate
+              corporateId: user.corporateId === 'admin' ? null : user.corporateId || null, // If admin managed, send global, else to specific corporate
               employeeId: user.id,
               link: '/admin/staff'
           });

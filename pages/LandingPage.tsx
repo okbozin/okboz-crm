@@ -1,10 +1,10 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   CheckCircle, Users, DollarSign, MapPin, Shield, Zap, 
-  ArrowRight, Menu, X, Star, BarChart3, Smartphone, Globe, Check,
-  LayoutDashboard, Pencil as PencilIcon, Sparkles // Added Sparkles import
+  ArrowRight, Menu, X, Star, BarChart3, Smartphone, Globe, 
+  LayoutDashboard, Pencil as PencilIcon, Sparkles 
 } from 'lucide-react';
 import { LandingPageContent } from '../types'; // Import the new interface
 
@@ -99,29 +99,37 @@ const DEFAULT_LANDING_PAGE_CONTENT: LandingPageContent = {
 };
 
 
-// Map icon string names to Lucide-React components
-const ICON_MAP: { [key: string]: React.ElementType } = {
-  Sparkles: Sparkles,
-  MapPin: MapPin,
-  DollarSign: DollarSign,
-  Smartphone: Smartphone,
-  BarChart3: BarChart3,
-  Shield: Shield,
-  Zap: Zap,
-  Globe: Globe, // For social proof
-  CheckCircle: CheckCircle,
-  LayoutDashboard: LayoutDashboard, // Placeholder if needed
-  Pencil: PencilIcon,
-  Users: Users,
-  // Add other icons as needed for features section
-};
-
 const LandingPage: React.FC = () => {
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
 
-  const [cmsContent, setCmsContent] = useState<LandingPageContent>(DEFAULT_LANDING_PAGE_CONTENT);
+  const [cmsContent, setCmsContent] = useState<LandingPageContent>(DEFAULT_LANDING_PAGE_CONTENT); // Fix: Use DEFAULT_LANDING_PAGE_CONTENT
+
+  // Memoized ICON_MAP for consistent component references
+  const ICON_MAP = useMemo(() => ({
+    Sparkles: Sparkles,
+    MapPin: MapPin,
+    DollarSign: DollarSign,
+    Smartphone: Smartphone,
+    BarChart3: BarChart3,
+    Shield: Shield,
+    Zap: Zap,
+    Globe: Globe,
+    Users: Users,
+    CheckCircle: CheckCircle, // Ensure this is imported and correctly mapped
+    LayoutDashboard: LayoutDashboard, // Default fallback icon
+    Pencil: PencilIcon, // Alias, ensure imported
+  }), []);
+
+  // Memoized helper function to get icon component
+  const getIconComponent = useCallback((iconName: string | undefined | null, defaultIcon: React.ElementType = LayoutDashboard) => {
+    if (typeof iconName !== 'string' || !ICON_MAP[iconName]) {
+      console.warn(`Icon "${iconName}" not found or invalid. Using default.`);
+      return defaultIcon;
+    }
+    return ICON_MAP[iconName];
+  }, [ICON_MAP, LayoutDashboard]);
 
   // Load CMS content from localStorage
   useEffect(() => {
@@ -129,24 +137,40 @@ const LandingPage: React.FC = () => {
       const savedContent = localStorage.getItem('landing_page_content');
       if (savedContent) {
         const parsedContent = JSON.parse(savedContent);
-        // Deep merge to ensure new fields in DEFAULT are included if not in saved
+        // Deep merge to ensure all default fields exist if not in saved content
         setCmsContent(prevState => ({
-          ...prevState,
-          ...parsedContent,
-          hero: { ...prevState.hero, ...parsedContent.hero },
-          features: { ...prevState.features, ...parsedContent.features, items: parsedContent.features?.items || prevState.features.items },
-          testimonials: { ...prevState.testimonials, ...parsedContent.testimonials, items: parsedContent.testimonials?.items || prevState.testimonials.items },
-          pricing: { ...prevState.pricing, ...parsedContent.pricing, plans: parsedContent.pricing?.plans || prevState.pricing.plans },
-          faq: { ...prevState.faq, ...parsedContent.faq, items: parsedContent.faq?.items || prevState.faq.items },
-          cta: { ...prevState.cta, ...parsedContent.cta },
-          footer: {
-            ...prevState.footer,
-            ...parsedContent.footer,
-            productLinks: parsedContent.footer?.productLinks || prevState.footer.productLinks,
-            companyLinks: parsedContent.footer?.companyLinks || prevState.footer.companyLinks,
-            legalLinks: parsedContent.footer?.legalLinks || prevState.footer.legalLinks,
-            socialLinks: parsedContent.footer?.socialLinks || prevState.footer.socialLinks,
-          },
+            ...DEFAULT_LANDING_PAGE_CONTENT, // Fix: Use DEFAULT_LANDING_PAGE_CONTENT
+            ...parsedContent,
+            hero: { ...DEFAULT_LANDING_PAGE_CONTENT.hero, ...parsedContent.hero }, // Fix: Use DEFAULT_LANDING_PAGE_CONTENT
+            features: { 
+                ...DEFAULT_LANDING_PAGE_CONTENT.features, // Fix: Use DEFAULT_LANDING_PAGE_CONTENT
+                ...parsedContent.features, 
+                items: parsedContent.features?.items || DEFAULT_LANDING_PAGE_CONTENT.features.items // Fix: Use DEFAULT_LANDING_PAGE_CONTENT
+            },
+            testimonials: { 
+                ...DEFAULT_LANDING_PAGE_CONTENT.testimonials, // Fix: Use DEFAULT_LANDING_PAGE_CONTENT
+                ...parsedContent.testimonials, 
+                items: parsedContent.testimonials?.items || DEFAULT_LANDING_PAGE_CONTENT.testimonials.items // Fix: Use DEFAULT_LANDING_PAGE_CONTENT
+            },
+            pricing: { 
+                ...DEFAULT_LANDING_PAGE_CONTENT.pricing, // Fix: Use DEFAULT_LANDING_PAGE_CONTENT
+                ...parsedContent.pricing, 
+                plans: parsedContent.pricing?.plans || DEFAULT_LANDING_PAGE_CONTENT.pricing.plans // Fix: Use DEFAULT_LANDING_PAGE_CONTENT
+            },
+            faq: { 
+                ...DEFAULT_LANDING_PAGE_CONTENT.faq, // Fix: Use DEFAULT_LANDING_PAGE_CONTENT
+                ...parsedContent.faq, 
+                items: parsedContent.faq?.items || DEFAULT_LANDING_PAGE_CONTENT.faq.items // Fix: Use DEFAULT_LANDING_PAGE_CONTENT
+            },
+            cta: { ...DEFAULT_LANDING_PAGE_CONTENT.cta, ...parsedContent.cta }, // Fix: Use DEFAULT_LANDING_PAGE_CONTENT
+            footer: {
+                ...DEFAULT_LANDING_PAGE_CONTENT.footer, // Fix: Use DEFAULT_LANDING_PAGE_CONTENT
+                ...parsedContent.footer,
+                productLinks: parsedContent.footer?.productLinks || DEFAULT_LANDING_PAGE_CONTENT.footer.productLinks, // Fix: Use DEFAULT_LANDING_PAGE_CONTENT
+                companyLinks: parsedContent.footer?.companyLinks || DEFAULT_LANDING_PAGE_CONTENT.footer.companyLinks, // Fix: Use DEFAULT_LANDING_PAGE_CONTENT
+                legalLinks: parsedContent.footer?.legalLinks || DEFAULT_LANDING_PAGE_CONTENT.footer.legalLinks, // Fix: Use DEFAULT_LANDING_PAGE_CONTENT
+                socialLinks: parsedContent.footer?.socialLinks || DEFAULT_LANDING_PAGE_CONTENT.footer.socialLinks, // Fix: Use DEFAULT_LANDING_PAGE_CONTENT
+            },
         }));
       }
     } catch (e) {
@@ -157,12 +181,6 @@ const LandingPage: React.FC = () => {
   }, []);
 
   const { hero, features, testimonials, pricing, faq, cta, footer } = cmsContent;
-
-
-  // Helper function to get icon component
-  const getIconComponent = (iconName: string, defaultIcon: React.ElementType = LayoutDashboard) => {
-    return ICON_MAP[iconName] || defaultIcon;
-  };
 
   return (
     <div className="min-h-screen bg-white font-sans text-gray-900 selection:bg-emerald-100 selection:text-emerald-900">
@@ -318,10 +336,10 @@ const LandingPage: React.FC = () => {
           <p className="text-sm font-semibold text-gray-500 uppercase tracking-widest mb-6">Trusted by 500+ growing companies</p>
           <div className="flex flex-wrap justify-center items-center gap-8 md:gap-16 opacity-60 grayscale hover:grayscale-0 transition-all duration-500">
              {/* Fake Logos (Could be made dynamic in CMS) */}
-             <div className="text-xl font-bold font-serif flex items-center gap-1"><Globe className="w-6 h-6" /> Globex</div>
-             <div className="text-xl font-bold font-mono flex items-center gap-1"><Zap className="w-6 h-6" /> BoltShift</div>
-             <div className="text-xl font-bold font-sans flex items-center gap-1"><Shield className="w-6 h-6" /> SecureCorp</div>
-             <div className="text-xl font-bold flex items-center gap-1"><BarChart3 className="w-6 h-6" /> Metrics</div>
+             <div className="text-xl font-bold font-serif flex items-center gap-1">{React.createElement(getIconComponent('Globe'), { className: "w-6 h-6" })} Globex</div>
+             <div className="text-xl font-bold font-mono flex items-center gap-1">{React.createElement(getIconComponent('Zap'), { className: "w-6 h-6" })} BoltShift</div>
+             <div className="text-xl font-bold font-sans flex items-center gap-1">{React.createElement(getIconComponent('Shield'), { className: "w-6 h-6" })} SecureCorp</div>
+             <div className="text-xl font-bold flex items-center gap-1">{React.createElement(getIconComponent('BarChart3'), { className: "w-6 h-6" })} Metrics</div>
           </div>
         </div>
       </section>
@@ -411,9 +429,9 @@ const LandingPage: React.FC = () => {
                         </div>
                      )}
                      
-                     <div className="mb-6">
+                     <div className="mb-4 mt-2">
                         <h3 className="text-xl font-bold text-gray-900">{plan.name}</h3>
-                        <p className="text-gray-500 text-sm mt-2">{plan.description}</p>
+                        <p className="text-gray-500 text-sm mt-1 min-h-[40px]">{plan.description}</p>
                      </div>
 
                      <div className="flex items-baseline gap-1 mb-8">
@@ -424,7 +442,7 @@ const LandingPage: React.FC = () => {
                      <div className="space-y-4 flex-1 mb-8">
                         {plan.features.map((feat, i) => (
                            <div key={i} className="flex items-start gap-3 text-sm text-gray-600">
-                              <Check className="w-5 h-5 text-emerald-500 shrink-0" />
+                              <CheckCircle className="w-5 h-5 text-emerald-500 shrink-0" />
                               <span>{feat}</span>
                            </div>
                         ))}

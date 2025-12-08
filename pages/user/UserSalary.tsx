@@ -3,7 +3,8 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { Download, TrendingUp, DollarSign, FileText, CheckCircle, Clock, Plus, AlertCircle, X, Send } from 'lucide-react';
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { MOCK_EMPLOYEES, getEmployeeAttendance } from '../../constants';
-import { AttendanceStatus, Employee, SalaryAdvanceRequest, LeaveRequest } from '../../types';
+import { AttendanceStatus, Employee, SalaryAdvanceRequest, LeaveRequest, UserRole } from '../../types';
+import { sendSystemNotification } from '../../services/cloudService'; // Import notification service
 
 const UserSalary: React.FC = () => {
   const [user, setUser] = useState<Employee | null>(null);
@@ -87,7 +88,7 @@ const UserSalary: React.FC = () => {
       return () => window.removeEventListener('storage', handleStorageChange);
   }, [user]);
 
-  const handleRequestAdvance = (e: React.FormEvent) => {
+  const handleRequestAdvance = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!user) return;
       
@@ -108,7 +109,7 @@ const UserSalary: React.FC = () => {
           reason: advanceForm.reason,
           status: 'Pending',
           requestDate: new Date().toISOString(),
-          corporateId: user.corporateId || (isSuperAdmin ? 'admin' : undefined), // NEW: Add corporateId from user
+          corporateId: user.corporateId === 'admin' ? null : user.corporateId || null, // NEW: Add corporateId from user, ensure null for admin
       };
 
       const existing = JSON.parse(localStorage.getItem('salary_advances') || '[]');
@@ -119,6 +120,17 @@ const UserSalary: React.FC = () => {
       setIsAdvanceModalOpen(false);
       setAdvanceForm({ amount: '', reason: '' });
       alert("Advance request submitted successfully!");
+
+      // NEW: Send notification to admins and corporate for advance request
+      await sendSystemNotification({
+          type: 'advance_request',
+          title: 'New Salary Advance Request',
+          message: `${user.name} has requested a salary advance of ₹${newRequest.amountRequested.toLocaleString()} for ${newRequest.reason}.`,
+          targetRoles: [UserRole.ADMIN, UserRole.CORPORATE],
+          corporateId: user.corporateId === 'admin' ? null : user.corporateId || null,
+          employeeId: user.id,
+          link: '/admin/payroll' // Link to payroll page, advances tab
+      });
   };
 
   // Dynamically calculate salary based on this month's attendance

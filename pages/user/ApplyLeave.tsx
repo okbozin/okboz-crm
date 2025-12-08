@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Calendar, Clock, CheckCircle, XCircle, AlertCircle, Send, FileText, PieChart } from 'lucide-react';
-import { Employee, LeaveRequest } from '../../types';
+import { Employee, LeaveRequest, UserRole } from '../../types';
 import { MOCK_EMPLOYEES } from '../../constants';
+import { sendSystemNotification } from '../../services/cloudService'; // Import notification service
 
 const ApplyLeave: React.FC = () => {
   const [user, setUser] = useState<Employee | null>(null);
@@ -15,18 +16,26 @@ const ApplyLeave: React.FC = () => {
     reason: ''
   });
 
-  // Initialize history from localStorage
-  const [history, setHistory] = useState<LeaveRequest[]>(() => {
+  // rawHistory will hold ALL leave requests from local storage
+  const [rawHistory, setRawHistory] = useState<LeaveRequest[]>(() => {
     const saved = localStorage.getItem('leave_history');
     if (saved) {
       try {
         return JSON.parse(saved);
       } catch (e) {
-        console.error("Failed to parse leave history", e);
+        console.error("Failed to parse leave history from local storage", e);
       }
     }
     return [];
   });
+
+  // userLeaveHistory will be a filtered view for the current user
+  const userLeaveHistory = useMemo(() => {
+    if (!user) return [];
+    return rawHistory.filter(h => h.employeeId === user.id)
+                     .sort((a, b) => new Date(b.appliedOn).getTime() - new Date(a.appliedOn).getTime());
+  }, [rawHistory, user]);
+
 
   // Helper to find employee by ID across all storage locations and inject corporateId
   const findEmployeeById = (id: string): Employee | undefined => {
@@ -109,10 +118,10 @@ const ApplyLeave: React.FC = () => {
       }
   }, [user]);
 
-  // Persist history to localStorage whenever it changes
+  // Persist rawHistory to localStorage whenever it changes
   useEffect(() => {
-    localStorage.setItem('leave_history', JSON.stringify(history));
-  }, [history]);
+    localStorage.setItem('leave_history', JSON.stringify(rawHistory));
+  }, [rawHistory]);
 
   // 3. Calculate Balances Dynamically
   const balances = useMemo(() => {
@@ -127,8 +136,8 @@ const ApplyLeave: React.FC = () => {
       return leaveTypes.map((lt, index) => {
           // Calculate used days for this leave type (Approved only) for THIS user
           // Filter history by current user ID to avoid mixup if using shared storage
-          const used = history
-              .filter(h => h.status === 'Approved' && h.type === lt.name && (!user || h.employeeId === user.id)) // Added employeeId check if available
+          const used = userLeaveHistory
+              .filter(h => h.status === 'Approved' && h.type === lt.name)
               .reduce((sum, h) => sum + h.days, 0);
           
           const style = colors[index % colors.length];
@@ -142,22 +151,23 @@ const ApplyLeave: React.FC = () => {
               bar: style.bar
           };
       });
-  }, [leaveTypes, history, user]);
+  }, [leaveTypes, userLeaveHistory]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.startDate || !formData.endDate || !formData.reason) {
-      alert("Please fill in all fields.");
+    // 'endDate' is now optional
+    if (!formData.startDate || !formData.reason) {
+      alert("Please fill in all required fields (From Date and Reason).");
       return;
     }
 
     const start = new Date(formData.startDate);
-    const end = new Date(formData.endDate);
+    const end = formData.endDate ? new Date(formData.endDate) : start; // If endDate is empty, it's a single day leave
     const today = new Date();
     today.setHours(0,0,0,0);
     
@@ -172,13 +182,14 @@ const ApplyLeave: React.FC = () => {
     }
     
     const diffTime = Math.abs(end.getTime() - start.getTime());
-    const days = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    // +1 to include both start and end day
+    const days = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; 
 
-    const newLeave: LeaveRequest & { employeeId?: string } = {
+    const newLeave: LeaveRequest = {
       id: Date.now(),
       type: formData.type,
       from: formData.startDate,
-      to: formData.endDate,
+      to: formData.endDate || formData.startDate, // If endDate is empty, set to startDate
       days: isNaN(days) ? 1 : days,
       status: 'Pending',
       reason: formData.reason,
@@ -187,9 +198,24 @@ const ApplyLeave: React.FC = () => {
       employeeId: user?.id // Tag with user ID
     };
 
-    setHistory([newLeave, ...history]);
+    // Update the raw history, which will then trigger userLeaveHistory to re-memoize
+    setRawHistory(prev => [newLeave, ...prev]);
+
     setFormData({ type: leaveTypes[0]?.name || '', startDate: '', endDate: '', reason: '' });
     alert("Leave request submitted successfully!");
+
+    // NEW: Send notification to admins and corporate for leave request
+    if (user) {
+        await sendSystemNotification({
+            type: 'leave_request',
+            title: 'New Leave Request',
+            message: `${user.name} has requested ${newLeave.days} day(s) of ${newLeave.type} from ${newLeave.from} to ${newLeave.to}.`,
+            targetRoles: [UserRole.ADMIN, UserRole.CORPORATE],
+            corporateId: user.corporateId === 'admin' ? null : user.corporateId || null,
+            employeeId: user.id,
+            link: '/admin/employee-settings' // Link to the Leave Approval section
+        });
+    }
   };
 
   const todayDate = new Date().toISOString().split('T')[0];
@@ -284,7 +310,7 @@ const ApplyLeave: React.FC = () => {
                     value={formData.endDate}
                     onChange={handleInputChange}
                     className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-sm"
-                    required
+                    // Removed 'required' attribute here
                   />
                 </div>
               </div>
@@ -321,11 +347,11 @@ const ApplyLeave: React.FC = () => {
                  <Clock className="w-5 h-5 text-emerald-500" />
                  Recent History
                </h3>
-               <button className="text-sm text-emerald-600 font-medium hover:underline">View All</button>
+               {/* No 'View All' button needed as it now only shows the user's history */}
             </div>
             
             <div className="divide-y divide-gray-100 max-h-[500px] overflow-y-auto">
-              {history.map((item) => (
+              {userLeaveHistory.map((item) => (
                 <div key={item.id} className="p-6 hover:bg-gray-50 transition-colors group">
                    <div className="flex justify-between items-start mb-3">
                       <div>
@@ -360,7 +386,7 @@ const ApplyLeave: React.FC = () => {
                 </div>
               ))}
               
-              {history.length === 0 && (
+              {userLeaveHistory.length === 0 && (
                 <div className="p-8 text-center text-gray-400 italic">
                   No leave history found.
                 </div>

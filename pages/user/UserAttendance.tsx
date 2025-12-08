@@ -2,17 +2,20 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import AttendanceCalendar from '../../components/AttendanceCalendar';
 import { MOCK_EMPLOYEES, getEmployeeAttendance, COLORS } from '../../constants';
-import { AttendanceStatus, DailyAttendance, Employee, Branch, CorporateAccount } from '../../types';
 import { 
   ChevronLeft, ChevronRight, Calendar, List, CheckCircle, XCircle, 
   User, MapPin, Clock, Fingerprint, Download, X, 
   PieChart as PieChartIcon, Activity, ScanLine, Loader2, Navigation,
   Phone, DollarSign, Plane, Briefcase, Camera, AlertCircle, Building2, RefreshCcw, Users, Coffee,
-  Search, Filter, LayoutGrid, ListChecks
+  Search, Filter, LayoutGrid, ListChecks, Save, Edit2, Timer
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useBranding } from '../../context/BrandingContext';
+import { useNotification } from '../../context/NotificationContext'; // Import useNotification
+import { sendSystemNotification } from '../../services/cloudService'; // Import sendSystemNotification
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as ReTooltip, Legend } from 'recharts';
+// Add missing imports for CorporateAccount, Branch, and Employee
+import { DailyAttendance, AttendanceStatus, CorporateAccount, Branch, Employee, UserRole } from '../../types';
 
 interface UserAttendanceProps {
   isAdmin?: boolean;
@@ -24,11 +27,12 @@ function haversineDistance(coords1: { lat: number; lng: number; }, coords2: { la
     const R = 6371e3; // metres
 
     const dLat = toRad(coords2.lat - coords1.lat);
+    // Fix: Changed 'lon' to 'lng' as per type definition
     const dLon = toRad(coords2.lng - coords1.lng); 
 
     const lat1 = toRad(coords1.lat);
-    const lat2 = toRad(coords2.lat);
-
+    const lat2 = toRad(coords2.lat); // Changed to coords2.lat
+    
     const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
               Math.cos(lat1) * Math.cos(lat2) *
               Math.sin(dLon / 2) * Math.sin(dLon / 2);
@@ -37,10 +41,53 @@ function haversineDistance(coords1: { lat: number; lng: number; }, coords2: { la
     return R * c; // Distance in meters
 }
 
+// Helper to parse time strings like "09:30 AM" into total minutes from midnight
+const parseTimeToMinutes = (timeString: string): number | null => {
+  if (!timeString) return null;
+  try {
+    const [time, period] = timeString.split(' ');
+    let [hours, minutes] = time.split(':').map(Number);
+    if (period === 'PM' && hours !== 12) hours += 12;
+    if (period === 'AM' && hours === 12) hours = 0;
+    return hours * 60 + minutes;
+  } catch (e) {
+    console.error("Error parsing time string:", timeString, e);
+    return null;
+  }
+};
+
+// Helper to format total minutes into Hh Mm Ss
+const formatDuration = (totalMinutes: number): string => {
+  if (totalMinutes < 0) totalMinutes = 0; // Should not happen with careful calculation
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = Math.round(totalMinutes % 60); // Round minutes for better display
+  return `${hours}h ${minutes}m`;
+};
+
+// Helper to find employee by ID across all storage locations
+const findEmployeeById = (id: string): Employee | undefined => {
+    try {
+      const adminStaff = JSON.parse(localStorage.getItem('staff_data') || '[]');
+      let found = adminStaff.find((e: any) => e.id === id);
+      if (found) return { ...found, corporateId: 'admin' };
+    } catch(e) {}
+
+    try {
+      const corporates = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
+      for (const corp of corporates) {
+          const cStaff = JSON.parse(localStorage.getItem(`staff_data_${corp.email}`) || '[]');
+          const found = cStaff.find((e: any) => e.id === id);
+          if (found) return { ...found, corporateId: corp.email };
+      }
+    } catch(e) {}
+
+    return MOCK_EMPLOYEES.find(e => e.id === id);
+};
 
 const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
   const navigate = useNavigate();
   const { companyName } = useBranding();
+  const { playAlarmSound } = useNotification(); // Use notification context
 
   // Admin View State
   const [viewMode, setViewMode] = useState<'Individual' | 'MusterRoll'>('Individual');
@@ -127,25 +174,6 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
 
   const [loggedInUser, setLoggedInUser] = useState<Employee | null>(null);
 
-  const findEmployeeById = (id: string): Employee | undefined => {
-      try {
-        const adminStaff = JSON.parse(localStorage.getItem('staff_data') || '[]');
-        let found = adminStaff.find((e: any) => e.id === id);
-        if (found) return found;
-      } catch(e) {}
-
-      try {
-        const corporates = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
-        for (const corp of corporates) {
-            const cStaff = JSON.parse(localStorage.getItem(`staff_data_${corp.email}`) || '[]');
-            const found = cStaff.find((e: any) => e.id === id);
-            if (found) return found;
-        }
-      } catch(e) {}
-
-      return MOCK_EMPLOYEES.find(e => e.id === id);
-  };
-
   useEffect(() => {
     if (!isAdmin) {
       const storedSessionId = localStorage.getItem('app_session_id');
@@ -222,15 +250,103 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
   const [locationStatus, setLocationStatus] = useState<Employee['attendanceLocationStatus']>('idle');
   const [currentLocation, setCurrentLocation] = useState<Employee['currentLocation']>(null);
   const [cameraStatus, setCameraStatus] = useState<Employee['cameraPermissionStatus']>('idle');
-  const [isScanningQr, setIsScanningQr] = useState(false);
+  const [isScanningQr, setIsScanningQr] = useState(false); // Not implemented in this iteration
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+
+  // --- ADMIN ATTENDANCE EDIT MODAL STATES ---
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editModalData, setEditModalData] = useState<DailyAttendance | null>(null);
+  const [editEmployeeName, setEditEmployeeName] = useState('');
+  const [editEmployeeId, setEditEmployeeId] = useState('');
 
   // Timer for Employee
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000); 
     return () => clearInterval(timer);
   }, []);
+
+  // Update Check-in/Check-out status and Duration
+  useEffect(() => {
+    if (!selectedEmployee) return;
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const todayRecord = attendanceData.find(d => d.date === todayStr);
+
+    if (todayRecord) {
+      setCheckInTime(todayRecord.checkIn || '--:--');
+      setCheckOutTime(todayRecord.checkOut || '--:--');
+      setIsCheckedIn(!!todayRecord.checkIn && !todayRecord.checkOut);
+
+      if (todayRecord.checkIn && todayRecord.checkOut) {
+        const startMinutes = parseTimeToMinutes(todayRecord.checkIn);
+        const endMinutes = parseTimeToMinutes(todayRecord.checkOut);
+
+        if (startMinutes !== null && endMinutes !== null) {
+          let diff = endMinutes - startMinutes;
+          if (diff < 0) diff += 24 * 60; // Handle overnight
+          const h = Math.floor(diff / 60);
+          const m = diff % 60;
+          setDuration({ hours: h, minutes: m, seconds: 0 }); 
+        } else {
+          setDuration({ hours: 0, minutes: 0, seconds: 0 });
+        }
+      } else {
+        setDuration({ hours: 0, minutes: 0, seconds: 0 });
+      }
+    } else {
+      setIsCheckedIn(false);
+      setCheckInTime('--:--');
+      setCheckOutTime('--:--');
+      setDuration({ hours: 0, minutes: 0, seconds: 0 });
+    }
+  }, [attendanceData, selectedEmployee]);
+
+  // Online/Offline Status Notification for Employee
+  useEffect(() => {
+    if (!isAdmin && selectedEmployee && selectedEmployee.liveTracking) {
+      const sendOnlineStatus = async (status: 'online' | 'offline') => {
+        const timestamp = new Date().toISOString();
+        const notificationMessage = `${selectedEmployee.name} is now ${status}.`;
+        
+        // Update employee's onlineHistory in local storage
+        let staffDataKey = 'staff_data';
+        if (selectedEmployee.corporateId && selectedEmployee.corporateId !== 'admin') {
+            staffDataKey = `staff_data_${selectedEmployee.corporateId}`;
+        }
+        const allStaff = JSON.parse(localStorage.getItem(staffDataKey) || '[]');
+        const updatedStaff = allStaff.map((emp: Employee) => {
+            if (emp.id === selectedEmployee.id) {
+                const currentHistory = emp.onlineHistory || [];
+                return { 
+                    ...emp, 
+                    onlineHistory: [...currentHistory, { timestamp, status }],
+                    isOnline: status === 'online'
+                };
+            }
+            return emp;
+        });
+        localStorage.setItem(staffDataKey, JSON.stringify(updatedStaff));
+        
+        // Send system notification
+        await sendSystemNotification({
+          type: 'online_status',
+          title: `Employee ${status.charAt(0).toUpperCase() + status.slice(1)}`,
+          message: notificationMessage,
+          targetRoles: [UserRole.ADMIN, UserRole.CORPORATE],
+          corporateId: selectedEmployee.corporateId === 'admin' ? null : selectedEmployee.corporateId || null,
+          employeeId: selectedEmployee.id,
+          link: '/admin/tracking' // Link to live tracking page
+        });
+      };
+
+      sendOnlineStatus('online'); // On mount
+
+      return () => {
+        sendOnlineStatus('offline'); // On unmount/cleanup
+      };
+    }
+  }, [isAdmin, selectedEmployee]);
 
   // Fetch attendance data
   useEffect(() => {
@@ -241,13 +357,27 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
     const savedAttendanceKey = `attendance_data_${selectedEmployee.id}_${year}_${month}`;
-    const savedData = localStorage.getItem(savedAttendanceKey);
+    let savedData = localStorage.getItem(savedAttendanceKey);
 
     if (savedData) {
       try {
-        setAttendanceData(JSON.parse(savedData));
+        let parsedData = JSON.parse(savedData);
+        // If loaded data is from a past month, ensure future days are NOT_MARKED
+        const today = new Date();
+        if (year === today.getFullYear() && month === today.getMonth()) {
+            parsedData = parsedData.map((d: DailyAttendance) => {
+                const dayOfMonth = parseInt(d.date.split('-')[2], 10);
+                if (dayOfMonth > today.getDate()) {
+                    return { ...d, status: AttendanceStatus.NOT_MARKED, checkIn: undefined, checkOut: undefined, isLate: false };
+                }
+                return d;
+            });
+        }
+        setAttendanceData(parsedData);
       } catch (e) {
-        setAttendanceData(getEmployeeAttendance(selectedEmployee, year, month));
+        const generatedData = getEmployeeAttendance(selectedEmployee, year, month);
+        localStorage.setItem(savedAttendanceKey, JSON.stringify(generatedData));
+        setAttendanceData(generatedData);
       }
     } else {
       const generatedData = getEmployeeAttendance(selectedEmployee, year, month);
@@ -294,12 +424,34 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
             present: Math.floor(filteredEmployeesForDisplay.length * 0.8),
             absent: Math.floor(filteredEmployeesForDisplay.length * 0.1),
             halfDay: 0,
-            paidLeave: Math.floor(filteredEmployeesForDisplay.length * 0.05),
-            weekOff: 0,
+            paidLeave: 0, // Simplified for MusterRoll
+            weekOff: 0, // Simplified
             late: Math.floor(filteredEmployeesForDisplay.length * 0.05)
         };
     }
   }, [attendanceData, viewMode, filteredEmployeesForDisplay, selectedEmployee]);
+
+  // Total Monthly Duration Calculation for Employee View
+  const totalMonthlyDurationMinutes = useMemo(() => {
+    let totalMinutes = 0;
+    if (selectedEmployee) {
+      attendanceData.forEach(day => {
+        if ((day.status === AttendanceStatus.PRESENT || day.status === AttendanceStatus.HALF_DAY) && day.checkIn && day.checkOut) {
+          const startMinutes = parseTimeToMinutes(day.checkIn);
+          const endMinutes = parseTimeToMinutes(day.checkOut);
+          if (startMinutes !== null && endMinutes !== null) {
+            let diff = endMinutes - startMinutes;
+            if (diff < 0) diff += 24 * 60; // Handle overnight shifts
+            totalMinutes += diff;
+          }
+        }
+      });
+    }
+    return totalMinutes;
+  }, [attendanceData, selectedEmployee]);
+
+  const formattedTotalMonthlyDuration = useMemo(() => formatDuration(totalMonthlyDurationMinutes), [totalMonthlyDurationMinutes]);
+
 
   // Chart Data
   const pieData = [
@@ -346,6 +498,288 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
     setRefreshTrigger(p => p + 1);
   };
 
+  // --- EMPLOYEE PUNCH CARD LOGIC ---
+
+  const getLocation = () => {
+    if (navigator.geolocation) {
+      setLocationStatus('fetching');
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const { latitude, longitude, accuracy } = position.coords;
+          const newLocation = { lat: latitude, lng: longitude, accuracy };
+          setCurrentLocation(newLocation);
+
+          if (employeeBranch && employeeBranch.lat && employeeBranch.lng && employeeBranch.radius) {
+            const distance = haversineDistance(
+              { lat: newLocation.lat, lng: newLocation.lng },
+              { lat: employeeBranch.lat, lng: employeeBranch.lng }
+            );
+
+            if (distance <= employeeBranch.radius) {
+              setLocationStatus('within_geofence');
+            } else {
+              setLocationStatus('outside_geofence');
+              playAlarmSound();
+            }
+          } else {
+            setLocationStatus('granted');
+          }
+        },
+        (error) => {
+          console.error("Geolocation error:", error);
+          if (error.code === error.PERMISSION_DENIED) {
+            setLocationStatus('denied');
+            playAlarmSound();
+          } else {
+            setLocationStatus('idle'); // Or 'error'
+          }
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    } else {
+      setLocationStatus('denied');
+      playAlarmSound();
+    }
+  };
+
+  const requestCameraPermission = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      streamRef.current = stream; // Store stream to stop it later
+      setCameraStatus('granted');
+      stream.getTracks().forEach(track => track.stop()); // Stop the stream immediately if not actually using for capture
+    } catch (error) {
+      console.error("Camera permission error:", error);
+      setCameraStatus('denied');
+      playAlarmSound();
+    }
+  };
+
+  const handlePunch = async () => {
+    if (!selectedEmployee) return;
+
+    const now = new Date();
+    const timeString = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+    const todayStr = now.toISOString().split('T')[0];
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const storageKey = `attendance_data_${selectedEmployee.id}_${year}_${month}`;
+
+    // Get latest attendance data
+    let currentAttendance = JSON.parse(localStorage.getItem(storageKey) || '[]');
+    let todayRecordIndex = currentAttendance.findIndex((d: DailyAttendance) => d.date === todayStr);
+
+    if (todayRecordIndex === -1) {
+      // If no record for today, create a new one (e.g., first punch of the month or new day)
+      currentAttendance.push({
+        date: todayStr,
+        status: AttendanceStatus.NOT_MARKED, // Will be updated below
+        checkIn: undefined,
+        checkOut: undefined,
+        isLate: false,
+      });
+      todayRecordIndex = currentAttendance.length - 1;
+    }
+
+    let updatedRecord = { ...currentAttendance[todayRecordIndex] };
+
+    // --- Permissions Check ---
+    const config = selectedEmployee.attendanceConfig || { gpsGeofencing: false, qrScan: false, manualPunch: true };
+    let canPunch = true;
+    let punchMessage = '';
+    // Fix: Explicitly cast type for notification
+    let notificationType: 'punch_in' | 'punch_out';
+    let notificationTitle: string;
+    let notificationMessage: string;
+
+    if (!isCheckedIn) { // Punch In
+      notificationType = 'punch_in';
+      notificationTitle = 'Employee Punched In';
+
+      if (config.gpsGeofencing) {
+        await getLocation();
+        if (locationStatus === 'denied') {
+          punchMessage = "Cannot Punch In: Geolocation permission denied.";
+          canPunch = false;
+        } else if (locationStatus === 'outside_geofence') {
+          punchMessage = `Cannot Punch In: You are outside the geofenced area for ${employeeBranch?.name || 'your branch'}.`;
+          canPunch = false;
+        }
+      }
+      if (canPunch && config.qrScan) { // This is a placeholder as QR scan logic isn't fully implemented in this UI
+        await requestCameraPermission();
+        if (cameraStatus === 'denied') {
+          punchMessage = "Cannot Punch In: Camera permission denied.";
+          canPunch = false;
+        }
+        // In a real app, QR scan would happen here and validate
+      }
+
+      if (canPunch) {
+        updatedRecord.checkIn = timeString;
+        updatedRecord.status = AttendanceStatus.PRESENT;
+        // Logic to determine if late (e.g., checkInTime > '09:30 AM')
+        updatedRecord.isLate = (parseTimeToMinutes(timeString) || 0) > (parseTimeToMinutes('09:30 AM') || 0); // Check against 9:30 AM
+        setCheckInTime(timeString);
+        setIsCheckedIn(true);
+        notificationMessage = `${selectedEmployee.name} (${selectedEmployee.id}) has punched in at ${timeString}.`;
+      } else {
+        // Display error message to user
+        alert(punchMessage);
+        return;
+      }
+    } else { // Punch Out
+      notificationType = 'punch_out';
+      notificationTitle = 'Employee Punched Out';
+
+      updatedRecord.checkOut = timeString;
+      setCheckOutTime(timeString);
+      setIsCheckedIn(false); // Reset for next day
+      notificationMessage = `${selectedEmployee.name} (${selectedEmployee.id}) has punched out at ${timeString}.`;
+    }
+
+    currentAttendance[todayRecordIndex] = updatedRecord;
+    localStorage.setItem(storageKey, JSON.stringify(currentAttendance));
+    setAttendanceData(currentAttendance); // Update local state
+    setRefreshTrigger(prev => prev + 1); // Trigger refresh for calendar/stats
+
+    // Send Notification
+    await sendSystemNotification({
+        type: notificationType, 
+        title: notificationTitle,
+        message: notificationMessage,
+        targetRoles: [UserRole.ADMIN, UserRole.CORPORATE], // Send to relevant roles
+        corporateId: selectedEmployee.corporateId === 'admin' ? null : selectedEmployee.corporateId || null,
+        employeeId: selectedEmployee.id,
+        link: '/admin/attendance' // Link to admin attendance page
+    });
+  };
+
+  // --- UI Location/Camera Status Display ---
+    let locationDisplay = "Location Unavailable";
+    let locationColor = "text-gray-500";
+    let locationIcon = <MapPin className="w-3 h-3" />;
+
+    switch (locationStatus) {
+        case 'idle':
+        case 'fetching':
+            locationDisplay = "Fetching Location...";
+            locationColor = "text-blue-500";
+            locationIcon = <Loader2 className="w-3 h-3 animate-spin" />;
+            break;
+        case 'granted':
+            locationDisplay = "Location Granted";
+            locationColor = "text-emerald-500";
+            locationIcon = <CheckCircle className="w-3 h-3" />;
+            break;
+        case 'within_geofence':
+            locationDisplay = "Within Geofence";
+            locationColor = "text-emerald-500";
+            locationIcon = <CheckCircle className="w-3 h-3" />;
+            break;
+        case 'outside_geofence':
+            locationDisplay = `Outside Geofence (${employeeBranch?.name})`;
+            locationColor = "text-red-500";
+            locationIcon = <AlertCircle className="w-3 h-3" />;
+            break;
+        case 'denied':
+            locationDisplay = "Location Denied";
+            locationColor = "text-red-500";
+            locationIcon = <XCircle className="w-3 h-3" />;
+            break;
+    }
+
+    let cameraDisplay = "Camera Unavailable";
+    let cameraColor = "text-gray-500";
+    let cameraIcon = <Camera className="w-3 h-3" />;
+
+    switch (cameraStatus) {
+        case 'idle':
+            cameraDisplay = "Camera Status Idle";
+            break;
+        case 'granted':
+            cameraDisplay = "Camera Granted";
+            cameraColor = "text-emerald-500";
+            cameraIcon = <CheckCircle className="w-3 h-3" />;
+            break;
+        case 'denied':
+            cameraDisplay = "Camera Denied";
+            cameraColor = "text-red-500";
+            cameraIcon = <XCircle className="w-3 h-3" />;
+            break;
+    }
+
+  // --- ADMIN ATTENDANCE EDIT MODAL LOGIC ---
+  const handleDateClickForAdmin = (day: DailyAttendance) => {
+    if (!selectedEmployee) return;
+    setEditModalData(day);
+    setEditEmployeeName(selectedEmployee.name);
+    setEditEmployeeId(selectedEmployee.id);
+    setIsEditModalOpen(true);
+  };
+
+  const handleEditModalChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    if (!editModalData) return;
+    const { name, value, type, checked } = e.target as HTMLInputElement;
+
+    if (name === 'isLate') {
+        setEditModalData(prev => prev ? { ...prev, isLate: checked } : null);
+    } else {
+        setEditModalData(prev => prev ? { ...prev, [name]: value } : null);
+    }
+  };
+
+  const saveEditedAttendance = async () => {
+    if (!editModalData || !selectedEmployee) return;
+
+    const year = new Date(editModalData.date).getFullYear();
+    const month = new Date(editModalData.date).getMonth();
+    const storageKey = `attendance_data_${selectedEmployee.id}_${year}_${month}`;
+
+    const currentAttendance: DailyAttendance[] = JSON.parse(localStorage.getItem(storageKey) || '[]');
+    const recordIndex = currentAttendance.findIndex(d => d.date === editModalData.date);
+
+    if (recordIndex !== -1) {
+        currentAttendance[recordIndex] = editModalData;
+    } else {
+        currentAttendance.push(editModalData);
+    }
+
+    localStorage.setItem(storageKey, JSON.stringify(currentAttendance));
+    setAttendanceData(currentAttendance);
+    setRefreshTrigger(prev => prev + 1); // Force calendar refresh
+    setIsEditModalOpen(false);
+
+    // Send Notification for manual edit
+    const message = `Attendance for ${selectedEmployee.name} (${selectedEmployee.id}) on ${editModalData.date} manually adjusted. New status: ${editModalData.status}, In: ${editModalData.checkIn || '-'}, Out: ${editModalData.checkOut || '-'}.`;
+    await sendSystemNotification({
+        type: 'system', // or 'attendance_edit' if a new type is added
+        title: 'Attendance Manually Edited',
+        message: message,
+        targetRoles: [UserRole.ADMIN, UserRole.CORPORATE], // Notify admins and corporate owners
+        corporateId: selectedEmployee.corporateId === 'admin' ? null : selectedEmployee.corporateId || null,
+        employeeId: selectedEmployee.id,
+        link: '/admin/attendance' // Link to admin attendance page
+    });
+  };
+
+  const getDurationString = (checkIn?: string, checkOut?: string) => {
+    if (!checkIn || !checkOut) return null;
+    try {
+        const startMinutes = parseTimeToMinutes(checkIn);
+        const endMinutes = parseTimeToMinutes(checkOut);
+        if (startMinutes === null || endMinutes === null) return null;
+
+        let diff = endMinutes - startMinutes;
+        if (diff < 0) diff += 24 * 60; // Handle overnight
+        if (diff <= 0) return null;
+        const h = Math.floor(diff / 60);
+        const m = diff % 60;
+        return `${h}h ${m}m`;
+    } catch (e) { return null; }
+  };
+
+
   // --- ADMIN RENDER ---
   if (isAdmin) {
       return (
@@ -360,6 +794,19 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between">
                  {/* Left Filters */}
                  <div className="flex flex-wrap gap-3 items-center flex-1">
+                    {/* Corporate Filter (Super Admin Only) */}
+                    {isSuperAdmin && (
+                        <select 
+                            value={filterCorporate}
+                            onChange={(e) => { setFilterCorporate(e.target.value); setFilterBranch('All'); }}
+                            className="px-4 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 min-w-[200px]"
+                        >
+                            <option value="All">All Corporates</option>
+                            <option value="admin">Head Office</option>
+                            {corporatesList.map(c => <option key={c.id} value={c.email}>{c.companyName}</option>)}
+                        </select>
+                    )}
+
                     {/* Branch Filter */}
                     <select 
                         value={filterBranch}
@@ -368,7 +815,7 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
                     >
                         <option value="All">All Branches</option>
                         {allBranchesList
-                            .filter(b => isSuperAdmin ? (filterCorporate === 'All' || b.owner === filterCorporate) : true)
+                            .filter(b => isSuperAdmin ? (filterCorporate === 'All' || b.owner === filterCorporate) : b.owner === currentSessionId)
                             .map((b, i) => <option key={i} value={b.name}>{b.name}</option>)
                         }
                     </select>
@@ -384,6 +831,7 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
                             }}
                             className="px-4 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 min-w-[250px]"
                         >
+                            <option value="All">Select Employee</option>
                             {filteredEmployeesForDisplay.map(e => <option key={e.id} value={e.id}>{e.name} ({e.role})</option>)}
                         </select>
                     )}
@@ -395,13 +843,13 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
                      <div className="flex bg-gray-100 p-1 rounded-lg">
                         <button 
                             onClick={() => setPeriodType('Daily')}
-                            className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${periodType === 'Daily' ? 'bg-white shadow text-gray-800' : 'text-gray-500'}`}
+                            className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${periodType === 'Daily' ? 'bg-white dark:bg-gray-600 shadow text-gray-800' : 'text-gray-500 dark:text-gray-400'}`}
                         >
                             Daily
                         </button>
                         <button 
                             onClick={() => setPeriodType('Monthly')}
-                            className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${periodType === 'Monthly' ? 'bg-white shadow text-gray-800' : 'text-gray-500'}`}
+                            className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${periodType === 'Monthly' ? 'bg-white dark:bg-gray-600 shadow text-gray-800' : 'text-gray-500 dark:text-gray-400'}`}
                         >
                             Monthly
                         </button>
@@ -421,7 +869,7 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
                                     setCurrentDate(new Date(y, m - 1, 1));
                                 }
                             }}
-                            className="pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white min-w-[160px]"
+                            className="pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm outline-none bg-white min-w-[160px]"
                         />
                         <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
                      </div>
@@ -510,7 +958,7 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
                             <div className="flex justify-between items-start">
                                 <div>
                                     <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">On Leave</p>
-                                    <h3 className="text-2xl font-bold text-blue-600">{stats.paidLeave}</h3>
+                                    <h3 className="2xl font-bold text-blue-600">{stats.paidLeave}</h3>
                                 </div>
                                 <Plane className="w-5 h-5 text-blue-500 opacity-20" />
                             </div>
@@ -597,9 +1045,10 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
                      {viewMode === 'Individual' ? (
                          selectedEmployee ? (
                              <AttendanceCalendar 
-                                data={attendanceData} 
-                                stats={stats} 
-                                showStats={false} // Stats already shown in top dashboard
+                                 data={attendanceData} 
+                                 stats={stats} 
+                                 showStats={false} // Stats already shown in top dashboard
+                                 onDateClick={handleDateClickForAdmin} // Add click handler for admin
                              />
                          ) : (
                              <div className="text-center py-10 text-gray-400">Select an employee to view calendar</div>
@@ -646,6 +1095,96 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
                      )}
                  </div>
              </div>
+
+            {/* Admin Attendance Edit Modal */}
+            {isEditModalOpen && editModalData && selectedEmployee && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-md animate-in fade-in zoom-in duration-200">
+                        <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-2xl">
+                            <h3 className="font-bold text-gray-800 text-xl">Edit Attendance</h3>
+                            <button onClick={() => setIsEditModalOpen(false)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5"/></button>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <div className="flex items-center gap-3 bg-blue-50 p-3 rounded-lg border border-blue-100">
+                                <User className="w-5 h-5 text-blue-600" />
+                                <div>
+                                    <p className="text-sm font-bold text-blue-800">{editEmployeeName}</p>
+                                    <p className="text-xs text-blue-600">on {new Date(editModalData.date).toLocaleDateString()}</p>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                                <select
+                                    id="status"
+                                    name="status"
+                                    value={editModalData.status}
+                                    onChange={handleEditModalChange}
+                                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
+                                >
+                                    {Object.values(AttendanceStatus).map(statusOption => (
+                                        <option key={statusOption} value={statusOption}>{statusOption}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label htmlFor="checkIn" className="block text-sm font-medium text-gray-700 mb-1">Check-in Time</label>
+                                    <input
+                                        type="time"
+                                        id="checkIn"
+                                        name="checkIn"
+                                        value={editModalData.checkIn ? new Date(`2000-01-01 ${editModalData.checkIn}`).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : ''}
+                                        onChange={(e) => {
+                                            const newTime = e.target.value;
+                                            setEditModalData(prev => prev ? { ...prev, checkIn: newTime ? new Date(`2000-01-01T${newTime}`).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : undefined } : null);
+                                        }}
+                                        className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                                    />
+                                </div>
+                                <div>
+                                    <label htmlFor="checkOut" className="block text-sm font-medium text-gray-700 mb-1">Check-out Time</label>
+                                    <input
+                                        type="time"
+                                        id="checkOut"
+                                        name="checkOut"
+                                        value={editModalData.checkOut ? new Date(`2000-01-01 ${editModalData.checkOut}`).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : ''}
+                                        onChange={(e) => {
+                                            const newTime = e.target.value;
+                                            setEditModalData(prev => prev ? { ...prev, checkOut: newTime ? new Date(`2000-01-01T${newTime}`).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : undefined } : null);
+                                        }}
+                                        className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                                    />
+                                </div>
+                            </div>
+                            
+                            <div className="flex justify-between items-center bg-gray-100 p-3 rounded-lg border border-gray-200">
+                                <label htmlFor="isLate" className="text-sm font-medium text-gray-700">Mark as Late</label>
+                                <input
+                                    type="checkbox"
+                                    id="isLate"
+                                    name="isLate"
+                                    checked={editModalData.isLate || false}
+                                    onChange={handleEditModalChange}
+                                    className="h-4 w-4 text-emerald-600 focus:ring-emerald-500 border-gray-300 rounded"
+                                />
+                            </div>
+
+                            <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100 flex justify-between items-center">
+                                <span className="font-bold text-emerald-800 text-sm">Working Duration:</span>
+                                <span className="font-bold text-emerald-600 text-lg">{getDurationString(editModalData.checkIn, editModalData.checkOut) || '--:--'}</span>
+                            </div>
+                        </div>
+                        <div className="p-5 border-t border-gray-100 bg-gray-50 flex justify-end gap-3 rounded-b-2xl">
+                            <button onClick={() => setIsEditModalOpen(false)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-white transition-colors">Cancel</button>
+                            <button onClick={saveEditedAttendance} className="px-6 py-2 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 shadow-md transition-colors flex items-center gap-2">
+                                <Save className="w-4 h-4" /> Save Changes
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
           </div>
       );
   }
@@ -654,20 +1193,23 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
   if (selectedEmployee) {
     const config = selectedEmployee.attendanceConfig || { gpsGeofencing: false, qrScan: false, manualPunch: true };
     
-    let locationDisplay = "Location Unavailable";
-    let locationColor = "text-gray-500";
-    let locationIcon = <MapPin className="w-3 h-3" />;
-
-    // ... (Employee Location Status Logic from previous version) ...
-    // Keeping it simple for brevity as the main request was Admin Dashboard
-    // In real implementation, include the geolocation effect from previous code
-
+    // Duration display
+    const formattedDuration = duration.hours > 0 || duration.minutes > 0 
+        ? `${duration.hours}h ${duration.minutes}m` 
+        : '';
+    
     return (
       <div className="space-y-6 max-w-7xl mx-auto">
         <div className="flex justify-between items-end">
-          <div>
+          <div className="flex items-center gap-3"> {/* Added gap for refresh button */}
             <h2 className="text-2xl font-bold text-gray-800">My Attendance</h2>
-            <p className="text-gray-500">Track your daily check-ins and monthly analysis</p>
+            <button 
+                onClick={() => setRefreshTrigger(prev => prev + 1)}
+                className="p-2 rounded-full text-gray-500 hover:bg-gray-100 transition-colors"
+                title="Refresh Attendance"
+            >
+                <RefreshCcw className="w-5 h-5" />
+            </button>
           </div>
           <div className="text-right hidden sm:block">
             <p className="text-sm text-gray-500">Today is</p>
@@ -682,18 +1224,49 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
                <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-emerald-500 to-teal-500"></div>
                <div className="mb-6">
                   <div className="text-4xl font-mono font-bold text-gray-800 mb-1">
-                    {currentTime.toLocaleTimeString('en-US', { hour12: false })}
+                    {currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
                   </div>
-                  <p className={`text-xs uppercase tracking-widest flex items-center justify-center gap-1 ${locationColor}`}>
-                    {locationIcon} {locationDisplay}
-                  </p>
+                  <div className="flex flex-col items-center justify-center gap-1 mt-2">
+                    <p className={`text-xs uppercase tracking-widest flex items-center gap-1 ${locationColor}`}>
+                      {locationIcon} {locationDisplay}
+                    </p>
+                    {config.qrScan && ( // Only show camera status if QR scan is enabled
+                        <p className={`text-xs uppercase tracking-widest flex items-center gap-1 ${cameraColor}`}>
+                            {cameraIcon} {cameraDisplay}
+                        </p>
+                    )}
+                  </div>
                </div>
                
                {/* PUNCH BUTTONS */}
-               {/* ... (Keep existing punch button logic) ... */}
-               <div className="w-full h-40 bg-gray-100 rounded-xl flex items-center justify-center text-gray-400 font-bold">
-                   PUNCH CARD UI
+               {/* Replaced PUNCH CARD UI with a Fingerprint Scanner UI */}
+               <div className="w-full flex flex-col items-center justify-center space-y-4">
+                 <div className="relative w-32 h-32 flex items-center justify-center">
+                   <div 
+                     className={`absolute inset-0 rounded-full flex items-center justify-center animate-pulse-slow opacity-60 ${isCheckedIn ? 'bg-red-100' : 'bg-emerald-100'}`}
+                     aria-hidden="true"
+                   ></div>
+                   <div 
+                     onClick={handlePunch} // Attach handler here
+                     className={`relative z-10 w-28 h-28 rounded-full flex items-center justify-center text-white cursor-pointer shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105
+                     ${isCheckedIn ? 'bg-red-500 hover:bg-red-600' : 'bg-emerald-500 hover:bg-emerald-600'}`}
+                     role="button"
+                     tabIndex={0}
+                     aria-label={isCheckedIn ? "Punch Out" : "Punch In"}
+                   >
+                     <Fingerprint className="w-16 h-16" />
+                   </div>
+                 </div>
+                 <p className="text-sm font-semibold text-gray-700">
+                   {isCheckedIn ? 'Tap to Punch Out' : 'Tap to Punch In'}
+                 </p>
+                 <div className="text-xs text-gray-500">
+                   {checkInTime !== '--:--' && <p>Check-in: {checkInTime}</p>}
+                   {checkOutTime !== '--:--' && <p>Check-out: {checkOutTime}</p>}
+                   {formattedDuration && <p>Duration: {formattedDuration}</p>}
+                 </div>
                </div>
+
              </div>
           </div>
 
@@ -709,7 +1282,22 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
                    <p className="text-xs text-gray-500 font-bold uppercase">Absent</p>
                    <p className="text-2xl font-bold text-gray-800 mt-2">{stats.absent}</p>
                 </div>
-                {/* ... other stats ... */}
+                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                   <p className="text-xs text-gray-500 font-bold uppercase">Half Day</p>
+                   <p className="text-2xl font-bold text-gray-800 mt-2">{stats.halfDay}</p>
+                </div>
+                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                   <p className="text-xs text-gray-500 font-bold uppercase">On Leave</p>
+                   <p className="text-2xl font-bold text-gray-800 mt-2">{stats.paidLeave}</p>
+                </div>
+                {/* NEW: Total Monthly Hours Card */}
+                <div className="col-span-2 bg-gradient-to-br from-indigo-500 to-purple-600 p-4 rounded-xl shadow-sm text-white flex items-center justify-between">
+                    <div>
+                        <p className="text-sm font-medium text-indigo-100">Total Monthly Hours</p>
+                        <p className="text-2xl font-bold mt-1">{formattedTotalMonthlyDuration}</p>
+                    </div>
+                    <Timer className="w-8 h-8 text-indigo-200 opacity-70" />
+                </div>
              </div>
 
              {/* Analysis Chart */}
@@ -744,7 +1332,10 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
         
         {/* Calendar */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-             <AttendanceCalendar data={attendanceData} stats={stats} />
+             <AttendanceCalendar 
+                                 data={attendanceData} 
+                                 stats={stats} 
+                             />
         </div>
       </div>
     );

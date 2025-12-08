@@ -2,6 +2,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Loader2, Settings, Users, RefreshCw, Map as MapIcon, ExternalLink } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { Employee } from '../../types'; // Import Employee type
 
 declare global {
   interface Window {
@@ -33,7 +34,7 @@ const LiveTracking: React.FC = () => {
 
   // Function to load staff data
   const refreshLocations = () => {
-      let allStaff: any[] = [];
+      let allStaff: Employee[] = [];
 
       if (isSuperAdmin) {
          // Load from all sources
@@ -41,8 +42,8 @@ const LiveTracking: React.FC = () => {
             const adminStaff = JSON.parse(localStorage.getItem('staff_data') || '[]');
             allStaff = [...adminStaff];
             
-            const corps = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
-            corps.forEach((c: any) => {
+            const corporates = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
+            corporates.forEach((c: any) => {
                 const cStaff = JSON.parse(localStorage.getItem(`staff_data_${c.email}`) || '[]');
                 allStaff = [...allStaff, ...cStaff];
             });
@@ -54,14 +55,25 @@ const LiveTracking: React.FC = () => {
          } catch(e) { console.error("Error loading staff", e); }
       }
 
-      // Filter for those with location data
-      const activeStaff = allStaff.filter((s: any) => s.currentLocation && s.currentLocation.lat).map((s: any) => ({
+      // Filter for those with location data AND check latest online status
+      const activeStaff = allStaff.filter((s: Employee) => {
+          if (!s.currentLocation || !s.currentLocation.lat) return false;
+          // Check if the latest onlineHistory entry is 'online'
+          const latestStatus = s.onlineHistory && s.onlineHistory.length > 0
+            ? s.onlineHistory[s.onlineHistory.length - 1].status
+            : 'offline';
+          
+          return s.liveTracking && latestStatus === 'online';
+      }).map((s: Employee) => ({
           id: s.id,
           name: s.name,
           role: s.role,
-          lat: s.currentLocation.lat,
-          lng: s.currentLocation.lng,
-          lastUpdate: 'Live'
+          lat: s.currentLocation?.lat,
+          lng: s.currentLocation?.lng,
+          lastUpdate: s.onlineHistory && s.onlineHistory.length > 0
+            ? new Date(s.onlineHistory[s.onlineHistory.length - 1].timestamp).toLocaleTimeString()
+            : 'N/A',
+          isOnline: true // Based on the filter, they are online
       }));
       
       // STRICTLY NO MOCK DATA. If empty, it's empty.
@@ -169,7 +181,7 @@ const LiveTracking: React.FC = () => {
               <div style="padding: 5px;">
                 <h3 style="margin:0; font-weight:bold; font-size: 14px;">${emp.name}</h3>
                 <p style="margin:2px 0; font-size:12px; color:gray;">${emp.role}</p>
-                <p style="margin:0; font-size:10px; color: green;">● ${emp.lastUpdate}</p>
+                <p style="margin:0; font-size:10px; color: green;">● ${emp.isOnline ? 'Online' : 'Offline'} (${emp.lastUpdate})</p>
               </div>
             `
         });
@@ -278,7 +290,7 @@ const LiveTracking: React.FC = () => {
                                 <div className="w-2 h-2 rounded-full bg-blue-500"></div>
                                 <span className="font-medium text-gray-700">{emp.name}</span>
                              </div>
-                             <span className="text-[10px] text-gray-400">{emp.lastUpdate}</span>
+                             <span className="text-[10px] text-gray-400">{emp.isOnline ? 'Online' : 'Offline'} ({emp.lastUpdate})</span>
                           </div>
                        ))}
                     </div>

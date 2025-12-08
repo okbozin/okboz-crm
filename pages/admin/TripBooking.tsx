@@ -15,6 +15,17 @@ import { Trip } from '../../types';
 
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#6366f1'];
 
+// Helper function to format date from YYYY-MM-DD to DD-MM-YYYY
+const formatDateForDisplay = (isoDateString: string): string => {
+  if (!isoDateString) return '';
+  try {
+    const [year, month, day] = isoDateString.split('-');
+    return `${day}-${month}-${year}`;
+  } catch (e) {
+    return isoDateString; // Fallback if format is unexpected
+  }
+};
+
 const TripEarning: React.FC = () => {
   const sessionId = localStorage.getItem('app_session_id') || 'admin';
   const isSuperAdmin = sessionId === 'admin';
@@ -380,7 +391,8 @@ const TripEarning: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
     if (window.confirm("Delete this trip record?")) {
       setTrips(prev => prev.filter(t => t.id !== id));
     }
@@ -419,7 +431,7 @@ const TripEarning: React.FC = () => {
         const percent = base > 0 ? (commBase / base) * 100 : 0;
         
         return [
-            t.tripId, t.date, t.ownerName || '-', t.branch, t.bookingType, t.userName, t.driverName || '-', 
+            t.tripId, formatDateForDisplay(t.date), t.ownerName || '-', t.branch, t.bookingType, t.userName, t.driverName || '-', 
             `${t.tripCategory} - ${t.transportType}`, `${percent.toFixed(1)}%`, t.adminCommission, t.totalPrice, t.bookingStatus
         ].map(escapeCsv);
     });
@@ -747,7 +759,7 @@ const TripEarning: React.FC = () => {
                     <tr key={trip.id} className="hover:bg-gray-50 transition-colors">
                        <td className="px-6 py-4">
                           <div className="font-bold text-gray-900">{trip.tripId}</div>
-                          <div className="text-xs text-gray-500">{trip.date}</div>
+                          <div className="text-xs text-gray-500">{formatDateForDisplay(trip.date)}</div>
                        </td>
                        {isSuperAdmin && (
                            <td className="px-6 py-4">
@@ -795,7 +807,7 @@ const TripEarning: React.FC = () => {
                        <td className="px-6 py-4 text-right">
                           <div className="flex items-center justify-end gap-2">
                              <button onClick={() => handleEdit(trip)} className="text-gray-400 hover:text-emerald-600 p-1 rounded hover:bg-emerald-50"><Edit2 className="w-4 h-4"/></button>
-                             <button onClick={() => handleDelete(trip.id)} className="text-gray-400 hover:text-red-600 p-1 rounded hover:bg-red-50"><Trash2 className="w-4 h-4"/></button>
+                             <button onClick={(e) => handleDelete(trip.id, e)} className="text-gray-400 hover:text-red-600 p-1 rounded hover:bg-red-50"><Trash2 className="w-4 h-4"/></button>
                           </div>
                        </td>
                     </tr>

@@ -64,7 +64,8 @@ export interface Employee {
   children?: number;
   idProof1Url?: string; 
   idProof2Url?: string; 
-  onlineHistory?: { timestamp: string; status: 'online' | 'offline'; }[];
+  onlineHistory?: { timestamp: string; status: 'online' | 'offline'; }[]; // Updated type
+  isOnline?: boolean; // NEW: Explicit online status
 }
 
 export interface DailyAttendance {
@@ -120,6 +121,13 @@ export type OutstationSubType = 'RoundTrip' | 'OneWay';
 export type VehicleType = 'Sedan' | 'SUV';
 export type EnquiryCategory = 'Transport' | 'General';
 
+// NEW: Shift Interface for Employee Settings
+export interface Shift {
+  id: number;
+  name: string;
+  start: string; // e.g., "09:00 AM"
+  end: string;   // e.g., "06:00 PM"
+}
 
 export interface Enquiry {
   id: string;
@@ -216,7 +224,8 @@ export interface SalaryAdvanceRequest {
 // NEW: Notification Interface
 export interface Notification {
   id: string;
-  type: 'system' | 'login' | 'leave_request' | 'advance_request' | 'task_assigned' | 'custom_message' | 'new_enquiry' | 'security';
+  // Fix: Added 'punch_in' and 'punch_out' to the type enum
+  type: 'system' | 'login' | 'leave_request' | 'advance_request' | 'task_assigned' | 'custom_message' | 'new_enquiry' | 'security' | 'punch_in' | 'punch_out' | 'task_created' | 'online_status'; // Added 'task_created' and 'online_status'
   title: string;
   message: string;
   timestamp: string; 
