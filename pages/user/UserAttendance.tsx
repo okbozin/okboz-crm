@@ -247,27 +247,36 @@ export default function UserAttendance({ isAdmin = false }: UserAttendanceProps)
   // --- BULK ACTION HANDLER ---
   const handleBulkAction = (status: AttendanceStatus) => {
       if (!selectedEmployee) return;
-      if (!window.confirm(`Mark ${selectedEmployee.name} as ${status === AttendanceStatus.PRESENT ? 'PRESENT' : 'ABSENT'} for all applicable days in ${currentMonthYearLabel}?`)) return;
+      
+      const actionName = status === AttendanceStatus.PRESENT ? 'PRESENT' : 'ABSENT';
+      if (!window.confirm(`Mark ${selectedEmployee.name} as ${actionName} for all applicable days in ${currentMonthYearLabel} (up to today)?`)) return;
 
       const year = currentDate.getFullYear();
       const month = currentDate.getMonth();
       const key = `attendance_data_${selectedEmployee.id}_${year}_${month}`;
 
+      // Get "Today" for comparison to prevent future marking
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
       // Use the current attendanceData as the base to ensure we respect existing Week Offs and Joining Dates
-      // This is safer than regenerating the loop manually and potentially mismatching the logic
       const updatedData = attendanceData.map(day => {
-          // 1. Skip Week Offs (Don't overwrite weekends)
+          const currentDayDate = new Date(day.date);
+          currentDayDate.setHours(0, 0, 0, 0);
+
+          // 1. Future Check: Skip if date is after today
+          if (currentDayDate > today) return day;
+
+          // 2. Skip Week Offs (Don't overwrite weekends)
           if (day.status === AttendanceStatus.WEEK_OFF) return day;
 
-          // 2. Skip Pre-Joining Dates (Don't mark absent/present before they joined)
-          const currentDayDate = new Date(day.date);
+          // 3. Skip Pre-Joining Dates (Don't mark absent/present before they joined)
           const joiningDate = new Date(selectedEmployee.joiningDate);
           joiningDate.setHours(0,0,0,0);
-          currentDayDate.setHours(0,0,0,0);
           
           if (currentDayDate < joiningDate) return day;
 
-          // 3. Apply New Status
+          // 4. Apply New Status
           if (status === AttendanceStatus.PRESENT) {
               return {
                   ...day,
