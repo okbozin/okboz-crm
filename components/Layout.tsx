@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, MapPin, Calendar, DollarSign, Briefcase, Menu, X, LogOut, UserCircle, Building, Settings, Target, CreditCard, ClipboardList, ReceiptIndianRupee, Navigation, Car, Building2, PhoneIncoming, GripVertical, Edit2, Check, FileText, Layers, PhoneCall, Bus, Bell, Sun, Moon, Monitor, Mail, UserCog, CarFront, BellRing, BarChart3, Map, Headset, BellDot, Pencil, Lock } from 'lucide-react';
+import { LayoutDashboard, Users, MapPin, Calendar, DollarSign, Briefcase, Menu, X, LogOut, UserCircle, Building, Settings, Target, CreditCard, ClipboardList, ReceiptIndianRupee, Navigation, Car, Building2, PhoneIncoming, GripVertical, Edit2, Check, FileText, Layers, PhoneCall, Bus, Bell, Sun, Moon, Monitor, Mail, UserCog, CarFront, BellRing, BarChart3, Map, Headset, BellDot, Pencil, Lock, Wallet } from 'lucide-react';
 import { UserRole, Enquiry, CorporateAccount, Employee } from '../types';
 import { useBranding } from '../context/BrandingContext';
 import { useTheme } from '../context/ThemeContext';
@@ -31,7 +31,8 @@ const MASTER_ADMIN_LINKS = [
   { id: 'documents', path: '/admin/documents', label: 'Documents', icon: FileText },
   { id: 'vendors', path: '/admin/vendors', label: 'Vendor Attachment', icon: CarFront },
   { id: 'payroll', path: '/admin/payroll', label: 'Payroll', icon: DollarSign },
-  { id: 'finance-and-expenses', path: '/admin/finance-and-expenses', label: 'Finance & Expenses', icon: CreditCard }, 
+  { id: 'finance-and-expenses', path: '/admin/finance-and-expenses', label: 'Finance & Expenses', icon: CreditCard },
+  { id: 'admin-expenses', path: '/admin/admin-expenses', label: 'Admin Expenses', icon: Wallet }, // Added Duplicate Tab
   { id: 'email-marketing', path: '/admin/email-marketing', label: 'Email Marketing', icon: Mail },
   { id: 'corporate', path: '/admin/corporate', label: 'Corporate', icon: Building2 },
   { id: 'settings', path: '/admin/settings', label: 'Settings', icon: Settings },
@@ -248,6 +249,7 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
     if (link.id === 'employee-settings' && role === UserRole.CORPORATE) return false;
     if (link.id === 'settings' && role === UserRole.CORPORATE) return false;
     if (link.id === 'finance-and-expenses' && role === UserRole.EMPLOYEE) return false;
+    if (link.id === 'admin-expenses' && role === UserRole.EMPLOYEE) return false; // Hide from employees
     if (link.id === 'cms' && role !== UserRole.ADMIN) return false;
     return true;
   });

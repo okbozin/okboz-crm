@@ -118,6 +118,7 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
   const [showSettings, setShowSettings] = useState(false);
   const [settingsVehicleType, setSettingsVehicleType] = useState<'Sedan' | 'SUV'>('Sedan');
   const [showAddPackage, setShowAddPackage] = useState(false);
+  const [editingPackageId, setEditingPackageId] = useState<string | null>(null);
   const [newPackage, setNewPackage] = useState({ name: '', hours: '', km: '', priceSedan: '', priceSuv: '' });
 
   const [pricing, setPricing] = useState<Record<'Sedan' | 'SUV', PricingRules>>(() => {
@@ -187,10 +188,61 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
   const [isMapReady, setIsMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
 
-  // Initialize Maps
+  // --- Google Maps Script Loader ---
   useEffect(() => {
+    // 1. Check global failure flag
+    if (window.gm_authFailure_detected) {
+      setMapError("Google Maps Error: Billing is not enabled. Please enable billing in Google Cloud Console.");
+      return;
+    }
+    // 2. Handle Missing API Key
+    const apiKey = localStorage.getItem('maps_api_key');
+    if (!apiKey) {
+      setMapError("API Key is missing. Add in Settings > Integrations.");
+      return;
+    }
+    // 3. Global Auth Failure Handler
+    const originalAuthFailure = window.gm_authFailure;
+    window.gm_authFailure = () => {
+      window.gm_authFailure_detected = true;
+      setMapError("Google Maps Error: Billing not enabled. Please enable billing in Google Cloud Console.");
+      if (originalAuthFailure) originalAuthFailure();
+    };
+
+    // 4. Validate Existing Script
+    const scriptId = 'google-maps-script';
+    let script = document.getElementById(scriptId) as HTMLScriptElement;
+
+    // Check if script is already fully loaded AND includes the 'places' library
     if (window.google && window.google.maps && window.google.maps.places) {
       setIsMapReady(true);
+      return;
+    }
+
+    if (!script) {
+        script = document.createElement('script');
+        script.id = scriptId;
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`; // Ensure libraries=places
+        script.async = true;
+        script.defer = true;
+        script.onload = () => {
+            if (window.google && window.google.maps && window.google.maps.places) {
+              setIsMapReady(true);
+            } else {
+              setMapError("Google Maps 'places' library failed to load.");
+            }
+        };
+        script.onerror = () => setMapError("Network error: Failed to load Google Maps script.");
+        document.head.appendChild(script);
+    } else {
+        script.addEventListener('load', () => {
+          if (window.google && window.google.maps && window.google.maps.places) {
+            setIsMapReady(true);
+          }
+        });
+        if (window.google && window.google.maps && window.google.maps.places) {
+            setIsMapReady(true);
+        }
     }
   }, []);
 
@@ -321,19 +373,45 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
     }));
   };
 
-  const handleAddPackage = () => {
+  const handleSavePackage = () => {
     if (!newPackage.name || !newPackage.priceSedan) return;
-    const pkg: RentalPackage = {
-      id: `pkg-${Date.now()}`,
-      name: newPackage.name,
-      hours: parseFloat(newPackage.hours) || 0,
-      km: parseFloat(newPackage.km) || 0,
-      priceSedan: parseFloat(newPackage.priceSedan) || 0,
-      priceSuv: parseFloat(newPackage.priceSuv) || 0,
-    };
-    setRentalPackages([...rentalPackages, pkg]);
+    
+    if (editingPackageId) {
+        setRentalPackages(prev => prev.map(p => p.id === editingPackageId ? {
+            ...p,
+            name: newPackage.name,
+            hours: parseFloat(newPackage.hours.toString()) || 0,
+            km: parseFloat(newPackage.km.toString()) || 0,
+            priceSedan: parseFloat(newPackage.priceSedan.toString()) || 0,
+            priceSuv: parseFloat(newPackage.priceSuv.toString()) || 0,
+        } : p));
+        setEditingPackageId(null);
+    } else {
+        const pkg: RentalPackage = {
+            id: `pkg-${Date.now()}`,
+            name: newPackage.name,
+            hours: parseFloat(newPackage.hours.toString()) || 0,
+            km: parseFloat(newPackage.km.toString()) || 0,
+            priceSedan: parseFloat(newPackage.priceSedan.toString()) || 0,
+            priceSuv: parseFloat(newPackage.priceSuv.toString()) || 0,
+        };
+        setRentalPackages([...rentalPackages, pkg]);
+    }
+    
     setShowAddPackage(false);
     setNewPackage({ name: '', hours: '', km: '', priceSedan: '', priceSuv: '' });
+  };
+
+  const handleEditPackage = (pkg: RentalPackage) => {
+      setNewPackage({
+          name: pkg.name,
+          hours: pkg.hours.toString(),
+          km: pkg.km.toString(),
+          priceSedan: pkg.priceSedan.toString(),
+          priceSuv: pkg.priceSuv.toString()
+      });
+      setEditingPackageId(pkg.id);
+      setShowAddPackage(true);
   };
 
   const handleSaveEnquiry = () => {
@@ -422,22 +500,34 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
                 onClick={() => setShowSettings(!showSettings)}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${showSettings ? 'bg-slate-800 text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}`}
             >
-                <Edit2 className="w-4 h-4" /> {showSettings ? 'Hide Rates' : 'Fire Configuration'}
+                <Edit2 className="w-4 h-4" /> {showSettings ? 'Hide Rates' : 'Fare Configuration'}
             </button>
         )}
       </div>
+
+      {/* Map Error Display */}
+      {mapError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg flex items-center gap-2 mb-4">
+          <AlertTriangle className="w-5 h-5" /> {mapError}
+        </div>
+      )}
 
       {/* FARE CONFIGURATION PANEL */}
       {showSettings && (
         <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 animate-in fade-in slide-in-from-top-4 mb-6 shadow-inner">
           <div className="flex items-center justify-between mb-6">
-             <h3 className="font-bold text-slate-800 flex items-center gap-2 text-lg"><Edit2 className="w-5 h-5 text-indigo-500" /> Fare Configuration</h3>
+             <div className="flex items-center gap-3">
+                 <h3 className="font-bold text-slate-800 flex items-center gap-2 text-lg"><Edit2 className="w-5 h-5 text-indigo-500" /> Fare Configuration</h3>
+                 <span className={`text-[10px] px-2 py-0.5 rounded border uppercase tracking-wide font-bold ${isSuperAdmin ? 'bg-purple-100 text-purple-700 border-purple-200' : 'bg-blue-100 text-blue-700 border-blue-200'}`}>
+                    {isSuperAdmin ? 'Global Master' : 'Franchise Custom'}
+                 </span>
+             </div>
              
              {/* Vehicle Type Toggle */}
              <div className="bg-white border border-slate-300 rounded-lg p-1 flex shadow-sm">
                 <button 
                    onClick={() => setSettingsVehicleType('Sedan')}
-                   className={`px-6 py-1.5 text-sm font-bold rounded-md transition-all ${settingsVehicleType === 'Sedan' ? 'bg-emerald-500 text-white shadow' : 'text-gray-600 hover:bg-gray-50'}`}
+                   className={`px-6 py-1.5 text-sm font-bold rounded-md transition-all ${settingsVehicleType === 'Sedan' ? 'bg-emerald-50 text-white shadow' : 'text-gray-600 hover:bg-gray-50'}`}
                 >
                    Sedan
                 </button>
@@ -522,7 +612,7 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
                   <div className="flex justify-between items-center mb-3">
                       <label className="text-xs font-bold text-gray-700">Rental Packages</label>
                       <button 
-                        onClick={() => setShowAddPackage(!showAddPackage)}
+                        onClick={() => { setShowAddPackage(!showAddPackage); setEditingPackageId(null); setNewPackage({ name: '', hours: '', km: '', priceSedan: '', priceSuv: '' }); }}
                         className="text-[10px] bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg border border-blue-100 hover:bg-blue-100 flex items-center gap-1 font-bold transition-colors"
                       >
                         <Plus className="w-3 h-3" /> New
@@ -540,7 +630,10 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
                               <input placeholder="Sedan ₹" type="number" className="w-full p-2 text-xs border rounded-lg outline-none" value={newPackage.priceSedan} onChange={e => setNewPackage({...newPackage, priceSedan: e.target.value})} />
                               <input placeholder="SUV ₹" type="number" className="w-full p-2 text-xs border rounded-lg outline-none" value={newPackage.priceSuv} onChange={e => setNewPackage({...newPackage, priceSuv: e.target.value})} />
                           </div>
-                          <button onClick={handleAddPackage} className="w-full bg-blue-600 text-white text-xs font-bold py-2 rounded-lg hover:bg-blue-700 transition-colors shadow-sm">Save Package</button>
+                          <div className="flex gap-2 justify-end">
+                              <button onClick={() => { setShowAddPackage(false); setEditingPackageId(null); }} className="text-xs text-gray-500 hover:text-gray-700 font-medium">Cancel</button>
+                              <button onClick={handleSavePackage} className="bg-blue-600 text-white text-xs font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors shadow-sm">{editingPackageId ? 'Update Package' : 'Save Package'}</button>
+                          </div>
                       </div>
                   )}
 
@@ -556,12 +649,17 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
                                       <div><span className="text-gray-400">S:</span> {pkg.priceSedan}</div>
                                       <div><span className="text-gray-400">X:</span> {pkg.priceSuv}</div>
                                   </div>
-                                  <button onClick={(e) => {
-                                      e.stopPropagation();
-                                      if (window.confirm('Remove package?')) setRentalPackages(prev => prev.filter(p => p.id !== pkg.id));
-                                  }} className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-red-50">
-                                      <Trash2 className="w-3 h-3" />
-                                  </button>
+                                  <div className="flex gap-1"> 
+                                      <button onClick={(e) => { e.stopPropagation(); handleEditPackage(pkg); }} className="text-gray-400 hover:text-blue-500 p-1.5 rounded-full hover:bg-blue-50">
+                                          <Edit2 className="w-3 h-3" />
+                                      </button>
+                                      <button onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (window.confirm('Remove package?')) setRentalPackages(prev => prev.filter(p => p.id !== pkg.id));
+                                      }} className="text-gray-400 hover:text-red-500 p-1.5 rounded-full hover:bg-red-50">
+                                          <Trash2 className="w-3 h-3" />
+                                      </button>
+                                  </div>
                               </div>
                           </div>
                       ))}
@@ -656,24 +754,36 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
                             <div className="space-y-4 pt-2">
                                 <div className="space-y-1">
                                     <label className="block text-xs font-bold text-gray-500 uppercase">Pickup Location</label>
-                                    <Autocomplete 
-                                        placeholder="Search Pickup"
-                                        onAddressSelect={(addr) => setFormData(prev => ({...prev, pickup: addr}))}
-                                        setNewPlace={(place) => setPickupCoords(place)}
-                                        defaultValue={formData.pickup}
-                                    />
+                                    {!isMapReady ? (
+                                        <div className="p-2 bg-gray-100 text-gray-500 text-sm rounded flex items-center gap-2">
+                                            <Loader2 className="w-4 h-4 animate-spin" /> Loading Maps...
+                                        </div>
+                                    ) : (
+                                        <Autocomplete 
+                                            placeholder="Search Pickup"
+                                            onAddressSelect={(addr) => setFormData(prev => ({...prev, pickup: addr}))}
+                                            setNewPlace={(place) => setPickupCoords(place)}
+                                            defaultValue={formData.pickup}
+                                        />
+                                    )}
                                 </div>
 
                                 {formData.tripType === 'Local' && (
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="col-span-2 space-y-1">
                                             <label className="block text-xs font-bold text-gray-500 uppercase">Drop Location</label>
-                                            <Autocomplete 
-                                                placeholder="Search Drop"
-                                                onAddressSelect={(addr) => setFormData(prev => ({...prev, drop: addr}))}
-                                                setNewPlace={(place) => setDropCoords(place)}
-                                                defaultValue={formData.drop}
-                                            />
+                                            {!isMapReady ? (
+                                                <div className="p-2 bg-gray-100 text-gray-500 text-sm rounded flex items-center gap-2">
+                                                    <Loader2 className="w-4 h-4 animate-spin" /> Loading Maps...
+                                                </div>
+                                            ) : (
+                                                <Autocomplete 
+                                                    placeholder="Search Drop"
+                                                    onAddressSelect={(addr) => setFormData(prev => ({...prev, drop: addr}))}
+                                                    setNewPlace={(place) => setDropCoords(place)}
+                                                    defaultValue={formData.drop}
+                                                />
+                                            )}
                                         </div>
                                         <div className="space-y-1">
                                             <label className="block text-xs font-bold text-gray-500 uppercase">Est Km</label>
@@ -713,12 +823,18 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
                                         </div>
                                         <div className="space-y-1">
                                             <label className="block text-xs font-bold text-gray-500 uppercase">Destination</label>
-                                            <Autocomplete 
-                                                placeholder="Search Destination"
-                                                onAddressSelect={(addr) => setFormData(prev => ({...prev, destination: addr}))}
-                                                setNewPlace={(place) => setDestCoords(place)}
-                                                defaultValue={formData.destination}
-                                            />
+                                            {!isMapReady ? (
+                                                <div className="p-2 bg-gray-100 text-gray-500 text-sm rounded flex items-center gap-2">
+                                                    <Loader2 className="w-4 h-4 animate-spin" /> Loading Maps...
+                                                </div>
+                                            ) : (
+                                                <Autocomplete 
+                                                    placeholder="Search Destination"
+                                                    onAddressSelect={(addr) => setFormData(prev => ({...prev, destination: addr}))}
+                                                    setNewPlace={(place) => setDestCoords(place)}
+                                                    defaultValue={formData.destination}
+                                                />
+                                            )}
                                         </div>
                                         <div className="grid grid-cols-3 gap-3">
                                             <div className="space-y-1">

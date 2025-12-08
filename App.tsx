@@ -155,6 +155,8 @@ const App: React.FC = () => {
                         <Route path="/admin/expenses" element={<Expenses />} />
                         {/* NEW ROUTE: Finance & Expenses */}
                         <Route path="/admin/finance-and-expenses" element={<Expenses />} />
+                        {/* NEW ROUTE: Admin Expenses */}
+                        <Route path="/admin/admin-expenses" element={<Expenses />} />
                         {/* NEW ROUTE: Email Marketing */}
                         <Route path="/admin/email-marketing" element={<EmailMarketing />} />
                         

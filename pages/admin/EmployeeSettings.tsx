@@ -7,8 +7,7 @@ import {
   MessageCircle, Plus, Trash2, Edit2, 
   MapPin as MapPinIcon, 
   Save, UploadCloud, 
-  AlertCircle, Shield, Smartphone, RotateCw, CalendarCheck, MessageSquare, Hourglass, AlertTriangle, Timer,
-  Calculator
+  AlertCircle, Shield, Smartphone, RotateCw, CalendarCheck, MessageSquare, Timer, AlertTriangle
 } from 'lucide-react';
 import { MOCK_EMPLOYEES } from '../../constants';
 
@@ -40,15 +39,12 @@ const SectionHeader = ({ title, icon: Icon, desc }: { title: string, icon: any, 
   </div>
 );
 
-const ToggleSwitch = ({ label, checked, onChange, disabled, description }: { label: string, checked: boolean, onChange: () => void, disabled?: boolean, description?: string }) => (
+const ToggleSwitch = ({ label, checked, onChange, disabled }: { label: string, checked: boolean, onChange: () => void, disabled?: boolean }) => (
   <div 
     onClick={!disabled ? onChange : undefined}
     className={`flex items-center justify-between p-4 bg-white rounded-lg border transition-all cursor-pointer ${checked ? 'border-emerald-200 bg-emerald-50' : 'border-gray-200 hover:border-gray-300'} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
   >
-    <div>
-        <span className={`font-medium text-sm block ${checked ? 'text-emerald-800' : 'text-gray-700'}`}>{label}</span>
-        {description && <span className="text-xs text-gray-500 mt-1 block">{description}</span>}
-    </div>
+    <span className={`font-medium text-sm ${checked ? 'text-emerald-800' : 'text-gray-700'}`}>{label}</span>
     <div className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${checked ? 'bg-emerald-500' : 'bg-gray-300'}`}>
       <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
     </div>
@@ -479,8 +475,8 @@ const ShiftsAndBreaks = () => {
                             onClick={() => {
                                 setEditingId(null);
                                 setShiftForm({ name: '', startHour: '09', startMin: '00', startAmPm: 'AM', endHour: '06', endMin: '00', endAmPm: 'PM' });
-                            }}
-                            className="text-gray-500 hover:bg-white px-3 py-2 rounded-lg border border-gray-300 text-sm font-medium transition-colors"
+                            }} 
+                            className="bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-lg font-bold text-sm transition-colors"
                         >
                             Cancel
                         </button>
@@ -489,57 +485,75 @@ const ShiftsAndBreaks = () => {
             </div>
         </div>
 
-        {/* List */}
-        <div className="space-y-3">
-            {shifts.map(shift => (
-                <div key={shift.id} className="flex justify-between items-center p-4 bg-gray-50 border border-gray-100 rounded-lg hover:shadow-md hover:border-emerald-100 transition-all group">
-                    <div>
-                        <h4 className="font-bold text-gray-800">{shift.name}</h4>
-                        <div className="flex items-center gap-2 mt-1">
-                            <span className="text-xs bg-white border border-gray-200 px-2 py-1 rounded text-gray-600 font-medium font-mono">{shift.start}</span>
-                            <span className="text-gray-400 text-xs">to</span>
-                            <span className="text-xs bg-white border border-gray-200 px-2 py-1 rounded text-gray-600 font-medium font-mono">{shift.end}</span>
-                        </div>
-                    </div>
-                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => handleEdit(shift)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"><Edit2 className="w-4 h-4" /></button>
-                        <button 
-                            onClick={() => {
-                                if (window.confirm("Delete this shift?")) {
-                                    setShifts(shifts.filter(s => s.id !== shift.id));
-                                    if (editingId === shift.id) {
-                                        setEditingId(null);
-                                        setShiftForm({ name: '', startHour: '09', startMin: '00', startAmPm: 'AM', endHour: '06', endMin: '00', endAmPm: 'PM' });
-                                    }
-                                }
-                            }} 
-                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                        >
-                            <Trash2 className="w-4 h-4" />
-                        </button>
-                    </div>
-                </div>
-            ))}
+        <div className="space-y-2">
+          {shifts.map((s) => (
+            <div key={s.id} className="flex justify-between items-center p-4 bg-white hover:bg-gray-50 rounded-lg border border-gray-200 transition-colors group">
+              <div className="flex items-center gap-4">
+                 <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg border border-emerald-100">
+                    <Clock className="w-5 h-5" />
+                 </div>
+                 <div>
+                     <span className="block text-sm font-bold text-gray-900">{s.name}</span>
+                     <span className="text-xs text-gray-500 font-mono bg-gray-100 px-2 py-0.5 rounded mt-1 inline-block">
+                        {s.start} - {s.end}
+                     </span>
+                 </div>
+              </div>
+              <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button onClick={() => handleEdit(s)} className="text-blue-500 hover:bg-blue-50 p-2 rounded-lg transition-colors border border-transparent hover:border-blue-200" title="Edit">
+                    <Edit2 className="w-4 h-4"/>
+                  </button>
+                  <button onClick={() => setShifts(shifts.filter(x => x.id !== s.id))} className="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors border border-transparent hover:border-red-200" title="Delete">
+                    <Trash2 className="w-4 h-4"/>
+                  </button>
+              </div>
+            </div>
+          ))}
+          {shifts.length === 0 && <div className="text-center text-gray-400 text-sm py-8 border border-dashed border-gray-300 rounded-lg">No shifts configured.</div>}
         </div>
       </div>
     </div>
   );
 };
 
-// 7. Attendance Rules (New Module)
+// 7. Attendance Modes
+const AttendanceModes = () => {
+  const [modes, setModes] = useState(() => {
+    const saved = localStorage.getItem(getStorageKey('company_attendance_modes'));
+    return saved ? JSON.parse(saved) : { gpsGeofencing: false, qrScan: false, manualPunch: true };
+  });
+
+  useEffect(() => {
+    localStorage.setItem(getStorageKey('company_attendance_modes'), JSON.stringify(modes));
+  }, [modes]);
+
+  const handleToggle = (m: string) => {
+      setModes((prev: any) => ({ ...prev, [m]: !prev[m] }));
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+      <SectionHeader title="Attendance Modes" icon={Smartphone} desc="Configure default allowed methods for staff." />
+      <div className="space-y-3">
+        <ToggleSwitch label="Enable GPS Geofencing" checked={modes.gpsGeofencing} onChange={() => handleToggle('gpsGeofencing')} />
+        <ToggleSwitch label="Enable QR Scan" checked={modes.qrScan} onChange={() => handleToggle('qrScan')} />
+        <ToggleSwitch label="Allow Manual Punch" checked={modes.manualPunch} onChange={() => handleToggle('manualPunch')} />
+      </div>
+    </div>
+  );
+};
+
+// 8. Attendance Rules (New Component)
 const AttendanceRules = () => {
-  // Load settings or defaults
   const [rules, setRules] = useState(() => {
     const saved = localStorage.getItem(getStorageKey('company_attendance_rules'));
     return saved ? JSON.parse(saved) : {
-      lateGraceMins: 15,
-      earlyExitGraceMins: 10,
-      halfDayThresholdHrs: 4,
-      fullDayThresholdHrs: 8,
-      autoHalfDay: true,
-      overtimeEnabled: true,
-      fixedHourlyRate: 1000,
-      lateDeductionEnabled: true
+      graceIn: '15',
+      graceOut: '15',
+      lateAction: 'Fixed', // Fixed | HalfDay | None
+      penaltyAmount: '1000',
+      halfDayThreshold: '120',
+      trackOvertime: false
     };
   });
 
@@ -547,186 +561,674 @@ const AttendanceRules = () => {
     localStorage.setItem(getStorageKey('company_attendance_rules'), JSON.stringify(rules));
   }, [rules]);
 
-  const handleChange = (field: string, value: any) => {
-    setRules((prev: any) => ({ ...prev, [field]: value }));
-  };
-
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-      <SectionHeader title="Attendance Rules" icon={AlertTriangle} desc="Configure grace periods, half-day logic, and overtime." />
+      <SectionHeader title="Attendance Rules & Penalties" icon={Timer} desc="Grace periods, late logic, and penalties." />
       
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Grace Periods */}
-        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm space-y-4">
-           <h4 className="font-bold text-gray-800 flex items-center gap-2 border-b pb-2">
-             <Timer className="w-4 h-4 text-orange-500" /> Grace Periods
-           </h4>
-           <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Late Entry Grace (mins)</label>
-              <div className="relative">
-                <input 
-                  type="number" 
-                  value={rules.lateGraceMins} 
-                  onChange={(e) => handleChange('lateGraceMins', parseInt(e.target.value) || 0)} 
-                  className="w-full p-2 pl-9 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-orange-500"
-                />
-                <Clock className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              </div>
-              <p className="text-xs text-gray-500 mt-1">Time allowed after shift start before marked "Late".</p>
-           </div>
-           
-           <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Early Exit Grace (mins)</label>
-              <div className="relative">
-                <input 
-                  type="number" 
-                  value={rules.earlyExitGraceMins} 
-                  onChange={(e) => handleChange('earlyExitGraceMins', parseInt(e.target.value) || 0)} 
-                  className="w-full p-2 pl-9 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-orange-500"
-                />
-                <Clock className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              </div>
-              <p className="text-xs text-gray-500 mt-1">Time allowed before shift end without penalty.</p>
-           </div>
+      <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm space-y-6">
+        
+        {/* Grace Period Section */}
+        <div>
+          <h4 className="text-sm font-bold text-gray-700 mb-3 uppercase flex items-center gap-2">
+            <Clock className="w-4 h-4 text-emerald-500" /> Grace Periods
+          </h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Punch-In Grace Time (Mins)</label>
+              <input 
+                type="number" 
+                value={rules.graceIn} 
+                onChange={(e) => setRules({...rules, graceIn: e.target.value})}
+                className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                placeholder="15"
+              />
+              <p className="text-[10px] text-gray-400 mt-1">Allowed delay after shift start.</p>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Punch-Out Early Limit (Mins)</label>
+              <input 
+                type="number" 
+                value={rules.graceOut} 
+                onChange={(e) => setRules({...rules, graceOut: e.target.value})}
+                className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                placeholder="15"
+              />
+              <p className="text-[10px] text-gray-400 mt-1">Allowed early exit before shift end.</p>
+            </div>
+          </div>
         </div>
 
-        {/* Working Hours & Half Day */}
-        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm space-y-4">
-           <h4 className="font-bold text-gray-800 flex items-center gap-2 border-b pb-2">
-             <Hourglass className="w-4 h-4 text-blue-500" /> Duration Logic
-           </h4>
-           <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Min Hrs (Half Day)</label>
+        <hr className="border-gray-100" />
+
+        {/* Penalty Section */}
+        <div>
+          <h4 className="text-sm font-bold text-gray-700 mb-3 uppercase flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-orange-500" /> Late Penalties
+          </h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Late Mark Action</label>
+              <select 
+                value={rules.lateAction} 
+                onChange={(e) => setRules({...rules, lateAction: e.target.value})}
+                className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
+              >
+                <option value="None">Mark Late Only (No Deduction)</option>
+                <option value="Fixed">Deduct Fixed Amount</option>
+                <option value="HalfDay">Mark Half Day</option>
+              </select>
+            </div>
+
+            {rules.lateAction === 'Fixed' && (
+              <div className="animate-in fade-in slide-in-from-left-2">
+                <label className="block text-xs font-medium text-gray-500 mb-1">Fixed Penalty (₹ per Hour)</label>
                 <input 
                   type="number" 
-                  value={rules.halfDayThresholdHrs} 
-                  onChange={(e) => handleChange('halfDayThresholdHrs', parseFloat(e.target.value) || 0)} 
-                  className="w-full p-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                  value={rules.penaltyAmount} 
+                  onChange={(e) => setRules({...rules, penaltyAmount: e.target.value})}
+                  className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                  placeholder="1000"
                 />
+                <p className="text-[10px] text-orange-500 mt-1">Deducted for every hour late beyond grace time.</p>
               </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Min Hrs (Full Day)</label>
+            )}
+          </div>
+        </div>
+
+        <hr className="border-gray-100" />
+
+        {/* Auto Half Day */}
+        <div>
+           <h4 className="text-sm font-bold text-gray-700 mb-3 uppercase flex items-center gap-2">
+            <RotateCcw className="w-4 h-4 text-blue-500" /> Auto Half-Day Logic
+          </h4>
+          <div className="flex items-center gap-4">
+             <div className="flex-1">
+                <label className="block text-xs font-medium text-gray-500 mb-1">Half-Day Threshold (Mins Late)</label>
                 <input 
                   type="number" 
-                  value={rules.fullDayThresholdHrs} 
-                  onChange={(e) => handleChange('fullDayThresholdHrs', parseFloat(e.target.value) || 0)} 
-                  className="w-full p-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                  value={rules.halfDayThreshold} 
+                  onChange={(e) => setRules({...rules, halfDayThreshold: e.target.value})}
+                  className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                  placeholder="120"
                 />
-              </div>
-           </div>
-           
+             </div>
+             <div className="flex-1 pt-6">
+                <p className="text-xs text-gray-500">If employee is late by more than this time, attendance is automatically marked as Half-Day.</p>
+             </div>
+          </div>
+        </div>
+
+        <hr className="border-gray-100" />
+
+        {/* Overtime */}
+        <div>
            <ToggleSwitch 
-              label="Auto-Mark Half Day" 
-              checked={rules.autoHalfDay} 
-              onChange={() => handleChange('autoHalfDay', !rules.autoHalfDay)}
-              description="Automatically mark attendance as Half Day if late beyond grace period or hours not met."
+             label="Convert Extra Hours to Incentive" 
+             checked={rules.trackOvertime} 
+             onChange={() => setRules({...rules, trackOvertime: !rules.trackOvertime})} 
            />
+           <p className="text-[10px] text-gray-400 mt-2 px-1">If enabled, working beyond shift end time (post grace) will be tracked as incentive hours.</p>
         </div>
 
-        {/* Financials: Overtime & Deductions */}
-        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm space-y-4 md:col-span-2">
-           <h4 className="font-bold text-gray-800 flex items-center gap-2 border-b pb-2">
-             <Calculator className="w-4 h-4 text-emerald-500" /> Overtime & Deductions
-           </h4>
-           
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                 <label className="block text-sm font-medium text-gray-700 mb-1">Fixed Hourly Rate (₹)</label>
-                 <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-bold">₹</span>
-                    <input 
-                      type="number" 
-                      value={rules.fixedHourlyRate} 
-                      onChange={(e) => handleChange('fixedHourlyRate', parseFloat(e.target.value) || 0)} 
-                      className="w-full p-2 pl-8 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
-                    />
-                 </div>
-                 <p className="text-xs text-gray-500 mt-1">Used for calculating fixed Overtime Incentives and Late Deductions.</p>
-              </div>
-
-              <div className="space-y-3">
-                 <ToggleSwitch 
-                    label="Enable Overtime Incentive" 
-                    checked={rules.overtimeEnabled} 
-                    onChange={() => handleChange('overtimeEnabled', !rules.overtimeEnabled)}
-                    description="Pay incentive for extra hours worked based on Fixed Hourly Rate."
-                 />
-                 
-                 <ToggleSwitch 
-                    label="Enable Late Deduction" 
-                    checked={rules.lateDeductionEnabled} 
-                    onChange={() => handleChange('lateDeductionEnabled', !rules.lateDeductionEnabled)}
-                    description="Deduct pay for late arrival hours based on Fixed Hourly Rate."
-                 />
-              </div>
-           </div>
-        </div>
       </div>
     </div>
   );
 };
 
-// ... (Other existing components: CustomPaidLeaves, HolidayList, AutoLiveTrack, etc. remain unchanged)
+// 9. Custom Paid Leaves
+const CustomPaidLeaves = () => {
+  const [leaveTypes, setLeaveTypes] = useState<any[]>(() => {
+    const saved = localStorage.getItem(getStorageKey('company_leave_types'));
+    return saved ? JSON.parse(saved) : [
+      { id: 'cl', name: 'Casual Leave', quota: 12 },
+      { id: 'sl', name: 'Sick Leave', quota: 8 },
+      { id: 'pl', name: 'Privilege Leave', quota: 15 },
+    ];
+  });
+  const [leaveForm, setLeaveForm] = useState({ name: '', quota: '' });
+  const [editingId, setEditingId] = useState<number | null>(null);
 
-const EmployeeSettings = () => {
-  const [activeCategory, setActiveCategory] = useState<SettingCategory>('My Company Report');
+  useEffect(() => {
+    localStorage.setItem(getStorageKey('company_leave_types'), JSON.stringify(leaveTypes));
+  }, [leaveTypes]);
 
-  const categories: { name: SettingCategory, icon: any }[] = [
-    { name: 'My Company Report', icon: FileText },
-    { name: 'My Team (Admins)', icon: Shield },
-    { name: 'Departments & Roles', icon: Building2 },
-    { name: 'Shifts & Breaks', icon: Clock },
-    { name: 'Attendance Rules', icon: AlertTriangle }, // Added here
-    { name: 'Attendance Modes', icon: Smartphone },
-    { name: 'Custom Paid Leaves', icon: Plane },
-    { name: 'Holiday List', icon: Calendar },
-    { name: 'Auto Live Track', icon: MapPinIcon },
-    { name: 'Custom Fields', icon: Settings2 },
-    { name: 'Inactive Employees', icon: UserX },
+  const handleSave = () => {
+      if(leaveForm.name && leaveForm.quota) {
+          if (editingId) {
+              setLeaveTypes(leaveTypes.map(l => l.id === editingId ? { ...l, name: leaveForm.name, quota: parseInt(leaveForm.quota) } : l));
+              setEditingId(null);
+          } else {
+              setLeaveTypes([...leaveTypes, { id: Date.now(), name: leaveForm.name, quota: parseInt(leaveForm.quota) }]);
+          }
+          setLeaveForm({ name: '', quota: '' });
+      }
+  };
+
+  const handleEdit = (leave: any) => {
+      setLeaveForm({ name: leave.name, quota: leave.quota.toString() });
+      setEditingId(leave.id);
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+      <SectionHeader title="Custom Paid Leaves" icon={Plane} desc="Define leave types and annual quotas." />
+      <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+         <div className="flex gap-2 mb-4">
+            <input value={leaveForm.name} onChange={e=>setLeaveForm({...leaveForm, name: e.target.value})} className="flex-1 border rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="Leave Name" />
+            <input type="number" value={leaveForm.quota} onChange={e=>setLeaveForm({...leaveForm, quota: e.target.value})} className="w-24 border rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="Quota" />
+            <button onClick={handleSave} className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-colors">
+                {editingId ? <Save className="w-4 h-4"/> : <Plus className="w-4 h-4"/>}
+                {editingId ? 'Save' : 'Add'}
+            </button>
+            {editingId && (
+                <button onClick={() => { setEditingId(null); setLeaveForm({name:'', quota:''}); }} className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg font-bold hover:bg-gray-50 transition-colors">Cancel</button>
+            )}
+         </div>
+         <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
+            {leaveTypes.map(l => (
+                <div key={l.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-100 group hover:border-emerald-200 transition-colors">
+                    <span className="text-sm font-medium text-gray-700">{l.name} <span className="text-emerald-600 font-bold ml-2 bg-emerald-50 px-2 py-0.5 rounded text-xs">({l.quota} Days)</span></span>
+                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => handleEdit(l)} className="text-blue-500 hover:bg-blue-50 p-1.5 rounded"><Edit2 className="w-4 h-4"/></button>
+                        <button onClick={() => setLeaveTypes(leaveTypes.filter(x => x.id !== l.id))} className="text-red-500 hover:bg-red-50 p-1.5 rounded"><Trash2 className="w-4 h-4"/></button>
+                    </div>
+                </div>
+            ))}
+         </div>
+      </div>
+    </div>
+  );
+};
+
+// 10. Holiday List (Up to 2026)
+const INDIAN_HOLIDAYS = [
+    // 2024 (Remaining)
+    { id: '2024-10-02', name: 'Gandhi Jayanti', date: '2024-10-02' },
+    { id: '2024-10-12', name: 'Dussehra', date: '2024-10-12' },
+    { id: '2024-10-31', name: 'Diwali', date: '2024-10-31' },
+    { id: '2024-11-15', name: 'Guru Nanak Jayanti', date: '2024-11-15' },
+    { id: '2024-12-25', name: 'Christmas', date: '2024-12-25' },
+    // 2025
+    { id: '2025-01-01', name: 'New Year', date: '2025-01-01' },
+    { id: '2025-01-14', name: 'Pongal / Makar Sankranti', date: '2025-01-14' },
+    { id: '2025-01-26', name: 'Republic Day', date: '2025-01-26' },
+    { id: '2025-02-26', name: 'Maha Shivaratri', date: '2025-02-26' },
+    { id: '2025-03-14', name: 'Holi', date: '2025-03-14' },
+    { id: '2025-03-31', name: 'Eid al-Fitr (Ramzan)', date: '2025-03-31' },
+    { id: '2025-04-14', name: 'Tamil New Year / Ambedkar Jayanti', date: '2025-04-14' },
+    { id: '2025-04-18', name: 'Good Friday', date: '2025-04-18' },
+    { id: '2025-05-01', name: 'Labour Day', date: '2025-05-01' },
+    { id: '2025-06-07', name: 'Bakrid / Eid al-Adha', date: '2025-06-07' },
+    { id: '2025-08-15', name: 'Independence Day', date: '2025-08-15' },
+    { id: '2025-08-16', name: 'Janmashtami', date: '2025-08-16' },
+    { id: '2025-08-27', name: 'Ganesh Chaturthi', date: '2025-08-27' },
+    { id: '2025-10-02', name: 'Gandhi Jayanti / Dussehra', date: '2025-10-02' },
+    { id: '2025-10-20', name: 'Diwali', date: '2025-10-20' },
+    { id: '2025-12-25', name: 'Christmas', date: '2025-12-25' },
+    // 2026
+    { id: '2026-01-01', name: 'New Year', date: '2026-01-01' },
+    { id: '2026-01-15', name: 'Pongal / Makar Sankranti', date: '2026-01-15' },
+    { id: '2026-01-26', name: 'Republic Day', date: '2026-01-26' },
+    { id: '2026-02-15', name: 'Maha Shivaratri', date: '2026-02-15' },
+    { id: '2026-03-04', name: 'Holi', date: '2026-03-04' },
+    { id: '2026-03-20', name: 'Eid al-Fitr', date: '2026-03-20' },
+    { id: '2026-04-03', name: 'Good Friday', date: '2026-04-03' },
+    { id: '2026-04-14', name: 'Ambedkar Jayanti', date: '2026-04-14' },
+    { id: '2026-05-01', name: 'Labour Day', date: '2026-05-01' },
+    { id: '2026-05-27', name: 'Bakrid', date: '2026-05-27' },
+    { id: '2026-08-15', name: 'Independence Day', date: '2026-08-15' },
+    { id: '2026-09-04', name: 'Janmashtami', date: '2026-09-04' },
+    { id: '2026-09-14', name: 'Ganesh Chaturthi', date: '2026-09-14' },
+    { id: '2026-10-02', name: 'Gandhi Jayanti', date: '2026-10-02' },
+    { id: '2026-10-20', name: 'Dussehra', date: '2026-10-20' },
+    { id: '2026-11-08', name: 'Diwali', date: '2026-11-08' },
+    { id: '2026-12-25', name: 'Christmas', date: '2026-12-25' },
+];
+
+const HolidayList = () => {
+  const [holidays, setHolidays] = useState<any[]>(() => {
+    const saved = localStorage.getItem(getStorageKey('company_holidays'));
+    // If no saved holidays, initialize with the full Indian list
+    return saved ? JSON.parse(saved) : INDIAN_HOLIDAYS;
+  });
+  const [form, setForm] = useState({ name: '', date: '' });
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    localStorage.setItem(getStorageKey('company_holidays'), JSON.stringify(holidays));
+  }, [holidays]);
+
+  const handleSave = () => {
+      if(form.name && form.date) {
+          if (editingId) {
+              setHolidays(holidays.map(h => h.id === editingId ? { ...h, ...form } : h).sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
+              setEditingId(null);
+          } else {
+              setHolidays([...holidays, { id: Date.now().toString(), ...form }].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
+          }
+          setForm({ name: '', date: '' });
+      }
+  };
+
+  const handleEdit = (h: any) => {
+      setForm({ name: h.name, date: h.date });
+      setEditingId(h.id);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+      <SectionHeader title="Holiday List (2024-2026)" icon={CalendarCheck} desc="Manage company holidays." />
+      <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+         <div className="flex gap-2 mb-4 p-4 bg-gray-50 rounded-lg border border-gray-100">
+            <input value={form.name} onChange={e=>setForm({...form, name: e.target.value})} className="flex-1 border rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white" placeholder="Holiday Name" />
+            <input type="date" value={form.date} onChange={e=>setForm({...form, date: e.target.value})} className="w-40 border rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white" />
+            <button onClick={handleSave} className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-colors">
+                {editingId ? <Save className="w-4 h-4"/> : <Plus className="w-4 h-4"/>}
+                {editingId ? 'Update' : 'Add'}
+            </button>
+            {editingId && (
+                <button onClick={() => { setEditingId(null); setForm({name:'', date:''}); }} className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg font-bold hover:bg-gray-50 transition-colors">Cancel</button>
+            )}
+         </div>
+         <div className="space-y-2 max-h-[500px] overflow-y-auto custom-scrollbar">
+            {holidays.map(h => (
+                <div key={h.id} className="flex justify-between items-center p-3 bg-white rounded-lg border border-gray-200 group hover:border-emerald-300 hover:shadow-sm transition-all">
+                    <div>
+                        <span className="text-sm font-bold text-gray-800">{h.name}</span>
+                        <span className="text-xs text-gray-500 ml-2 bg-gray-100 px-2 py-0.5 rounded font-mono">{h.date}</span>
+                        {/* Highlight year */}
+                        <span className="text-[10px] text-gray-400 ml-2">{h.date.split('-')[0]}</span>
+                    </div>
+                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => handleEdit(h)} className="text-blue-500 hover:bg-blue-50 p-1.5 rounded transition-colors"><Edit2 className="w-4 h-4"/></button>
+                        <button onClick={() => setHolidays(holidays.filter(x => x.id !== h.id))} className="text-red-500 hover:bg-red-50 p-1.5 rounded transition-colors"><Trash2 className="w-4 h-4"/></button>
+                    </div>
+                </div>
+            ))}
+         </div>
+      </div>
+    </div>
+  );
+};
+
+// 11. Auto Live Track
+const AutoLiveTrack = () => {
+    const [enabled, setEnabled] = useState(() => localStorage.getItem(getStorageKey('company_settings_autotrack')) === 'true');
+    useEffect(() => { localStorage.setItem(getStorageKey('company_settings_autotrack'), String(enabled)); }, [enabled]);
+    
+    return (
+        <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+            <SectionHeader title="Auto Live Track" icon={MapPinIcon} desc="Enable automatic GPS tracking for field staff." />
+            <ToggleSwitch label="Enable Live Tracking" checked={enabled} onChange={() => setEnabled(!enabled)} />
+            <div className="bg-blue-50 p-4 rounded-lg text-sm text-blue-700 mt-4 border border-blue-100">
+                <AlertCircle className="w-4 h-4 inline mr-2" />
+                This will request location access from staff devices during working hours.
+            </div>
+        </div>
+    );
+};
+
+// 12. Calendar Month
+const CalendarMonth = () => {
+    const [startMonth, setStartMonth] = useState(() => localStorage.getItem(getStorageKey('company_settings_financial_year')) || 'April');
+    useEffect(() => { localStorage.setItem(getStorageKey('company_settings_financial_year'), startMonth); }, [startMonth]);
+
+    return (
+        <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+            <SectionHeader title="Calendar Month" icon={Calendar} desc="Set financial year start." />
+            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Financial Year Start</label>
+                <select value={startMonth} onChange={(e) => setStartMonth(e.target.value)} className="w-full p-2 border rounded-lg bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
+                    <option>January</option><option>April</option><option>July</option><option>October</option>
+                </select>
+            </div>
+        </div>
+    );
+};
+
+// 13. Attendance Cycle
+const AttendanceCycle = () => {
+    const [cycle, setCycle] = useState(() => localStorage.getItem(getStorageKey('company_settings_attendance_cycle')) || 'Calendar Month');
+    useEffect(() => { localStorage.setItem(getStorageKey('company_settings_attendance_cycle'), cycle); }, [cycle]);
+
+    return (
+        <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+            <SectionHeader title="Attendance Cycle" icon={RotateCw} desc="Define attendance calculation period." />
+            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Cycle Period</label>
+                <select value={cycle} onChange={(e) => setCycle(e.target.value)} className="w-full p-2 border rounded-lg bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
+                    <option>Calendar Month (1st to End)</option>
+                    <option>Wage Cycle (26th to 25th)</option>
+                </select>
+            </div>
+        </div>
+    );
+};
+
+// 14. Payout Date
+const PayoutDate = () => {
+    const [payoutDate, setPayoutDate] = useState(() => localStorage.getItem(getStorageKey('company_global_payout_day')) || '5');
+    useEffect(() => { localStorage.setItem(getStorageKey('company_global_payout_day'), payoutDate); }, [payoutDate]);
+
+    return (
+        <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+            <SectionHeader title="Payout Date" icon={DollarSign} desc="Set monthly salary payout day." />
+            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Day of Month (1-28)</label>
+                <input type="number" min="1" max="28" value={payoutDate} onChange={(e) => setPayoutDate(e.target.value)} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none" />
+            </div>
+        </div>
+    );
+};
+
+// 15. Import Settings
+const ImportSettings = () => (
+    <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+        <SectionHeader title="Import Settings" icon={UploadCloud} desc="Configure data import defaults." />
+        <div className="bg-white p-6 rounded-xl border border-gray-200 text-center text-gray-500 shadow-sm">
+            Import configurations are managed automatically based on CSV headers.
+        </div>
+    </div>
+);
+
+// 16. Incentive Types
+const IncentiveTypes = () => {
+    const [types, setTypes] = useState<string[]>(() => {
+        const saved = localStorage.getItem(getStorageKey('company_incentive_types'));
+        return saved ? JSON.parse(saved) : ['Performance', 'Sales Commission', 'Referral'];
+    });
+    const [newType, setNewType] = useState('');
+
+    useEffect(() => { localStorage.setItem(getStorageKey('company_incentive_types'), JSON.stringify(types)); }, [types]);
+
+    return (
+        <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+            <SectionHeader title="Incentive Types" icon={Award} desc="Define incentive categories." />
+            <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+                <div className="flex gap-2 mb-4">
+                    <input value={newType} onChange={e=>setNewType(e.target.value)} className="flex-1 border rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="Incentive Name" />
+                    <button onClick={()=>{if(newType) {setTypes([...types, newType]); setNewType('')}}} className="bg-emerald-500 hover:bg-emerald-600 text-white p-2 rounded-lg transition-colors"><Plus className="w-4 h-4"/></button>
+                </div>
+                <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar">
+                    {types.map((t, i) => (
+                        <div key={i} className="flex justify-between p-2 bg-gray-50 rounded border border-gray-100 hover:border-emerald-100 transition-colors">
+                            <span className="text-sm text-gray-700">{t}</span>
+                            <button onClick={()=>setTypes(types.filter((_, idx)=>idx!==i))} className="text-red-400 hover:text-red-600"><Trash2 className="w-3 h-3"/></button>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// 17. Salary Templates
+const SalaryTemplates = () => (
+    <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+        <SectionHeader title="Salary Templates" icon={File} desc="Manage salary structures." />
+        <div className="bg-white p-6 rounded-xl border border-gray-200 text-center text-gray-500 shadow-sm">
+            Standard Template: Basic (50%), HRA (30%), Allowance (20%) is currently active.
+        </div>
+    </div>
+);
+
+// 18. Round Off
+const RoundOff = () => {
+    const [round, setRound] = useState(() => localStorage.getItem(getStorageKey('company_settings_round_off')) || 'None');
+    useEffect(() => { localStorage.setItem(getStorageKey('company_settings_round_off'), round); }, [round]);
+
+    return (
+        <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+            <SectionHeader title="Round Off" icon={RotateCcw} desc="Round off attendance times." />
+            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                <select value={round} onChange={(e) => setRound(e.target.value)} className="w-full p-2 border rounded-lg bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
+                    <option>None</option><option>Nearest 15 Mins</option><option>Nearest 30 Mins</option>
+                </select>
+            </div>
+        </div>
+    );
+};
+
+// 19. App Notifications
+const AppNotifications = () => {
+    const [enabled, setEnabled] = useState(() => localStorage.getItem(getStorageKey('company_settings_notifications')) === 'true');
+    useEffect(() => { localStorage.setItem(getStorageKey('company_settings_notifications'), String(enabled)); }, [enabled]);
+
+    return (
+        <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+            <SectionHeader title="App Notifications" icon={Bell} desc="Enable system notifications." />
+            <ToggleSwitch label="Enable In-App Alerts" checked={enabled} onChange={() => setEnabled(!enabled)} />
+        </div>
+    );
+};
+
+// 20. Request A Feature
+const RequestAFeature = () => (
+    <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+        <SectionHeader title="Request A Feature" icon={MessageSquare} desc="Feedback and suggestions." />
+        <div className="bg-white p-6 rounded-xl border border-gray-200 text-center shadow-sm">
+            <textarea className="w-full border rounded-lg p-3 mb-3 text-sm focus:ring-2 focus:ring-emerald-500 outline-none" rows={4} placeholder="Describe your idea..."></textarea>
+            <button className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg text-sm font-bold transition-colors">Submit</button>
+        </div>
+    </div>
+);
+
+
+// --- Main Component ---
+const EmployeeSettings: React.FC = () => {
+  const [activeSetting, setActiveSetting] = useState<SettingCategory>('My Company Report');
+
+  const AttendanceRules = () => {
+    const [rules, setRules] = useState(() => {
+      const saved = localStorage.getItem(getStorageKey('company_attendance_rules'));
+      return saved ? JSON.parse(saved) : {
+        graceIn: '15',
+        graceOut: '15',
+        lateAction: 'Fixed', // Fixed | HalfDay | None
+        penaltyAmount: '1000',
+        halfDayThreshold: '120',
+        trackOvertime: false
+      };
+    });
+  
+    useEffect(() => {
+      localStorage.setItem(getStorageKey('company_attendance_rules'), JSON.stringify(rules));
+    }, [rules]);
+  
+    return (
+      <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+        <SectionHeader title="Attendance Rules & Penalties" icon={Timer} desc="Grace periods, late logic, and penalties." />
+        
+        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm space-y-6">
+          
+          {/* Grace Period Section */}
+          <div>
+            <h4 className="text-sm font-bold text-gray-700 mb-3 uppercase flex items-center gap-2">
+              <Clock className="w-4 h-4 text-emerald-500" /> Grace Periods
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Punch-In Grace Time (Mins)</label>
+                <input 
+                  type="number" 
+                  value={rules.graceIn} 
+                  onChange={(e) => setRules({...rules, graceIn: e.target.value})}
+                  className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                  placeholder="15"
+                />
+                <p className="text-[10px] text-gray-400 mt-1">Allowed delay after shift start.</p>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Punch-Out Early Limit (Mins)</label>
+                <input 
+                  type="number" 
+                  value={rules.graceOut} 
+                  onChange={(e) => setRules({...rules, graceOut: e.target.value})}
+                  className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                  placeholder="15"
+                />
+                <p className="text-[10px] text-gray-400 mt-1">Allowed early exit before shift end.</p>
+              </div>
+            </div>
+          </div>
+  
+          <hr className="border-gray-100" />
+  
+          {/* Penalty Section */}
+          <div>
+            <h4 className="text-sm font-bold text-gray-700 mb-3 uppercase flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-orange-500" /> Late Penalties
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Late Mark Action</label>
+                <select 
+                  value={rules.lateAction} 
+                  onChange={(e) => setRules({...rules, lateAction: e.target.value})}
+                  className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
+                >
+                  <option value="None">Mark Late Only (No Deduction)</option>
+                  <option value="Fixed">Deduct Fixed Amount</option>
+                  <option value="HalfDay">Mark Half Day</option>
+                </select>
+              </div>
+  
+              {rules.lateAction === 'Fixed' && (
+                <div className="animate-in fade-in slide-in-from-left-2">
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Fixed Penalty (₹ per Hour)</label>
+                  <input 
+                    type="number" 
+                    value={rules.penaltyAmount} 
+                    onChange={(e) => setRules({...rules, penaltyAmount: e.target.value})}
+                    className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                    placeholder="1000"
+                  />
+                  <p className="text-[10px] text-orange-500 mt-1">Deducted for every hour late beyond grace time.</p>
+                </div>
+              )}
+            </div>
+          </div>
+  
+          <hr className="border-gray-100" />
+  
+          {/* Auto Half Day */}
+          <div>
+             <h4 className="text-sm font-bold text-gray-700 mb-3 uppercase flex items-center gap-2">
+              <RotateCcw className="w-4 h-4 text-blue-500" /> Auto Half-Day Logic
+            </h4>
+            <div className="flex items-center gap-4">
+               <div className="flex-1">
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Half-Day Threshold (Mins Late)</label>
+                  <input 
+                    type="number" 
+                    value={rules.halfDayThreshold} 
+                    onChange={(e) => setRules({...rules, halfDayThreshold: e.target.value})}
+                    className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                    placeholder="120"
+                  />
+               </div>
+               <div className="flex-1 pt-6">
+                  <p className="text-xs text-gray-500">If employee is late by more than this time, attendance is automatically marked as Half-Day.</p>
+               </div>
+            </div>
+          </div>
+  
+          <hr className="border-gray-100" />
+  
+          {/* Overtime */}
+          <div>
+             <ToggleSwitch 
+               label="Convert Extra Hours to Incentive" 
+               checked={rules.trackOvertime} 
+               onChange={() => setRules({...rules, trackOvertime: !rules.trackOvertime})} 
+             />
+             <p className="text-[10px] text-gray-400 mt-2 px-1">If enabled, working beyond shift end time (post grace) will be tracked as incentive hours.</p>
+          </div>
+  
+        </div>
+      </div>
+    );
+  };
+
+  const renderActiveSetting = () => {
+    switch (activeSetting) {
+      case 'My Company Report': return <MyCompanyReport />;
+      case 'My Team (Admins)': return <MyTeamAdmins />;
+      case 'Departments & Roles': return <DepartmentsAndRoles />;
+      case 'Custom Fields': return <CustomFields />;
+      case 'Inactive Employees': return <InactiveEmployees />;
+      case 'Shifts & Breaks': return <ShiftsAndBreaks />;
+      case 'Attendance Modes': return <AttendanceModes />;
+      case 'Attendance Rules': return <AttendanceRules />;
+      case 'Custom Paid Leaves': return <CustomPaidLeaves />;
+      case 'Holiday List': return <HolidayList />;
+      case 'Auto Live Track': return <AutoLiveTrack />;
+      case 'Calendar Month': return <CalendarMonth />;
+      case 'Attendance Cycle': return <AttendanceCycle />;
+      case 'Payout Date': return <PayoutDate />;
+      case 'Import Settings': return <ImportSettings />;
+      case 'Incentive Types': return <IncentiveTypes />;
+      case 'Salary Templates': return <SalaryTemplates />;
+      case 'Round Off': return <RoundOff />;
+      case 'App Notifications': return <AppNotifications />;
+      case 'Request A Feature': return <RequestAFeature />;
+      default: return null;
+    }
+  };
+
+  const settingsLinks: { category: SettingCategory, icon: any }[] = [
+    { category: 'My Company Report', icon: FileText },
+    { category: 'My Team (Admins)', icon: Shield },
+    { category: 'Departments & Roles', icon: Building2 },
+    { category: 'Custom Fields', icon: Settings2 },
+    { category: 'Inactive Employees', icon: UserX },
+    { category: 'Shifts & Breaks', icon: Clock },
+    { category: 'Attendance Modes', icon: Smartphone },
+    { category: 'Attendance Rules', icon: Timer },
+    { category: 'Custom Paid Leaves', icon: Plane },
+    { category: 'Holiday List', icon: CalendarCheck },
+    { category: 'Auto Live Track', icon: MapPinIcon },
+    { category: 'Calendar Month', icon: Calendar },
+    { category: 'Attendance Cycle', icon: RotateCw },
+    { category: 'Payout Date', icon: DollarSign },
+    { category: 'Import Settings', icon: UploadCloud },
+    { category: 'Incentive Types', icon: Award },
+    { category: 'Salary Templates', icon: File },
+    { category: 'Round Off', icon: RotateCcw },
+    { category: 'App Notifications', icon: Bell },
+    { category: 'Request A Feature', icon: MessageSquare },
   ];
 
   return (
-    <div className="max-w-7xl mx-auto pb-20">
-      <div className="flex flex-col md:flex-row gap-8">
-        {/* Sidebar */}
-        <div className="w-full md:w-64 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden h-fit">
-          <div className="p-4 bg-gray-50 border-b border-gray-200">
-            <h3 className="font-bold text-gray-800">Settings Menu</h3>
-          </div>
-          <nav className="p-2 space-y-1">
-            {categories.map((cat) => (
+    <div className="flex h-[calc(100vh-6rem)] overflow-hidden">
+      {/* Sidebar */}
+      <div className="w-72 flex-shrink-0 border-r border-gray-200 bg-white p-6 overflow-y-auto custom-scrollbar">
+        <h3 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+          <Settings2 className="w-5 h-5 text-gray-500" /> Employee Settings
+        </h3>
+        <nav className="space-y-1">
+          {settingsLinks.map((link) => {
+            const Icon = link.icon;
+            const isActive = activeSetting === link.category;
+            return (
               <button
-                key={cat.name}
-                onClick={() => setActiveCategory(cat.name)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${
-                  activeCategory === cat.name 
-                    ? 'bg-emerald-50 text-emerald-700' 
-                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                }`}
+                key={link.category}
+                onClick={() => setActiveSetting(link.category)}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors group ${isActive ? 'bg-emerald-50 text-emerald-700 font-medium border border-emerald-100' : 'text-gray-700 hover:bg-gray-50 border border-transparent'}`}
               >
-                <cat.icon className={`w-4 h-4 ${activeCategory === cat.name ? 'text-emerald-500' : 'text-gray-400'}`} />
-                {cat.name}
+                <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-emerald-600' : 'text-gray-500 group-hover:text-gray-700'}`} />
+                <span className="truncate">{link.category}</span>
               </button>
-            ))}
-          </nav>
-        </div>
+            );
+          })}
+        </nav>
+      </div>
 
-        {/* Content Area */}
-        <div className="flex-1">
-          {activeCategory === 'My Company Report' && <MyCompanyReport />}
-          {activeCategory === 'My Team (Admins)' && <MyTeamAdmins />}
-          {activeCategory === 'Departments & Roles' && <DepartmentsAndRoles />}
-          {activeCategory === 'Custom Fields' && <CustomFields />}
-          {activeCategory === 'Inactive Employees' && <InactiveEmployees />}
-          {activeCategory === 'Shifts & Breaks' && <ShiftsAndBreaks />}
-          {activeCategory === 'Attendance Rules' && <AttendanceRules />}
-          {/* Placeholders for other sections not fully implemented in this update */}
-          {activeCategory === 'Attendance Modes' && <div className="text-gray-500 p-8 text-center bg-white rounded-xl border border-dashed">Attendance Modes settings coming soon.</div>}
-          {activeCategory === 'Custom Paid Leaves' && <div className="text-gray-500 p-8 text-center bg-white rounded-xl border border-dashed">Leave settings coming soon.</div>}
-          {activeCategory === 'Holiday List' && <div className="text-gray-500 p-8 text-center bg-white rounded-xl border border-dashed">Holiday calendar settings coming soon.</div>}
-          {activeCategory === 'Auto Live Track' && <div className="text-gray-500 p-8 text-center bg-white rounded-xl border border-dashed">Live Tracking configuration coming soon.</div>}
-        </div>
+      {/* Content */}
+      <div className="flex-1 p-8 bg-gray-50 overflow-y-auto custom-scrollbar">
+        {renderActiveSetting()}
       </div>
     </div>
   );
