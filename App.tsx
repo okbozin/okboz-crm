@@ -159,12 +159,13 @@ const App: React.FC = () => {
                         <Route path="/admin/admin-expenses" element={<Expenses />} />
                         {/* NEW ROUTE: Email Marketing */}
                         <Route path="/admin/email-marketing" element={<EmailMarketing />} />
+                        {/* Settings Route - Accessible to Admin and Corporate */}
+                        <Route path="/admin/settings" element={<Settings />} />
                         
-                        {/* Corporate Management & Settings - Only Super Admin */}
+                        {/* Corporate Management & CMS - Only Super Admin */}
                         {userRole === UserRole.ADMIN && (
                           <>
                             <Route path="/admin/corporate" element={<Corporate />} />
-                            <Route path="/admin/settings" element={<Settings />} />
                             <Route path="/admin/cms" element={<CMS />} />
                           </>
                         )}

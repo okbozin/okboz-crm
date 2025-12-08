@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { 
   Plus, Search, DollarSign, 
   PieChart, FileText, 
@@ -50,9 +51,13 @@ const INCOME_CATEGORIES = [
 const COLORS = ['#10b981', '#3b82f6', '#6366f1', '#f59e0b', '#ec4899', '#8b5cf6', '#ef4444', '#14b8a6', '#64748b'];
 
 const Expenses: React.FC = () => {
+  const location = useLocation();
+  const isAdminExpensesTab = location.pathname.includes('admin-expenses');
+
   // Determine Session Context
   const getSessionKey = () => {
     const sessionId = localStorage.getItem('app_session_id') || 'admin';
+    if (isAdminExpensesTab) return 'admin_expenses_data';
     return sessionId === 'admin' ? 'office_expenses' : `office_expenses_${sessionId}`;
   };
 
@@ -60,8 +65,8 @@ const Expenses: React.FC = () => {
 
   // State
   const [expenses, setExpenses] = useState<Expense[]>(() => {
-    if (isSuperAdmin) {
-        // --- SUPER ADMIN AGGREGATION ---
+    if (isSuperAdmin && !isAdminExpensesTab) {
+        // --- SUPER ADMIN AGGREGATION (Finance & Expenses Tab) ---
         let allExpenses: Expense[] = [];
         
         // 1. Admin Data
@@ -89,6 +94,7 @@ const Expenses: React.FC = () => {
         });
         return allExpenses;
     } else {
+        // Standard Load (Admin Expenses Tab OR Corporate View)
         const key = getSessionKey();
         const saved = localStorage.getItem(key);
         if (saved) return JSON.parse(saved);
@@ -129,14 +135,18 @@ const Expenses: React.FC = () => {
 
   // Persistence
   useEffect(() => {
-    if (!isSuperAdmin) {
+    if (!isSuperAdmin || isAdminExpensesTab) {
+        // Direct save for Corporate or Admin Expenses Tab
         const key = getSessionKey();
         localStorage.setItem(key, JSON.stringify(expenses));
     } else {
+        // Aggregation Save Logic (Only for Finance & Expenses Tab of Super Admin)
+        // We only save back the 'Head Office' items to the main 'office_expenses' key
+        // Corporate items are read-only in this view or managed elsewhere
         const headOfficeExpenses = expenses.filter(e => e.franchiseName === 'Head Office');
         localStorage.setItem('office_expenses', JSON.stringify(headOfficeExpenses));
     }
-  }, [expenses, isSuperAdmin]);
+  }, [expenses, isSuperAdmin, isAdminExpensesTab]);
 
   // Handlers
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -252,7 +262,7 @@ const Expenses: React.FC = () => {
       paymentMethod: formData.paymentMethod || 'Cash',
       status: (formData.status as 'Paid' | 'Pending') || 'Pending',
       description: formData.description,
-      franchiseName: isSuperAdmin ? 'Head Office' : undefined,
+      franchiseName: isSuperAdmin && !isAdminExpensesTab ? 'Head Office' : undefined,
       receiptUrl: receiptUrl
     };
 
@@ -309,9 +319,9 @@ const Expenses: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-gray-800">Finance & Expenses</h2>
+          <h2 className="text-2xl font-bold text-gray-800">{isAdminExpensesTab ? 'Admin Expenses' : 'Finance & Expenses'}</h2>
           <p className="text-gray-500">
-             {isSuperAdmin ? "Consolidated financial report across all franchises" : "Track income, expenses, and net balance"}
+             {isAdminExpensesTab ? "Manage admin-specific expenses" : (isSuperAdmin ? "Consolidated financial report across all franchises" : "Track income, expenses, and net balance")}
           </p>
         </div>
         <button 
@@ -408,7 +418,7 @@ const Expenses: React.FC = () => {
                    <tr>
                      <th className="px-6 py-4">Ref #</th>
                      <th className="px-6 py-4">Title / Category</th>
-                     {isSuperAdmin && <th className="px-6 py-4">Franchise</th>}
+                     {isSuperAdmin && !isAdminExpensesTab && <th className="px-6 py-4">Franchise</th>}
                      <th className="px-6 py-4">Date</th>
                      <th className="px-6 py-4">Amount</th>
                      <th className="px-6 py-4 text-center">Status</th>
@@ -437,7 +447,7 @@ const Expenses: React.FC = () => {
                              </div>
                          </div>
                        </td>
-                       {isSuperAdmin && (
+                       {isSuperAdmin && !isAdminExpensesTab && (
                            <td className="px-6 py-4">
                                {exp.franchiseName && (
                                    <div className="inline-flex items-center gap-1.5 bg-indigo-50 text-indigo-700 px-2 py-1 rounded text-xs font-semibold border border-indigo-100">
