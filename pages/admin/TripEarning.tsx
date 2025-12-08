@@ -1,14 +1,13 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Plus, Search, Download, X, Save,
-  User, Car, MapPin, DollarSign, Trash2, Edit2, 
-  PieChart as PieChartIcon, TrendingUp, Building2, RefreshCcw, Calculator, Filter,
-  Loader2, AlertTriangle, ReceiptIndianRupee, Printer, ArrowLeft, ArrowRight, NotebookPen
+  MapPin, Trash2, Edit2, 
+  Building2, RefreshCcw, Calculator, Filter,
+  AlertTriangle, ReceiptIndianRupee, Printer,
+  PieChart as PieChartIcon, Loader2
 } from 'lucide-react';
 import { 
-  PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid 
+  PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend
 } from 'recharts';
 import Autocomplete from '../../components/Autocomplete';
 import { Trip } from '../../types';
@@ -36,15 +35,15 @@ const TripEarning: React.FC = () => {
         
         try {
             const adminData = JSON.parse(localStorage.getItem('trips_data') || '[]');
-            allTrips = [...allTrips, ...adminData.map((t: any) => ({...t, ownerId: 'admin', ownerName: 'Head Office'}))];
+            allTrips = [...allTrips, ...adminData.filter((t: any) => t && typeof t === 'object').map((t: any) => ({...t, ownerId: 'admin', ownerName: 'Head Office'}))];
         } catch(e) {}
 
         try {
-            const corporates = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
+            const corporates = JSON.parse(localStorage.getItem('corporate_accounts') || '[]').filter((c: any) => c && typeof c === 'object');
             corporates.forEach((c: any) => {
                 const cData = localStorage.getItem(`trips_data_${c.email}`);
                 if (cData) {
-                    const parsed = JSON.parse(cData);
+                    const parsed = JSON.parse(cData).filter((t: any) => t && typeof t === 'object');
                     const tagged = parsed.map((t: any) => ({...t, ownerId: c.email, ownerName: c.companyName}));
                     allTrips = [...allTrips, ...tagged];
                 }
@@ -56,23 +55,17 @@ const TripEarning: React.FC = () => {
         const key = `trips_data_${sessionId}`;
         try {
             const saved = localStorage.getItem(key);
-            const parsed = saved ? JSON.parse(saved) : [];
+            const parsed = saved ? JSON.parse(saved).filter((t: any) => t && typeof t === 'object') : [];
             return parsed.map((t: any) => ({...t, ownerId: sessionId, ownerName: 'My Branch'}));
         } catch (e) { return []; }
     }
   });
 
   const [allBranches, setAllBranches] = useState<any[]>([]); 
-  // Initialize from storage directly to ensure it is available for the sync effect immediately
-  const [corporates, setCorporates] = useState<any[]>(() => {
-    try {
-      return JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
-    } catch (e) { return []; }
-  });
-  
+  const [corporates, setCorporates] = useState<any[]>([]); 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-
+  
   // Filter State
   const [showFilters, setShowFilters] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -103,20 +96,17 @@ const TripEarning: React.FC = () => {
     tripCategory: 'Local',
     bookingStatus: 'Confirmed',
     cancelBy: '',
-    // Removed userName, userMobile, driverName, driverMobile from form for UI, but kept in Trip interface
-    // Setting default values to avoid issues if not passed.
-    userName: '', 
-    userMobile: '', 
-    driverName: '', 
+    userName: '', // Kept for type compatibility but not used in form
+    userMobile: '',
+    driverName: '',
     driverMobile: '',
-    pickup: '', // Now moved to Trip Info
+    pickup: '', 
     tripPrice: 0,
     adminCommission: 0,
     tax: 0,
     waitingCharge: 0,
     discount: 0,
     cancellationCharge: 0,
-    totalPrice: 0,
     remarks: ''
   };
 
@@ -171,23 +161,26 @@ const TripEarning: React.FC = () => {
     }
   }, []);
 
-  // Load Branches
+  // Load Branches and Corporates
   useEffect(() => {
     try {
+      const corps = JSON.parse(localStorage.getItem('corporate_accounts') || '[]').filter((c: any) => c && typeof c === 'object');
+      setCorporates(corps);
+
       let loadedBranches: any[] = [];
       if (isSuperAdmin) {
-          const adminBranches = JSON.parse(localStorage.getItem('branches_data') || '[]');
+          const adminBranches = JSON.parse(localStorage.getItem('branches_data') || '[]').filter((b: any) => b && typeof b === 'object');
           loadedBranches = [...adminBranches.map((b: any) => ({...b, owner: 'admin', ownerName: 'Head Office'}))]; 
           
-          corporates.forEach((c: any) => {
-             const cBranches = JSON.parse(localStorage.getItem(`branches_data_${c.email}`) || '[]');
+          corps.forEach((c: any) => {
+             const cBranches = JSON.parse(localStorage.getItem(`branches_data_${c.email}`) || '[]').filter((b: any) => b && typeof b === 'object');
              loadedBranches = [...loadedBranches, ...cBranches.map((b: any) => ({...b, owner: c.email, ownerName: c.companyName}))];
           });
       } else {
           const key = `branches_data_${sessionId}`;
           const saved = localStorage.getItem(key);
           if (saved) {
-              const parsed = JSON.parse(saved);
+              const parsed = JSON.parse(saved).filter((b: any) => b && typeof b === 'object');
               loadedBranches = parsed.map((b: any) => ({...b, owner: sessionId}));
           }
       }
@@ -196,43 +189,36 @@ const TripEarning: React.FC = () => {
       }
       setAllBranches(loadedBranches);
     } catch (e) {}
-  }, [isSuperAdmin, sessionId, corporates]);
+  }, [isSuperAdmin, sessionId]);
 
   // Sync Trips to Storage
   useEffect(() => {
     if (isSuperAdmin) {
         // 1. Save Head Office Trips
-        const headOfficeTrips = trips.filter(t => t.ownerId === 'admin');
+        const headOfficeTrips = trips.filter(t => t && t.ownerId === 'admin');
         const cleanAdminTrips = headOfficeTrips.map(({ownerId, ownerName, ...rest}) => rest);
         localStorage.setItem('trips_data', JSON.stringify(cleanAdminTrips));
 
         // 2. Save Corporate Trips (Distribute updates/deletes)
-        // Fallback: Read directly from LS if state is empty to prevent data loss
-        let currentCorporates = corporates;
-        if (currentCorporates.length === 0) {
-             try { currentCorporates = JSON.parse(localStorage.getItem('corporate_accounts') || '[]'); } catch(e) {}
-        }
-
-        if (currentCorporates.length > 0) {
-            currentCorporates.forEach((corp: any) => {
-                const corpTrips = trips.filter(t => t.ownerId === corp.email);
+        if (corporates.length > 0) {
+            corporates.forEach((corp: any) => {
+                const corpTrips = trips.filter(t => t && t.ownerId === corp.email);
                 const cleanCorpTrips = corpTrips.map(({ownerId, ownerName, ...rest}) => rest);
                 localStorage.setItem(`trips_data_${corp.email}`, JSON.stringify(cleanCorpTrips));
             });
         }
     } else {
         const key = `trips_data_${sessionId}`;
-        const cleanTrips = trips.map(({ownerId, ownerName, ...rest}) => rest);
+        const cleanTrips = trips.filter(t => t).map(({ownerId, ownerName, ...rest}) => rest);
         localStorage.setItem(key, JSON.stringify(cleanTrips));
     }
   }, [trips, isSuperAdmin, sessionId, corporates]);
 
   const filteredTrips = useMemo(() => {
     return trips.filter(t => {
+      if (!t) return false;
       const matchesSearch = 
-        t.tripId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (t.userName && t.userName.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (t.userMobile && t.userMobile.includes(searchTerm));
+        (t.tripId && t.tripId.toLowerCase().includes(searchTerm.toLowerCase()));
       
       const matchesStatus = statusFilter === 'All' || t.bookingStatus === statusFilter;
       const matchesBranch = branchFilter === 'All' || (t.branch && t.branch === branchFilter);
@@ -259,26 +245,26 @@ const TripEarning: React.FC = () => {
   // --- Chart Data Logic ---
   const bookingTypeData = useMemo(() => {
       const counts: Record<string, number> = {};
-      filteredTrips.forEach(t => { counts[t.bookingType] = (counts[t.bookingType] || 0) + 1; });
+      filteredTrips.forEach(t => { if(t) counts[t.bookingType] = (counts[t.bookingType] || 0) + 1; });
       return Object.keys(counts).map((key, idx) => ({ name: key, value: counts[key], color: COLORS[idx % COLORS.length] }));
   }, [filteredTrips]);
 
   const transportTypeData = useMemo(() => {
       const counts: Record<string, number> = {};
-      filteredTrips.forEach(t => { counts[t.transportType] = (counts[t.transportType] || 0) + 1; });
+      filteredTrips.forEach(t => { if(t) counts[t.transportType] = (counts[t.transportType] || 0) + 1; });
       return Object.keys(counts).map((key, idx) => ({ name: key, value: counts[key], color: COLORS[idx % COLORS.length] }));
   }, [filteredTrips]);
 
   const tripCategoryData = useMemo(() => {
       const counts: Record<string, number> = {};
-      filteredTrips.forEach(t => { counts[t.tripCategory] = (counts[t.tripCategory] || 0) + 1; });
+      filteredTrips.forEach(t => { if(t) counts[t.tripCategory] = (counts[t.tripCategory] || 0) + 1; });
       return Object.keys(counts).map((key, idx) => ({ name: key, value: counts[key], color: COLORS[idx % COLORS.length] }));
   }, [filteredTrips]);
 
   const commissionData = useMemo(() => {
       const counts: Record<string, number> = {};
       filteredTrips.forEach(t => { 
-          counts[t.tripCategory] = (counts[t.tripCategory] || 0) + (t.adminCommission || 0); 
+          if(t) counts[t.tripCategory] = (counts[t.tripCategory] || 0) + (t.adminCommission || 0); 
       });
       return Object.keys(counts).map((key, idx) => ({ 
           name: key, 
@@ -320,12 +306,12 @@ const TripEarning: React.FC = () => {
 
   const formAvailableBranches = useMemo(() => {
       const targetOwner = formData.ownerId;
-      return allBranches.filter(b => b.owner === targetOwner);
+      return allBranches.filter(b => b && b.owner === targetOwner);
   }, [allBranches, formData.ownerId]);
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.tripId || !formData.date || !formData.pickup) { // Pickup is now required in UI
+    if (!formData.tripId || !formData.date) {
       alert("Please fill required fields (*)");
       return;
     }
@@ -427,7 +413,7 @@ const TripEarning: React.FC = () => {
       alert("No trips to export.");
       return;
     }
-    const headers = ["Trip ID", "Date", "Owner", "Branch", "Booking Type", "Customer", "Driver", "Transport", "Comm %", "Comm Amt", "Total", "Status"];
+    const headers = ["Trip ID", "Date", "Owner", "Branch", "Booking Type", "Transport", "Comm %", "Comm Amt", "Total", "Status"];
     const escapeCsv = (val: any) => {
         if (val === null || val === undefined) return '';
         const stringVal = String(val);
@@ -443,7 +429,7 @@ const TripEarning: React.FC = () => {
         const percent = base > 0 ? (commBase / base) * 100 : 0;
         
         return [
-            t.tripId, formatDateForDisplay(t.date), t.ownerName || '-', t.branch, t.bookingType, t.userName, t.driverName || '-', 
+            t.tripId, formatDateForDisplay(t.date), t.ownerName || '-', t.branch, t.bookingType, 
             `${t.tripCategory} - ${t.transportType}`, `${percent.toFixed(1)}%`, t.adminCommission, t.totalPrice, t.bookingStatus
         ].map(escapeCsv);
     });
@@ -490,7 +476,7 @@ const TripEarning: React.FC = () => {
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
                   <input 
                       type="text" 
-                      placeholder="Search Trip ID, Name or Mobile..." 
+                      placeholder="Search Trip ID..." 
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                       className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
@@ -661,33 +647,6 @@ const TripEarning: React.FC = () => {
 
         <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
             <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <Car className="w-5 h-5 text-red-500" /> Transport Type
-            </h3>
-            <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                        <Pie
-                            data={transportTypeData}
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={60}
-                            outerRadius={80}
-                            paddingAngle={5}
-                            dataKey="value"
-                        >
-                            {transportTypeData.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={entry.color} />
-                            ))}
-                        </Pie>
-                        <Tooltip />
-                        <Legend />
-                    </PieChart>
-                </ResponsiveContainer>
-            </div>
-        </div>
-
-        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
-            <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
                 <MapPin className="w-5 h-5 text-orange-500" /> Trip Category
             </h3>
             <div className="h-64">
@@ -842,7 +801,7 @@ const TripEarning: React.FC = () => {
       {/* Add/Edit Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-           <div className="bg-white rounded-2xl shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col animate-in fade-in zoom-in duration-200">
+           <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col animate-in fade-in zoom-in duration-200">
               <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-2xl">
                  <h3 className="font-bold text-gray-800 text-xl">{editingId ? 'Edit Trip' : 'New Trip Entry'}</h3>
                  <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600"><X className="w-6 h-6"/></button>
@@ -850,180 +809,131 @@ const TripEarning: React.FC = () => {
               
               <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-6">
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Left Column: Trip Info & Customer/Driver Details & Remarks */}
-                    <div className="space-y-6">
-                       <div className="space-y-4">
-                           <h4 className="text-sm font-bold text-gray-900 border-b pb-2 flex items-center gap-2"><MapPin className="w-4 h-4 text-emerald-500"/> Trip Info</h4>
-                           
-                           {isSuperAdmin && (
-                               <div>
-                                   <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Assign to (Corporate/HO)</label>
-                                   <select 
-                                       name="ownerId" 
-                                       value={formData.ownerId} 
-                                       onChange={(e) => setFormData({...formData, ownerId: e.target.value, branch: ''})} 
-                                       className="w-full p-2 border border-gray-300 rounded-lg outline-none bg-white text-sm"
-                                   >
-                                       <option value="admin">Head Office</option>
-                                       {corporates.map((c: any) => (
-                                           <option key={c.email} value={c.email}>{c.companyName} ({c.city})</option>
-                                       ))}
-                                   </select>
-                               </div>
-                           )}
-
+                    {/* Column 1: Trip Info */}
+                    <div className="space-y-4">
+                       <h4 className="text-sm font-bold text-gray-900 border-b pb-2 flex items-center gap-2"><MapPin className="w-4 h-4 text-emerald-500"/> Trip Info</h4>
+                       
+                       {/* Super Admin: Select Owner first */}
+                       {isSuperAdmin && (
                            <div>
-                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Branch</label>
-                              <select 
-                                  name="branch" 
-                                  value={formData.branch} 
-                                  onChange={handleInputChange} 
-                                  className="w-full p-2 border border-gray-300 rounded-lg outline-none bg-white text-sm"
-                              >
-                                 <option value="">Select Branch</option>
-                                 {formAvailableBranches.map((b: any) => (
-                                    <option key={b.id} value={b.name}>{b.name}</option>
-                                 ))}
-                              </select>
-                           </div>
-
-                           <div className="grid grid-cols-2 gap-2">
-                              <div>
-                                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Trip ID *</label>
-                                 <input 
-                                    type="text" 
-                                    name="tripId" 
-                                    value={formData.tripId} 
-                                    onChange={handleInputChange} 
-                                    className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm font-mono focus:ring-2 focus:ring-emerald-500" 
-                                    placeholder="Enter ID"
-                                    required 
-                                 />
-                              </div>
-                              <div>
-                                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Date *</label>
-                                 <input type="date" name="date" value={formData.date} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" required />
-                              </div>
-                           </div>
-
-                           <div className="grid grid-cols-2 gap-2">
-                              <div>
-                                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Booking Type *</label>
-                                 <select name="bookingType" value={formData.bookingType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none bg-white text-sm">
-                                    <option>Online</option>
-                                    <option>Offline</option>
-                                    <option>Call</option>
-                                    <option>WhatsApp</option>
-                                 </select>
-                              </div>
-                              <div>
-                                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Transport Type *</label>
-                                 <select name="transportType" value={formData.transportType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none bg-white text-sm">
-                                    <option>Sedan</option>
-                                    <option>SUV</option>
-                                    <option>Van</option>
-                                    <option>Mini Bus</option>
-                                 </select>
-                              </div>
-                           </div>
-
-                           <div>
-                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Trip Category *</label>
-                              <select name="tripCategory" value={formData.tripCategory} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none bg-white text-sm">
-                                 <option>Local</option>
-                                 <option>Rental</option>
-                                 <option>Outstation</option>
-                              </select>
-                           </div>
-
-                           <div className="grid grid-cols-2 gap-2">
-                              <div>
-                                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Status *</label>
-                                 <select name="bookingStatus" value={formData.bookingStatus} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none bg-white text-sm">
-                                    <option>Pending</option>
-                                    <option>Confirmed</option>
-                                    <option>Completed</option>
-                                    <option>Cancelled</option>
-                                 </select>
-                              </div>
-                              <div>
-                                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cancel By</label>
-                                 <select 
-                                   name="cancelBy" 
-                                   value={formData.cancelBy} 
-                                   onChange={handleInputChange} 
+                               <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Assign to (Corporate/HO)</label>
+                               <select 
+                                   name="ownerId" 
+                                   value={formData.ownerId} 
+                                   onChange={(e) => setFormData({...formData, ownerId: e.target.value, branch: ''})} 
                                    className="w-full p-2 border border-gray-300 rounded-lg outline-none bg-white text-sm"
-                                   disabled={formData.bookingStatus !== 'Cancelled'}
-                                 >
-                                    <option value="">-</option>
-                                    <option>Head Office Admin</option>
-                                    <option>Branch Admin</option>
-                                    <option>User</option>
-                                    <option>Driver</option>
-                                 </select>
-                              </div>
+                               >
+                                   <option value="admin">Head Office</option>
+                                   {corporates.map((c: any) => (
+                                       <option key={c.email} value={c.email}>{c.companyName} ({c.city})</option>
+                                   ))}
+                               </select>
                            </div>
-                           
-                           {/* Pickup Location - Moved here */}
-                           <div>
-                               <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Pickup Location *</label>
-                               {!isMapReady ? (
-                                 <div className="p-2 bg-gray-100 text-gray-500 text-sm rounded flex items-center gap-2">
-                                     <Loader2 className="w-4 h-4 animate-spin" /> Map Loading...
-                                 </div>
-                               ) : (
-                                 <Autocomplete 
-                                     placeholder="Search Pickup Location"
-                                     onAddressSelect={(addr) => setFormData(prev => ({ ...prev, pickup: addr }))}
-                                     defaultValue={formData.pickup}
-                                 />
-                               )}
-                               {mapError && <p className="text-xs text-red-500 mt-1">{mapError}</p>}
-                           </div>
+                       )}
 
-                        </div>
+                       <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Branch</label>
+                          <select 
+                              name="branch" 
+                              value={formData.branch} 
+                              onChange={handleInputChange} 
+                              className="w-full p-2 border border-gray-300 rounded-lg outline-none bg-white text-sm"
+                          >
+                             <option value="">Select Branch</option>
+                             {formAvailableBranches.map((b: any) => (
+                                <option key={b.id} value={b.name}>{b.name}</option>
+                             ))}
+                          </select>
+                       </div>
 
-                        <div className="space-y-3 pt-2 border-t border-gray-100">
-                           <h4 className="text-sm font-bold text-gray-900 border-b pb-2 flex items-center gap-2"><NotebookPen className="w-4 h-4 text-orange-500"/> Additional Details</h4>
-                           
-                           {/* User Name */}
-                           <div>
-                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">User Name</label>
-                              <input type="text" name="userName" value={formData.userName} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="Customer Name" />
-                           </div>
-                           {/* User Mobile */}
-                           <div>
-                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">User Mobile</label>
-                              <input type="tel" name="userMobile" value={formData.userMobile} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="+91..." />
-                           </div>
-                           {/* Driver Name */}
-                           <div>
-                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Driver Name</label>
-                              <input type="text" name="driverName" value={formData.driverName} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="Driver Name" />
-                           </div>
-                           {/* Driver Mobile */}
-                           <div>
-                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Driver Mobile</label>
-                              <input type="tel" name="driverMobile" value={formData.driverMobile} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="+91..." />
-                           </div>
-                           {/* Remarks */}
-                           <div>
-                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Remarks</label>
-                              <textarea name="remarks" rows={3} value={formData.remarks} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm resize-none" placeholder="Any special notes..." />
-                           </div>
-                        </div>
+                       <div className="grid grid-cols-2 gap-2">
+                          <div>
+                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Trip ID *</label>
+                             <input 
+                                type="text" 
+                                name="tripId" 
+                                value={formData.tripId} 
+                                onChange={handleInputChange} 
+                                className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm font-mono focus:ring-2 focus:ring-emerald-500" 
+                                placeholder="Enter ID"
+                                required 
+                             />
+                          </div>
+                          <div>
+                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Date *</label>
+                             <input type="date" name="date" value={formData.date} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" required />
+                          </div>
+                       </div>
 
+                       <div className="grid grid-cols-2 gap-2">
+                          <div>
+                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Booking Type *</label>
+                             <select name="bookingType" value={formData.bookingType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none bg-white text-sm">
+                                <option>Online</option>
+                                <option>Offline</option>
+                                <option>Call</option>
+                                <option>WhatsApp</option>
+                             </select>
+                          </div>
+                          <div>
+                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Transport Type *</label>
+                             <select name="transportType" value={formData.transportType} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none bg-white text-sm">
+                                <option>Sedan</option>
+                                <option>SUV</option>
+                                <option>Van</option>
+                                <option>Mini Bus</option>
+                             </select>
+                          </div>
+                       </div>
+
+                       <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Trip Category *</label>
+                          <select name="tripCategory" value={formData.tripCategory} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none bg-white text-sm">
+                             <option>Local</option>
+                             <option>Rental</option>
+                             <option>Outstation</option>
+                          </select>
+                       </div>
+
+                       <div className="grid grid-cols-2 gap-2">
+                          <div>
+                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Status *</label>
+                             <select name="bookingStatus" value={formData.bookingStatus} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none bg-white text-sm">
+                                <option>Pending</option>
+                                <option>Confirmed</option>
+                                <option>Completed</option>
+                                <option>Cancelled</option>
+                             </select>
+                          </div>
+                          <div>
+                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cancel By</label>
+                             <select 
+                               name="cancelBy" 
+                               value={formData.cancelBy} 
+                               onChange={handleInputChange} 
+                               className="w-full p-2 border border-gray-300 rounded-lg outline-none bg-white text-sm"
+                               disabled={formData.bookingStatus !== 'Cancelled'}
+                             >
+                                <option value="">-</option>
+                                <option>Head Office Admin</option>
+                                <option>Branch Admin</option>
+                                <option>User</option>
+                                <option>Driver</option>
+                             </select>
+                          </div>
+                       </div>
                     </div>
 
-                    {/* Right Column: Financials */}
-                    <div className="space-y-6">
+                    {/* Column 2: Financials */}
+                    <div className="space-y-4">
                        <h4 className="text-sm font-bold text-gray-900 border-b pb-2 flex items-center gap-2"><Calculator className="w-4 h-4 text-purple-500"/> Financials</h4>
                        
                        <div className="grid grid-cols-2 gap-4">
-                           <div>
+                           <div className="col-span-2">
                               <label className="block text-xs font-bold text-gray-500 uppercase mb-1">{formData.bookingStatus === 'Cancelled' ? 'Cancellation Fee (Trip Price Field)' : 'Trip Price (₹) *'}</label>
                               <input type="number" name="tripPrice" value={formData.tripPrice || ''} onChange={(e) => {
                                   const price = parseFloat(e.target.value) || 0;
+                                  // Only auto-calc tax if NOT cancelled
                                   const taxAmt = formData.bookingStatus !== 'Cancelled' ? (price * parseFloat(taxPercentage)) / 100 : 0;
                                   setFormData(prev => ({ ...prev, tripPrice: price, tax: taxAmt }));
                               }} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm font-medium" placeholder="0" />
@@ -1066,7 +976,7 @@ const TripEarning: React.FC = () => {
                            
                            {/* Fields visible when Cancelled */}
                            {formData.bookingStatus === 'Cancelled' && (
-                               <div>
+                               <div className="col-span-2">
                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cancellation Charge (Addt'l)</label>
                                    <input type="number" name="cancellationCharge" value={formData.cancellationCharge || ''} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="0" />
                                </div>
@@ -1082,7 +992,7 @@ const TripEarning: React.FC = () => {
                                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cancel Chg.</label>
                                  <input type="number" name="cancellationCharge" value={formData.cancellationCharge || ''} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="0" />
                                </div>
-                               <div>
+                               <div className="col-span-2">
                                   <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Discount</label>
                                   <input type="number" name="discount" value={formData.discount || ''} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm text-red-600" placeholder="0" />
                                </div>
@@ -1115,7 +1025,6 @@ const TripEarning: React.FC = () => {
                                      className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm focus:ring-2 focus:ring-emerald-500" 
                                      placeholder="%" 
                                  />
-                                  <p className="text-[10px] text-gray-400 mt-1">Calculated on (Trip + Wait) + Cancel</p>
                               </div>
                               <div>
                                  <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Admin Comm Amt</label>
@@ -1139,9 +1048,15 @@ const TripEarning: React.FC = () => {
                                * Admin Commission is 100% of Total Cancellation Fee.
                            </div>
                        )}
-                        </div>
-                     </div>
-                 )}
+                       
+                       <p className="text-[10px] text-gray-400 mt-1">Calculated on (Trip + Wait) + Cancel</p>
+                       
+                       <div className="mt-4">
+                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Remarks</label>
+                          <textarea name="remarks" rows={2} value={formData.remarks} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm resize-none" placeholder="Any special notes..." />
+                       </div>
+                    </div>
+                 </div>
 
                  {mapError && (
                     <div className="bg-red-50 text-red-700 p-3 rounded-lg flex items-center gap-2 mt-4 text-sm border border-red-200">
@@ -1149,11 +1064,10 @@ const TripEarning: React.FC = () => {
                     </div>
                  )}
 
-                 {/* Action Buttons */}
                  <div className="pt-6 border-t border-gray-100 mt-6 flex justify-end gap-3">
                     <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-white font-medium">Cancel</button>
                     <button type="submit" className="px-6 py-2 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 shadow-sm transition-colors flex items-center gap-2">
-                       <Save className="w-4 h-4" /> {editingId ? 'Update Trip' : 'Save Trip'}
+                       <Save className="w-4 h-4" /> Save Trip
                     </button>
                  </div>
               </form>

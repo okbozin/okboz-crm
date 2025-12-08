@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import AttendanceCalendar from '../../components/AttendanceCalendar';
 import { MOCK_EMPLOYEES, getEmployeeAttendance, COLORS } from '../../constants';
@@ -11,10 +10,9 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useBranding } from '../../context/BrandingContext';
-import { useNotification } from '../../context/NotificationContext'; // Import useNotification
-import { sendSystemNotification } from '../../services/cloudService'; // Import sendSystemNotification
+import { useNotification } from '../../context/NotificationContext'; 
+import { sendSystemNotification } from '../../services/cloudService'; 
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as ReTooltip, Legend } from 'recharts';
-// Add missing imports for CorporateAccount, Branch, and Employee
 import { DailyAttendance, AttendanceStatus, CorporateAccount, Branch, Employee, UserRole } from '../../types';
 
 interface UserAttendanceProps {
@@ -27,11 +25,10 @@ function haversineDistance(coords1: { lat: number; lng: number; }, coords2: { la
     const R = 6371e3; // metres
 
     const dLat = toRad(coords2.lat - coords1.lat);
-    // Fix: Changed 'lon' to 'lng' as per type definition
     const dLon = toRad(coords2.lng - coords1.lng); 
 
     const lat1 = toRad(coords1.lat);
-    const lat2 = toRad(coords2.lat); // Changed to coords2.lat
+    const lat2 = toRad(coords2.lat); 
     
     const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
               Math.cos(lat1) * Math.cos(lat2) *
@@ -58,24 +55,24 @@ const parseTimeToMinutes = (timeString: string): number | null => {
 
 // Helper to format total minutes into Hh Mm Ss
 const formatDuration = (totalMinutes: number): string => {
-  if (totalMinutes < 0) totalMinutes = 0; // Should not happen with careful calculation
+  if (totalMinutes < 0) totalMinutes = 0; 
   const hours = Math.floor(totalMinutes / 60);
-  const minutes = Math.round(totalMinutes % 60); // Round minutes for better display
+  const minutes = Math.round(totalMinutes % 60); 
   return `${hours}h ${minutes}m`;
 };
 
 // Helper to find employee by ID across all storage locations
 const findEmployeeById = (id: string): Employee | undefined => {
     try {
-      const adminStaff = JSON.parse(localStorage.getItem('staff_data') || '[]');
+      const adminStaff = JSON.parse(localStorage.getItem('staff_data') || '[]').filter((item: any) => item && typeof item === 'object');
       let found = adminStaff.find((e: any) => e.id === id);
       if (found) return { ...found, corporateId: 'admin' };
     } catch(e) {}
 
     try {
-      const corporates = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
+      const corporates = JSON.parse(localStorage.getItem('corporate_accounts') || '[]').filter((item: any) => item && typeof item === 'object');
       for (const corp of corporates) {
-          const cStaff = JSON.parse(localStorage.getItem(`staff_data_${corp.email}`) || '[]');
+          const cStaff = JSON.parse(localStorage.getItem(`staff_data_${corp.email}`) || '[]').filter((item: any) => item && typeof item === 'object');
           const found = cStaff.find((e: any) => e.id === id);
           if (found) return { ...found, corporateId: corp.email };
       }
@@ -84,10 +81,11 @@ const findEmployeeById = (id: string): Employee | undefined => {
     return MOCK_EMPLOYEES.find(e => e.id === id);
 };
 
-const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
+// Fix: Changed from a const functional component with separate export to a direct export default function
+export default function UserAttendance({ isAdmin = false }: UserAttendanceProps) {
   const navigate = useNavigate();
   const { companyName } = useBranding();
-  const { playAlarmSound } = useNotification(); // Use notification context
+  const { playAlarmSound } = useNotification(); 
 
   // Admin View State
   const [viewMode, setViewMode] = useState<'Individual' | 'MusterRoll'>('Individual');
@@ -113,21 +111,21 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
   useEffect(() => {
     if (isAdmin) {
       try {
-        const corps = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
+        const corps = JSON.parse(localStorage.getItem('corporate_accounts') || '[]').filter((item: any) => item && typeof item === 'object');
         setCorporatesList(corps);
       } catch (e) { console.error("Failed to load corporate accounts", e); }
 
       let aggregatedBranches: (Branch & { owner?: string, ownerName?: string })[] = [];
       try {
-        const adminBranches = JSON.parse(localStorage.getItem('branches_data') || '[]');
+        const adminBranches = JSON.parse(localStorage.getItem('branches_data') || '[]').filter((item: any) => item && typeof item === 'object');
         aggregatedBranches = [...aggregatedBranches, ...adminBranches.map((b: Branch) => ({ ...b, owner: 'admin', ownerName: 'Head Office' }))];
         
-        const corps = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
+        const corps = JSON.parse(localStorage.getItem('corporate_accounts') || '[]').filter((item: any) => item && typeof item === 'object');
         corps.forEach((c: CorporateAccount) => {
           const corpBranchesKey = `branches_data_${c.email}`;
           const corpBranchesData = localStorage.getItem(corpBranchesKey);
           if (corpBranchesData) {
-            const corpBranches = JSON.parse(corpBranchesData).map((b: Branch) => ({ ...b, owner: c.email, ownerName: c.companyName }));
+            const corpBranches = JSON.parse(corpBranchesData).filter((item: any) => item && typeof item === 'object').map((b: Branch) => ({ ...b, owner: c.email, ownerName: c.companyName }));
             aggregatedBranches = [...aggregatedBranches, ...corpBranches];
           }
         });
@@ -145,17 +143,17 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
           const adminData = localStorage.getItem('staff_data');
           if (adminData) {
               try { 
-                  const parsed = JSON.parse(adminData);
+                  const parsed = JSON.parse(adminData).filter((item: any) => item && typeof item === 'object');
                   allStaff = [...allStaff, ...parsed.map((e: any) => ({...e, corporateId: 'admin', corporateName: 'Head Office'}))];
               } catch (e) {}
           }
           try {
-            const corporates = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
+            const corporates = JSON.parse(localStorage.getItem('corporate_accounts') || '[]').filter((item: any) => item && typeof item === 'object');
             corporates.forEach((corp: any) => {
                 const cData = localStorage.getItem(`staff_data_${corp.email}`);
                 if (cData) {
                     try {
-                        const parsed = JSON.parse(cData);
+                        const parsed = JSON.parse(cData).filter((item: any) => item && typeof item === 'object');
                         const tagged = parsed.map((e: any) => ({...e, corporateId: corp.email, corporateName: corp.companyName}));
                         allStaff = [...allStaff, ...tagged];
                     } catch (e) {}
@@ -166,7 +164,7 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
       } else {
           const key = `staff_data_${currentSessionId}`;
           const saved = localStorage.getItem(key);
-          return saved ? JSON.parse(saved).map((e: any) => ({...e, corporateId: currentSessionId, corporateName: 'My Branch'})) : [];
+          return saved ? JSON.parse(saved).filter((item: any) => item && typeof item === 'object').map((e: any) => ({...e, corporateId: currentSessionId, corporateName: 'My Branch'})) : [];
       }
     }
     return [];
@@ -220,12 +218,12 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
   useEffect(() => {
     if (selectedEmployee?.branch) {
       const allBranches: Branch[] = [];
-      const adminBranches = JSON.parse(localStorage.getItem('branches_data') || '[]');
+      const adminBranches = JSON.parse(localStorage.getItem('branches_data') || '[]').filter((item: any) => item && typeof item === 'object');
       allBranches.push(...adminBranches);
 
-      const corporates = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
+      const corporates = JSON.parse(localStorage.getItem('corporate_accounts') || '[]').filter((item: any) => item && typeof item === 'object');
       corporates.forEach((corp: any) => {
-        const cBranches = JSON.parse(localStorage.getItem(`branches_data_${corp.email}`) || '[]');
+        const cBranches = JSON.parse(localStorage.getItem(`branches_data_${corp.email}`) || '[]').filter((item: any) => item && typeof item === 'object');
         allBranches.push(...cBranches);
       });
 
@@ -250,9 +248,13 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
   const [locationStatus, setLocationStatus] = useState<Employee['attendanceLocationStatus']>('idle');
   const [currentLocation, setCurrentLocation] = useState<Employee['currentLocation']>(null);
   const [cameraStatus, setCameraStatus] = useState<Employee['cameraPermissionStatus']>('idle');
-  const [isScanningQr, setIsScanningQr] = useState(false); // Not implemented in this iteration
+  const [isScanningQr, setIsScanningQr] = useState(false); 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const [isPunching, setIsPunching] = useState(false);
+  
+  // Feedback message state
+  const [punchMessage, setPunchMessage] = useState<{ type: 'success' | 'error' | 'warning', text: string } | null>(null);
 
   // --- ADMIN ATTENDANCE EDIT MODAL STATES ---
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -309,12 +311,11 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
         const timestamp = new Date().toISOString();
         const notificationMessage = `${selectedEmployee.name} is now ${status}.`;
         
-        // Update employee's onlineHistory in local storage
         let staffDataKey = 'staff_data';
         if (selectedEmployee.corporateId && selectedEmployee.corporateId !== 'admin') {
             staffDataKey = `staff_data_${selectedEmployee.corporateId}`;
         }
-        const allStaff = JSON.parse(localStorage.getItem(staffDataKey) || '[]');
+        const allStaff = JSON.parse(localStorage.getItem(staffDataKey) || '[]').filter((item: any) => item && typeof item === 'object');
         const updatedStaff = allStaff.map((emp: Employee) => {
             if (emp.id === selectedEmployee.id) {
                 const currentHistory = emp.onlineHistory || [];
@@ -328,22 +329,21 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
         });
         localStorage.setItem(staffDataKey, JSON.stringify(updatedStaff));
         
-        // Send system notification
         await sendSystemNotification({
           type: 'online_status',
           title: `Employee ${status.charAt(0).toUpperCase() + status.slice(1)}`,
           message: notificationMessage,
           targetRoles: [UserRole.ADMIN, UserRole.CORPORATE],
-          corporateId: selectedEmployee.corporateId === 'admin' ? null : selectedEmployee.corporateId || null,
+          corporateId: selectedEmployee.corporateId === 'admin' ? undefined : selectedEmployee.corporateId,
           employeeId: selectedEmployee.id,
-          link: '/admin/tracking' // Link to live tracking page
+          link: '/admin/tracking'
         });
       };
 
-      sendOnlineStatus('online'); // On mount
+      sendOnlineStatus('online');
 
       return () => {
-        sendOnlineStatus('offline'); // On unmount/cleanup
+        sendOnlineStatus('offline');
       };
     }
   }, [isAdmin, selectedEmployee]);
@@ -361,8 +361,7 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
 
     if (savedData) {
       try {
-        let parsedData = JSON.parse(savedData);
-        // If loaded data is from a past month, ensure future days are NOT_MARKED
+        let parsedData = JSON.parse(savedData).filter((item: any) => item && typeof item === 'object');
         const today = new Date();
         if (year === today.getFullYear() && month === today.getMonth()) {
             parsedData = parsedData.map((d: DailyAttendance) => {
@@ -404,7 +403,6 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
   }
 
   const stats = useMemo(() => {
-    // If Individual View: Stats for SELECTED EMPLOYEE
     if (viewMode === 'Individual' && selectedEmployee) {
         return attendanceData.reduce((acc, day) => {
         if (day.status === AttendanceStatus.PRESENT) acc.present++;
@@ -416,22 +414,18 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
         return acc;
         }, { present: 0, absent: 0, halfDay: 0, paidLeave: 0, weekOff: 0, late: 0 });
     } 
-    // If Muster Roll: Stats for ALL EMPLOYEES in filtered list
     else {
-        // Mock aggregate for now as it's complex to fetch all
-        // In real app, backend provides this
         return { 
             present: Math.floor(filteredEmployeesForDisplay.length * 0.8),
             absent: Math.floor(filteredEmployeesForDisplay.length * 0.1),
             halfDay: 0,
-            paidLeave: 0, // Simplified for MusterRoll
-            weekOff: 0, // Simplified
+            paidLeave: 0, 
+            weekOff: 0, 
             late: Math.floor(filteredEmployeesForDisplay.length * 0.05)
         };
     }
   }, [attendanceData, viewMode, filteredEmployeesForDisplay, selectedEmployee]);
 
-  // Total Monthly Duration Calculation for Employee View
   const totalMonthlyDurationMinutes = useMemo(() => {
     let totalMinutes = 0;
     if (selectedEmployee) {
@@ -441,7 +435,7 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
           const endMinutes = parseTimeToMinutes(day.checkOut);
           if (startMinutes !== null && endMinutes !== null) {
             let diff = endMinutes - startMinutes;
-            if (diff < 0) diff += 24 * 60; // Handle overnight shifts
+            if (diff < 0) diff += 24 * 60;
             totalMinutes += diff;
           }
         }
@@ -453,7 +447,6 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
   const formattedTotalMonthlyDuration = useMemo(() => formatDuration(totalMonthlyDurationMinutes), [totalMonthlyDurationMinutes]);
 
 
-  // Chart Data
   const pieData = [
     { name: 'Present', value: stats.present, color: '#10b981' },
     { name: 'Absent', value: stats.absent, color: '#ef4444' },
@@ -461,17 +454,14 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
     { name: 'Leave', value: stats.paidLeave, color: '#3b82f6' },
   ].filter(d => d.value > 0);
 
-  // Month Label
   const monthLabel = currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
-  // Bulk Actions
   const handleMarkAll = (status: AttendanceStatus) => {
     if (!selectedEmployee) return;
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
     const storageKey = `attendance_data_${selectedEmployee.id}_${year}_${month}`;
     
-    // Create full month data if missing
     let newData = [...attendanceData];
     if (newData.length === 0) {
         const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -486,7 +476,6 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
     const today = new Date();
     const updatedData = newData.map(d => {
         const dDate = new Date(d.date);
-        // Only mark past/today, skip future
         if (dDate <= today && d.status === AttendanceStatus.NOT_MARKED) {
              return { ...d, status, checkIn: status === AttendanceStatus.PRESENT ? '09:30 AM' : undefined, checkOut: status === AttendanceStatus.PRESENT ? '06:30 PM' : undefined };
         }
@@ -498,850 +487,694 @@ const UserAttendance: React.FC<UserAttendanceProps> = ({ isAdmin = false }) => {
     setRefreshTrigger(p => p + 1);
   };
 
-  // --- EMPLOYEE PUNCH CARD LOGIC ---
-
-  const getLocation = () => {
-    if (navigator.geolocation) {
-      setLocationStatus('fetching');
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          const { latitude, longitude, accuracy } = position.coords;
-          const newLocation = { lat: latitude, lng: longitude, accuracy };
-          setCurrentLocation(newLocation);
-
-          if (employeeBranch && employeeBranch.lat && employeeBranch.lng && employeeBranch.radius) {
-            const distance = haversineDistance(
-              { lat: newLocation.lat, lng: newLocation.lng },
-              { lat: employeeBranch.lat, lng: employeeBranch.lng }
-            );
-
-            if (distance <= employeeBranch.radius) {
-              setLocationStatus('within_geofence');
-            } else {
-              setLocationStatus('outside_geofence');
-              playAlarmSound();
-            }
-          } else {
-            setLocationStatus('granted');
-          }
-        },
-        (error) => {
-          console.error("Geolocation error:", error);
-          if (error.code === error.PERMISSION_DENIED) {
-            setLocationStatus('denied');
-            playAlarmSound();
-          } else {
-            setLocationStatus('idle'); // Or 'error'
-          }
-        },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-      );
-    } else {
-      setLocationStatus('denied');
-      playAlarmSound();
+  const getLocationPromise = (): Promise<[Employee['attendanceLocationStatus'], Employee['currentLocation'] | null]> => new Promise((resolve) => {
+    if (!navigator.geolocation) {
+      resolve(['denied', null]);
+      return;
     }
-  };
 
-  const requestCameraPermission = async () => {
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude, accuracy } = position.coords;
+        resolve(['granted', { lat: latitude, lng: longitude, accuracy }]);
+      },
+      (error) => {
+        console.error("Geolocation Error:", error);
+        resolve(['denied', null]);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  });
+
+  const getCameraPermission = async (): Promise<Employee['cameraPermissionStatus']> => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      return 'denied';
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      streamRef.current = stream; // Store stream to stop it later
-      setCameraStatus('granted');
-      stream.getTracks().forEach(track => track.stop()); // Stop the stream immediately if not actually using for capture
-    } catch (error) {
-      console.error("Camera permission error:", error);
-      setCameraStatus('denied');
-      playAlarmSound();
+      stream.getTracks().forEach(track => track.stop()); // Stop the stream immediately
+      return 'granted';
+    } catch (e) {
+      console.error("Camera permission error:", e);
+      return 'denied';
     }
   };
 
   const handlePunch = async () => {
-    if (!selectedEmployee) return;
+    if (!selectedEmployee || isPunching) return;
 
-    const now = new Date();
-    const timeString = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
-    const todayStr = now.toISOString().split('T')[0];
-    const year = now.getFullYear();
-    const month = now.getMonth();
-    const storageKey = `attendance_data_${selectedEmployee.id}_${year}_${month}`;
+    setIsPunching(true);
+    setPunchMessage(null); // Clear previous messages
 
-    // Get latest attendance data
-    let currentAttendance = JSON.parse(localStorage.getItem(storageKey) || '[]');
-    let todayRecordIndex = currentAttendance.findIndex((d: DailyAttendance) => d.date === todayStr);
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    const currentTimeFormatted = today.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
 
-    if (todayRecordIndex === -1) {
-      // If no record for today, create a new one (e.g., first punch of the month or new day)
-      currentAttendance.push({
-        date: todayStr,
-        status: AttendanceStatus.NOT_MARKED, // Will be updated below
-        checkIn: undefined,
-        checkOut: undefined,
-        isLate: false,
-      });
-      todayRecordIndex = currentAttendance.length - 1;
+    let newLocationStatus: Employee['attendanceLocationStatus'] = 'idle';
+    let newCameraStatus: Employee['cameraPermissionStatus'] = 'idle';
+    let newLocation: Employee['currentLocation'] = null;
+
+    // 1. Get Permissions & Location (if configured for employee)
+    if (selectedEmployee.liveTracking || selectedEmployee.attendanceConfig?.gpsGeofencing) {
+        [newLocationStatus, newLocation] = await getLocationPromise();
+        setLocationStatus(newLocationStatus);
+    }
+    if (selectedEmployee.attendanceConfig?.qrScan) {
+        newCameraStatus = await getCameraPermission();
+        setCameraStatus(newCameraStatus);
     }
 
-    let updatedRecord = { ...currentAttendance[todayRecordIndex] };
-
-    // --- Permissions Check ---
-    const config = selectedEmployee.attendanceConfig || { gpsGeofencing: false, qrScan: false, manualPunch: true };
+    // 2. Validate Punch based on settings
     let canPunch = true;
-    let punchMessage = '';
-    // Fix: Explicitly cast type for notification
-    let notificationType: 'punch_in' | 'punch_out';
-    let notificationTitle: string;
-    let notificationMessage: string;
+    let failReason = '';
 
-    if (!isCheckedIn) { // Punch In
-      notificationType = 'punch_in';
-      notificationTitle = 'Employee Punched In';
+    if (selectedEmployee.attendanceConfig?.gpsGeofencing && newLocationStatus !== 'granted') {
+        canPunch = false;
+        failReason = "Location permission denied.";
+    } else if (selectedEmployee.attendanceConfig?.qrScan && newCameraStatus !== 'granted') {
+        canPunch = false;
+        failReason = "Camera permission denied.";
+    }
 
-      if (config.gpsGeofencing) {
-        await getLocation();
-        if (locationStatus === 'denied') {
-          punchMessage = "Cannot Punch In: Geolocation permission denied.";
-          canPunch = false;
-        } else if (locationStatus === 'outside_geofence') {
-          punchMessage = `Cannot Punch In: You are outside the geofenced area for ${employeeBranch?.name || 'your branch'}.`;
-          canPunch = false;
+    // Geofencing Check
+    if (canPunch && selectedEmployee.attendanceConfig?.gpsGeofencing && newLocation && employeeBranch) {
+        const distance = haversineDistance(newLocation, { lat: employeeBranch.lat, lng: employeeBranch.lng });
+        if (distance > employeeBranch.radius) {
+            canPunch = false;
+            failReason = `You are ${Math.round(distance - employeeBranch.radius)}m outside the geofence (${employeeBranch.radius}m).`;
+            setLocationStatus('outside_geofence');
+        } else {
+            setLocationStatus('within_geofence');
         }
-      }
-      if (canPunch && config.qrScan) { // This is a placeholder as QR scan logic isn't fully implemented in this UI
-        await requestCameraPermission();
-        if (cameraStatus === 'denied') {
-          punchMessage = "Cannot Punch In: Camera permission denied.";
-          canPunch = false;
+    }
+
+    // Proceed with Punch if Valid
+    if (canPunch) {
+        // Update employee's current location and attendance status
+        let staffDataKey = 'staff_data';
+        if (selectedEmployee.corporateId && selectedEmployee.corporateId !== 'admin') {
+            staffDataKey = `staff_data_${selectedEmployee.corporateId}`;
         }
-        // In a real app, QR scan would happen here and validate
-      }
+        const allStaff = JSON.parse(localStorage.getItem(staffDataKey) || '[]').filter((item: any) => item && typeof item === 'object');
+        const updatedStaff = allStaff.map((emp: Employee) => {
+            if (emp.id === selectedEmployee.id) {
+                return { ...emp, currentLocation: newLocation, attendanceLocationStatus: newLocationStatus, cameraPermissionStatus: newCameraStatus };
+            }
+            return emp;
+        });
+        localStorage.setItem(staffDataKey, JSON.stringify(updatedStaff));
 
-      if (canPunch) {
-        updatedRecord.checkIn = timeString;
-        updatedRecord.status = AttendanceStatus.PRESENT;
-        // Logic to determine if late (e.g., checkInTime > '09:30 AM')
-        updatedRecord.isLate = (parseTimeToMinutes(timeString) || 0) > (parseTimeToMinutes('09:30 AM') || 0); // Check against 9:30 AM
-        setCheckInTime(timeString);
-        setIsCheckedIn(true);
-        notificationMessage = `${selectedEmployee.name} (${selectedEmployee.id}) has punched in at ${timeString}.`;
-      } else {
-        // Display error message to user
-        alert(punchMessage);
-        return;
-      }
-    } else { // Punch Out
-      notificationType = 'punch_out';
-      notificationTitle = 'Employee Punched Out';
 
-      updatedRecord.checkOut = timeString;
-      setCheckOutTime(timeString);
-      setIsCheckedIn(false); // Reset for next day
-      notificationMessage = `${selectedEmployee.name} (${selectedEmployee.id}) has punched out at ${timeString}.`;
-    }
+        // Update attendance record
+        const year = today.getFullYear();
+        const month = today.getMonth();
+        const storageKey = `attendance_data_${selectedEmployee.id}_${year}_${month}`;
+        const existingAttendance = JSON.parse(localStorage.getItem(storageKey) || '[]').filter((item: any) => item && typeof item === 'object');
 
-    currentAttendance[todayRecordIndex] = updatedRecord;
-    localStorage.setItem(storageKey, JSON.stringify(currentAttendance));
-    setAttendanceData(currentAttendance); // Update local state
-    setRefreshTrigger(prev => prev + 1); // Trigger refresh for calendar/stats
+        let updatedAttendance = [...existingAttendance];
+        const dayIndex = updatedAttendance.findIndex(d => d.date === todayStr);
 
-    // Send Notification
-    await sendSystemNotification({
-        type: notificationType, 
-        title: notificationTitle,
-        message: notificationMessage,
-        targetRoles: [UserRole.ADMIN, UserRole.CORPORATE], // Send to relevant roles
-        corporateId: selectedEmployee.corporateId === 'admin' ? null : selectedEmployee.corporateId || null,
-        employeeId: selectedEmployee.id,
-        link: '/admin/attendance' // Link to admin attendance page
-    });
-  };
+        if (!isCheckedIn) { // Punch In
+            const checkInHour = today.getHours();
+            const checkInMinute = today.getMinutes();
 
-  // --- UI Location/Camera Status Display ---
-    let locationDisplay = "Location Unavailable";
-    let locationColor = "text-gray-500";
-    let locationIcon = <MapPin className="w-3 h-3" />;
+            let isLate = false;
+            // Assuming a default shift start time of 9:30 AM (or fetch from employee.workingHours)
+            const defaultShiftStart = selectedEmployee.workingHours ? parseTimeToMinutes(selectedEmployee.workingHours.split(' - ')[0]) : parseTimeToMinutes('09:30 AM');
+            const actualCheckInMinutes = parseTimeToMinutes(currentTimeFormatted);
 
-    switch (locationStatus) {
-        case 'idle':
-        case 'fetching':
-            locationDisplay = "Fetching Location...";
-            locationColor = "text-blue-500";
-            locationIcon = <Loader2 className="w-3 h-3 animate-spin" />;
-            break;
-        case 'granted':
-            locationDisplay = "Location Granted";
-            locationColor = "text-emerald-500";
-            locationIcon = <CheckCircle className="w-3 h-3" />;
-            break;
-        case 'within_geofence':
-            locationDisplay = "Within Geofence";
-            locationColor = "text-emerald-500";
-            locationIcon = <CheckCircle className="w-3 h-3" />;
-            break;
-        case 'outside_geofence':
-            locationDisplay = `Outside Geofence (${employeeBranch?.name})`;
-            locationColor = "text-red-500";
-            locationIcon = <AlertCircle className="w-3 h-3" />;
-            break;
-        case 'denied':
-            locationDisplay = "Location Denied";
-            locationColor = "text-red-500";
-            locationIcon = <XCircle className="w-3 h-3" />;
-            break;
-    }
+            if (defaultShiftStart !== null && actualCheckInMinutes !== null && actualCheckInMinutes > defaultShiftStart + 15) { // 15 min grace
+                isLate = true;
+            }
 
-    let cameraDisplay = "Camera Unavailable";
-    let cameraColor = "text-gray-500";
-    let cameraIcon = <Camera className="w-3 h-3" />;
+            if (dayIndex !== -1) {
+                updatedAttendance[dayIndex] = {
+                    ...updatedAttendance[dayIndex],
+                    status: AttendanceStatus.PRESENT,
+                    checkIn: currentTimeFormatted,
+                    isLate: isLate
+                };
+            } else {
+                updatedAttendance.push({
+                    date: todayStr,
+                    status: AttendanceStatus.PRESENT,
+                    checkIn: currentTimeFormatted,
+                    isLate: isLate
+                });
+            }
+            setPunchMessage({ type: 'success', text: `Punched IN at ${currentTimeFormatted}!` + (isLate ? ' (Late)' : '') });
+            // NEW: Send Punch-In Notification
+            await sendSystemNotification({
+                type: 'punch_in', // Explicitly cast 'type'
+                title: 'Employee Punched In',
+                message: `${selectedEmployee.name} punched in at ${currentTimeFormatted}.`,
+                targetRoles: [UserRole.ADMIN, UserRole.CORPORATE], // Admin and Corporate can receive
+                corporateId: selectedEmployee.corporateId === 'admin' ? undefined : selectedEmployee.corporateId,
+                employeeId: selectedEmployee.id,
+                link: '/admin/attendance' // Link to attendance page
+            });
 
-    switch (cameraStatus) {
-        case 'idle':
-            cameraDisplay = "Camera Status Idle";
-            break;
-        case 'granted':
-            cameraDisplay = "Camera Granted";
-            cameraColor = "text-emerald-500";
-            cameraIcon = <CheckCircle className="w-3 h-3" />;
-            break;
-        case 'denied':
-            cameraDisplay = "Camera Denied";
-            cameraColor = "text-red-500";
-            cameraIcon = <XCircle className="w-3 h-3" />;
-            break;
-    }
-
-  // --- ADMIN ATTENDANCE EDIT MODAL LOGIC ---
-  const handleDateClickForAdmin = (day: DailyAttendance) => {
-    if (!selectedEmployee) return;
-    setEditModalData(day);
-    setEditEmployeeName(selectedEmployee.name);
-    setEditEmployeeId(selectedEmployee.id);
-    setIsEditModalOpen(true);
-  };
-
-  const handleEditModalChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    if (!editModalData) return;
-    const { name, value, type, checked } = e.target as HTMLInputElement;
-
-    if (name === 'isLate') {
-        setEditModalData(prev => prev ? { ...prev, isLate: checked } : null);
+        } else { // Punch Out
+            if (dayIndex !== -1) {
+                updatedAttendance[dayIndex] = {
+                    ...updatedAttendance[dayIndex],
+                    checkOut: currentTimeFormatted
+                };
+            }
+            setPunchMessage({ type: 'success', text: `Punched OUT at ${currentTimeFormatted}!` });
+             // NEW: Send Punch-Out Notification
+             await sendSystemNotification({
+                type: 'punch_out', // Explicitly cast 'type'
+                title: 'Employee Punched Out',
+                message: `${selectedEmployee.name} punched out at ${currentTimeFormatted}.`,
+                targetRoles: [UserRole.ADMIN, UserRole.CORPORATE], // Admin and Corporate can receive
+                corporateId: selectedEmployee.corporateId === 'admin' ? undefined : selectedEmployee.corporateId,
+                employeeId: selectedEmployee.id,
+                link: '/admin/attendance' // Link to attendance page
+            });
+        }
+        localStorage.setItem(storageKey, JSON.stringify(updatedAttendance));
+        setAttendanceData(updatedAttendance);
+        setRefreshTrigger(p => p + 1); // Trigger re-render of attendance calendar
     } else {
-        setEditModalData(prev => prev ? { ...prev, [name]: value } : null);
+        setPunchMessage({ type: 'error', text: failReason });
+    }
+
+    setIsPunching(false);
+  };
+
+  const handleDateClickForAdminEdit = (day: DailyAttendance) => {
+    if (isAdmin && selectedEmployee) {
+        setEditModalData(day);
+        setEditEmployeeName(selectedEmployee.name);
+        setEditEmployeeId(selectedEmployee.id);
+        setIsEditModalOpen(true);
     }
   };
 
-  const saveEditedAttendance = async () => {
-    if (!editModalData || !selectedEmployee) return;
+  const handleSaveAdminAttendanceEdit = () => {
+    if (!editModalData || !editEmployeeId) return;
 
-    const year = new Date(editModalData.date).getFullYear();
-    const month = new Date(editModalData.date).getMonth();
-    const storageKey = `attendance_data_${selectedEmployee.id}_${year}_${month}`;
+    const year = parseInt(editModalData.date.split('-')[0]);
+    const month = parseInt(editModalData.date.split('-')[1]) - 1; // Month index
+    const storageKey = `attendance_data_${editEmployeeId}_${year}_${month}`;
 
-    const currentAttendance: DailyAttendance[] = JSON.parse(localStorage.getItem(storageKey) || '[]');
-    const recordIndex = currentAttendance.findIndex(d => d.date === editModalData.date);
+    const existingAttendance = JSON.parse(localStorage.getItem(storageKey) || '[]').filter((item: any) => item && typeof item === 'object');
+    const updatedAttendance = existingAttendance.map((d: DailyAttendance) =>
+        d.date === editModalData.date ? { ...d, ...editModalData } : d
+    );
 
-    if (recordIndex !== -1) {
-        currentAttendance[recordIndex] = editModalData;
-    } else {
-        currentAttendance.push(editModalData);
-    }
-
-    localStorage.setItem(storageKey, JSON.stringify(currentAttendance));
-    setAttendanceData(currentAttendance);
-    setRefreshTrigger(prev => prev + 1); // Force calendar refresh
+    localStorage.setItem(storageKey, JSON.stringify(updatedAttendance));
+    setRefreshTrigger(p => p + 1); // Refresh calendar
     setIsEditModalOpen(false);
-
-    // Send Notification for manual edit
-    const message = `Attendance for ${selectedEmployee.name} (${selectedEmployee.id}) on ${editModalData.date} manually adjusted. New status: ${editModalData.status}, In: ${editModalData.checkIn || '-'}, Out: ${editModalData.checkOut || '-'}.`;
-    await sendSystemNotification({
-        type: 'system', // or 'attendance_edit' if a new type is added
-        title: 'Attendance Manually Edited',
-        message: message,
-        targetRoles: [UserRole.ADMIN, UserRole.CORPORATE], // Notify admins and corporate owners
-        corporateId: selectedEmployee.corporateId === 'admin' ? null : selectedEmployee.corporateId || null,
-        employeeId: selectedEmployee.id,
-        link: '/admin/attendance' // Link to admin attendance page
-    });
+    setEditModalData(null);
   };
 
-  const getDurationString = (checkIn?: string, checkOut?: string) => {
-    if (!checkIn || !checkOut) return null;
-    try {
-        const startMinutes = parseTimeToMinutes(checkIn);
-        const endMinutes = parseTimeToMinutes(checkOut);
-        if (startMinutes === null || endMinutes === null) return null;
+  const currentMonthDay = currentDate.getDate();
+  const currentMonthYearLabel = currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const dayOfMonthLabel = currentDate.toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
-        let diff = endMinutes - startMinutes;
-        if (diff < 0) diff += 24 * 60; // Handle overnight
-        if (diff <= 0) return null;
-        const h = Math.floor(diff / 60);
-        const m = diff % 60;
-        return `${h}h ${m}m`;
-    } catch (e) { return null; }
-  };
+  // UI for Employee Section (non-admin)
+  const employeePunchCardUI = (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex-1 flex flex-col justify-between items-center text-center max-w-sm mx-auto">
+        {punchMessage && (
+            <div className={`p-3 rounded-lg text-sm w-full mb-4 flex items-center gap-2 ${punchMessage.type === 'success' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-red-50 text-red-700 border border-red-100'}`}>
+                {punchMessage.type === 'success' ? <CheckCircle className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+                <span>{punchMessage.text}</span>
+            </div>
+        )}
+        <div className="mb-6">
+            <p className="text-sm text-gray-500 font-medium mb-1">{dayOfMonthLabel}</p>
+            <h3 className="text-5xl font-bold text-gray-900 mb-2 font-mono tracking-tight">{currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}</h3>
+            <p className="text-sm text-gray-500">
+                {isCheckedIn ? 'Currently Checked-in' : 'Ready to Punch In'}
+            </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 w-full mb-6 text-gray-700">
+            <div className="bg-gray-50 p-3 rounded-lg border border-gray-100 flex flex-col">
+                <span className="text-xs text-gray-500 mb-1">Check-in</span>
+                <span className="font-bold text-lg">{checkInTime}</span>
+            </div>
+            <div className="bg-gray-50 p-3 rounded-lg border border-gray-100 flex flex-col">
+                <span className="text-xs text-gray-500 mb-1">Check-out</span>
+                <span className="font-bold text-lg">{checkOutTime}</span>
+            </div>
+            <div className="col-span-2 bg-gray-50 p-3 rounded-lg border border-gray-100 flex flex-col">
+                <span className="text-xs text-gray-500 mb-1">Duration</span>
+                <span className="font-bold text-lg">{`${duration.hours.toString().padStart(2, '0')}h ${duration.minutes.toString().padStart(2, '0')}m ${duration.seconds.toString().padStart(2, '0')}s`}</span>
+            </div>
+        </div>
+
+        {selectedEmployee.branch && (
+            <div className={`text-xs p-2 rounded-lg w-full mb-6 flex items-center justify-center gap-2 ${
+                locationStatus === 'within_geofence' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
+                locationStatus === 'outside_geofence' ? 'bg-red-50 text-red-700 border border-red-100' :
+                'bg-gray-50 text-gray-500 border border-gray-100'
+            }`}>
+                {locationStatus === 'within_geofence' && <MapPin className="w-4 h-4 shrink-0" />}
+                {locationStatus === 'outside_geofence' && <AlertCircle className="w-4 h-4 shrink-0" />}
+                <span>
+                    {locationStatus === 'within_geofence' && `Within ${employeeBranch?.radius}m of ${employeeBranch?.name}`}
+                    {locationStatus === 'outside_geofence' && `Outside geofence of ${employeeBranch?.name}`}
+                    {locationStatus === 'denied' && `Location access denied.`}
+                    {locationStatus === 'idle' && `Checking location...`}
+                    {locationStatus === 'fetching' && <Loader2 className="w-4 h-4 animate-spin" />}
+                </span>
+            </div>
+        )}
+
+        {selectedEmployee.attendanceConfig?.qrScan && isScanningQr && (
+            <div className="relative w-full h-48 bg-gray-200 rounded-lg overflow-hidden mb-6 flex items-center justify-center">
+                <video ref={videoRef} className="w-full h-full object-cover"></video>
+                <button onClick={() => setIsScanningQr(false)} className="absolute top-2 right-2 bg-black/50 text-white p-2 rounded-full"><X className="w-4 h-4" /></button>
+                <div className="absolute inset-0 border-8 border-dashed border-white/50 rounded-lg"></div>
+            </div>
+        )}
+
+        <button
+            onClick={handlePunch}
+            disabled={isPunching || (selectedEmployee.attendanceConfig?.qrScan && isScanningQr)}
+            className={`w-full py-4 rounded-xl font-bold text-lg transition-colors shadow-lg ${
+                !isCheckedIn
+                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-200'
+                    : 'bg-red-600 hover:bg-red-700 text-white shadow-red-200'
+            } disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3`}
+        >
+            {isPunching && <Loader2 className="w-5 h-5 animate-spin" />}
+            {isCheckedIn ? 'Punch OUT' : 'Punch IN'}
+        </button>
+
+        {selectedEmployee.attendanceConfig?.qrScan && !isScanningQr && !isCheckedIn && (
+            <button
+                onClick={() => setIsScanningQr(true)}
+                className="mt-3 w-full py-3 border border-gray-300 text-gray-700 rounded-xl font-medium hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
+            >
+                <ScanLine className="w-5 h-5" /> Scan QR Code
+            </button>
+        )}
+    </div>
+  );
 
 
-  // --- ADMIN RENDER ---
-  if (isAdmin) {
-      return (
-          <div className="space-y-6 max-w-[1600px] mx-auto">
-             {/* Header Section */}
-             <div>
-                <h2 className="text-2xl font-bold text-gray-800">Attendance Management</h2>
-                <p className="text-gray-500">Monitor and manage staff attendance</p>
-             </div>
+  return (
+    <div className="max-w-7xl mx-auto space-y-6 pb-20">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-800">{isAdmin ? 'Staff Attendance Management' : 'My Attendance'}</h2>
+          <p className="text-gray-500">
+            {isAdmin ? 'View and manage employee attendance records.' : 'Track your daily attendance and work hours.'}
+          </p>
+        </div>
 
-             {/* Main Toolbar */}
-             <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between">
-                 {/* Left Filters */}
-                 <div className="flex flex-wrap gap-3 items-center flex-1">
-                    {/* Corporate Filter (Super Admin Only) */}
-                    {isSuperAdmin && (
-                        <select 
-                            value={filterCorporate}
-                            onChange={(e) => { setFilterCorporate(e.target.value); setFilterBranch('All'); }}
-                            className="px-4 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 min-w-[200px]"
-                        >
-                            <option value="All">All Corporates</option>
-                            <option value="admin">Head Office</option>
-                            {corporatesList.map(c => <option key={c.id} value={c.email}>{c.companyName}</option>)}
-                        </select>
-                    )}
-
-                    {/* Branch Filter */}
-                    <select 
-                        value={filterBranch}
-                        onChange={(e) => { setFilterBranch(e.target.value); setFilterStaffId('All'); }}
-                        className="px-4 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 min-w-[200px]"
-                    >
-                        <option value="All">All Branches</option>
-                        {allBranchesList
-                            .filter(b => isSuperAdmin ? (filterCorporate === 'All' || b.owner === filterCorporate) : b.owner === currentSessionId)
-                            .map((b, i) => <option key={i} value={b.name}>{b.name}</option>)
-                        }
-                    </select>
-                    
-                    {/* Employee Filter (Only in Individual View) */}
-                    {viewMode === 'Individual' && (
-                        <select 
-                            value={filterStaffId}
-                            onChange={(e) => { 
-                                setFilterStaffId(e.target.value); 
-                                const emp = employees.find(ep => ep.id === e.target.value);
-                                if (emp) setSelectedEmployee(emp);
-                            }}
-                            className="px-4 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 min-w-[250px]"
-                        >
-                            <option value="All">Select Employee</option>
-                            {filteredEmployeesForDisplay.map(e => <option key={e.id} value={e.id}>{e.name} ({e.role})</option>)}
-                        </select>
-                    )}
-                 </div>
-
-                 {/* Right Controls */}
-                 <div className="flex gap-3 items-center">
-                     {/* Period Toggle */}
-                     <div className="flex bg-gray-100 p-1 rounded-lg">
-                        <button 
-                            onClick={() => setPeriodType('Daily')}
-                            className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${periodType === 'Daily' ? 'bg-white dark:bg-gray-600 shadow text-gray-800' : 'text-gray-500 dark:text-gray-400'}`}
-                        >
-                            Daily
-                        </button>
-                        <button 
-                            onClick={() => setPeriodType('Monthly')}
-                            className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${periodType === 'Monthly' ? 'bg-white dark:bg-gray-600 shadow text-gray-800' : 'text-gray-500 dark:text-gray-400'}`}
-                        >
-                            Monthly
-                        </button>
-                     </div>
-
-                     {/* Date Picker */}
-                     <div className="relative">
-                        <input 
-                            type={periodType === 'Daily' ? 'date' : 'month'}
-                            value={periodType === 'Daily' ? currentDate.toISOString().split('T')[0] : currentDate.toISOString().slice(0, 7)}
-                            onChange={(e) => {
-                                const val = e.target.value;
-                                if (!val) return;
-                                if (periodType === 'Daily') setCurrentDate(new Date(val));
-                                else {
-                                    const [y, m] = val.split('-').map(Number);
-                                    setCurrentDate(new Date(y, m - 1, 1));
-                                }
-                            }}
-                            className="pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm outline-none bg-white min-w-[160px]"
-                        />
-                        <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-                     </div>
-                 </div>
-             </div>
-
-             {/* View Switcher (Tabs) */}
-             <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
-                 <button 
+        {isAdmin && (
+            <div className="flex bg-gray-100 p-1 rounded-xl border border-gray-200">
+                <button
                     onClick={() => setViewMode('Individual')}
-                    className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition-all ${viewMode === 'Individual' ? 'bg-white shadow text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
-                 >
+                    className={`px-4 py-2 text-sm font-medium rounded-lg transition-all flex items-center gap-2 ${viewMode === 'Individual' ? 'bg-white shadow text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
+                >
                     <User className="w-4 h-4" /> Individual
-                 </button>
-                 <button 
+                </button>
+                <button
                     onClick={() => setViewMode('MusterRoll')}
-                    className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition-all ${viewMode === 'MusterRoll' ? 'bg-white shadow text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
-                 >
+                    className={`px-4 py-2 text-sm font-medium rounded-lg transition-all flex items-center gap-2 ${viewMode === 'MusterRoll' ? 'bg-white shadow text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
+                >
                     <ListChecks className="w-4 h-4" /> Muster Roll
-                 </button>
-             </div>
+                </button>
+            </div>
+        )}
+      </div>
 
-             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Stats Cards Grid */}
-                <div className="lg:col-span-2 space-y-4">
-                    {/* Row 1 */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Total Staff</p>
-                            <h3 className="text-2xl font-bold text-gray-800">{filteredEmployeesForDisplay.length}</h3>
-                            <p className="text-[10px] text-gray-400 mt-1">Active Employees</p>
-                        </div>
-                        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm border-l-4 border-l-emerald-500">
-                            <div className="flex justify-between items-start">
-                                <div>
-                                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Present</p>
-                                    <h3 className="text-2xl font-bold text-emerald-600">{stats.present}</h3>
-                                </div>
-                                <CheckCircle className="w-5 h-5 text-emerald-500 opacity-20" />
-                            </div>
-                            <p className="text-[10px] text-gray-400 mt-1">Man-days</p>
-                        </div>
-                        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm border-l-4 border-l-red-500">
-                            <div className="flex justify-between items-start">
-                                <div>
-                                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Absent</p>
-                                    <h3 className="text-2xl font-bold text-red-600">{stats.absent}</h3>
-                                </div>
-                                <XCircle className="w-5 h-5 text-red-500 opacity-20" />
-                            </div>
-                            <p className="text-[10px] text-gray-400 mt-1">Man-days</p>
-                        </div>
-                        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm border-l-4 border-l-orange-500">
-                            <div className="flex justify-between items-start">
-                                <div>
-                                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Late</p>
-                                    <h3 className="text-2xl font-bold text-orange-600">{stats.late}</h3>
-                                </div>
-                                <Clock className="w-5 h-5 text-orange-500 opacity-20" />
-                            </div>
-                            <p className="text-[10px] text-gray-400 mt-1">Arrivals</p>
-                        </div>
-                    </div>
+      {/* Admin Filters / Employee Profile Header */}
+      {isAdmin ? (
+        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col md:flex-row gap-4 items-center">
+            {isSuperAdmin && (
+                <select
+                    value={filterCorporate}
+                    onChange={(e) => { setFilterCorporate(e.target.value); setFilterBranch('All'); setFilterStaffId('All'); setSelectedEmployee(null); }}
+                    className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 min-w-[150px]"
+                >
+                    <option value="All">All Corporates</option>
+                    <option value="admin">Head Office</option>
+                    {corporatesList.map(c => <option key={c.id} value={c.email}>{c.companyName}</option>)}
+                </select>
+            )}
 
-                    {/* Row 2 */}
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                            <div className="flex justify-between items-start">
-                                <div>
-                                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Half Day</p>
-                                    <h3 className="text-2xl font-bold text-amber-600">{stats.halfDay}</h3>
-                                </div>
-                                <Activity className="w-5 h-5 text-amber-500 opacity-20" />
-                            </div>
-                        </div>
-                        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                            <div className="flex justify-between items-start">
-                                <div>
-                                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Week Off</p>
-                                    <h3 className="text-2xl font-bold text-slate-600">{stats.weekOff}</h3>
-                                </div>
-                                <Coffee className="w-5 h-5 text-slate-500 opacity-20" />
-                            </div>
-                        </div>
-                        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                            <div className="flex justify-between items-start">
-                                <div>
-                                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">On Leave</p>
-                                    <h3 className="2xl font-bold text-blue-600">{stats.paidLeave}</h3>
-                                </div>
-                                <Plane className="w-5 h-5 text-blue-500 opacity-20" />
-                            </div>
-                            <p className="text-[10px] text-gray-400 mt-1">Approved</p>
-                        </div>
-                    </div>
-                </div>
+            <select
+                value={filterBranch}
+                onChange={(e) => { setFilterBranch(e.target.value); setFilterStaffId('All'); setSelectedEmployee(null); }}
+                className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 min-w-[140px]"
+            >
+                <option value="All">All Branches</option>
+                {allBranchesList
+                    .filter(b => b && (filterCorporate === 'All' || (b.owner === filterCorporate)))
+                    .map((b, i) => (
+                    <option key={i} value={b.name}>{b.name}</option>
+                ))}
+            </select>
 
-                {/* Chart */}
-                <div className="lg:col-span-1 bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col">
-                    <h4 className="text-sm font-bold text-gray-800 mb-4 flex items-center gap-2">
-                        <PieChartIcon className="w-4 h-4 text-emerald-500" /> Monthly Distribution
-                    </h4>
-                    <div className="flex-1 min-h-[200px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                                <Pie
-                                    data={pieData}
-                                    cx="50%"
-                                    cy="50%"
-                                    innerRadius={50}
-                                    outerRadius={70}
-                                    paddingAngle={5}
-                                    dataKey="value"
-                                >
-                                    {pieData.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={entry.color} />
-                                    ))}
-                                </Pie>
-                                <ReTooltip />
-                                <Legend iconSize={8} layout="horizontal" verticalAlign="bottom" wrapperStyle={{fontSize: '10px'}} />
-                            </PieChart>
-                        </ResponsiveContainer>
-                    </div>
-                </div>
-             </div>
+            <select
+                value={filterStaffId}
+                onChange={(e) => {
+                    setFilterStaffId(e.target.value);
+                    const selected = filteredEmployeesForDisplay.find(emp => emp.id === e.target.value);
+                    setSelectedEmployee(selected || null);
+                }}
+                className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 min-w-[180px]"
+            >
+                <option value="All">Select Employee</option>
+                {filteredEmployeesForDisplay.map(emp => (
+                    <option key={emp.id} value={emp.id}>{emp.name} ({emp.role})</option>
+                ))}
+            </select>
 
-             {/* Content View */}
-             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                 
-                 {/* View Controls */}
-                 <div className="p-4 border-b border-gray-100 flex flex-col md:flex-row justify-between items-center bg-gray-50">
-                     <div className="flex items-center gap-3">
-                         {selectedEmployee && (
-                             <div className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg shadow-sm">
-                                 <User className="w-4 h-4 text-gray-400" />
-                                 <span className="text-sm font-bold text-gray-700">{selectedEmployee.name}</span>
-                                 <span className="text-xs text-gray-400">({selectedEmployee.role})</span>
-                             </div>
-                         )}
-                         <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg p-1">
-                             <button onClick={handlePrev} className="p-1 hover:bg-gray-100 rounded text-gray-500"><ChevronLeft className="w-4 h-4" /></button>
-                             <span className="text-sm font-mono font-bold text-gray-700 px-2 min-w-[100px] text-center">
-                                 {periodType === 'Daily' ? currentDate.toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'}) : monthLabel}
-                             </span>
-                             <button onClick={handleNext} className="p-1 hover:bg-gray-100 rounded text-gray-500"><ChevronRight className="w-4 h-4" /></button>
-                         </div>
-                     </div>
+            <div className="w-px h-6 bg-gray-200 mx-1"></div>
 
-                     {viewMode === 'Individual' && (
-                         <div className="flex gap-3">
-                             <button 
-                                onClick={() => handleMarkAll(AttendanceStatus.PRESENT)}
-                                className="px-4 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold hover:bg-emerald-100 transition-colors"
-                             >
-                                Mark All Present
-                             </button>
-                             <button 
-                                onClick={() => handleMarkAll(AttendanceStatus.ABSENT)}
-                                className="px-4 py-1.5 bg-red-50 text-red-700 border border-red-200 rounded-lg text-xs font-bold hover:bg-red-100 transition-colors"
-                             >
-                                Mark All Absent
-                             </button>
-                             <div className="flex border border-gray-200 rounded-lg bg-white p-0.5">
-                                 <button className="p-1.5 bg-gray-100 rounded text-gray-700"><Calendar className="w-4 h-4" /></button>
-                                 <button className="p-1.5 hover:bg-gray-50 rounded text-gray-400"><List className="w-4 h-4" /></button>
-                             </div>
-                         </div>
-                     )}
-                 </div>
+            <div className="flex bg-gray-100 p-1 rounded-lg">
+                <button
+                    onClick={() => setPeriodType('Daily')}
+                    className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${periodType === 'Daily' ? 'bg-white shadow text-emerald-600' : 'text-gray-500'}`}
+                >
+                    Daily
+                </button>
+                <button
+                    onClick={() => setPeriodType('Monthly')}
+                    className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${periodType === 'Monthly' ? 'bg-white shadow text-emerald-600' : 'text-gray-500'}`}
+                >
+                    Monthly
+                </button>
+            </div>
 
-                 {/* Content Body */}
-                 <div className="p-6">
-                     {viewMode === 'Individual' ? (
-                         selectedEmployee ? (
-                             <AttendanceCalendar 
-                                 data={attendanceData} 
-                                 stats={stats} 
-                                 showStats={false} // Stats already shown in top dashboard
-                                 onDateClick={handleDateClickForAdmin} // Add click handler for admin
-                             />
-                         ) : (
-                             <div className="text-center py-10 text-gray-400">Select an employee to view calendar</div>
-                         )
-                     ) : (
-                         <div className="overflow-x-auto">
-                            <table className="w-full text-left text-sm whitespace-nowrap">
-                                <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-200">
-                                    <tr>
-                                        <th className="px-6 py-4">Employee</th>
-                                        <th className="px-6 py-4">Role</th>
-                                        <th className="px-6 py-4 text-center">Status</th>
-                                        <th className="px-6 py-4 text-center">In Time</th>
-                                        <th className="px-6 py-4 text-center">Out Time</th>
-                                        <th className="px-6 py-4 text-center">Hours</th>
-                                        <th className="px-6 py-4 text-right">Action</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-100">
-                                    {filteredEmployeesForDisplay.map(emp => (
-                                        <tr key={emp.id} className="hover:bg-gray-50 transition-colors">
-                                            <td className="px-6 py-4 font-bold text-gray-800 flex items-center gap-3">
-                                                <img src={emp.avatar} className="w-8 h-8 rounded-full border border-gray-100" alt="" />
-                                                {emp.name}
-                                            </td>
-                                            <td className="px-6 py-4 text-gray-500">{emp.role}</td>
-                                            <td className="px-6 py-4 text-center">
-                                                {/* Mock Status for Muster Roll List - In real app, fetch status for currentDate */}
-                                                <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded text-xs font-bold border border-emerald-200">
-                                                    PRESENT
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 text-center font-mono text-gray-600">09:30 AM</td>
-                                            <td className="px-6 py-4 text-center font-mono text-gray-600">06:30 PM</td>
-                                            <td className="px-6 py-4 text-center text-gray-500">9h 0m</td>
-                                            <td className="px-6 py-4 text-right">
-                                                <button className="text-blue-600 hover:underline text-xs font-medium">Edit</button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                         </div>
-                     )}
-                 </div>
-             </div>
+            {periodType === 'Daily' ? (
+                <input
+                    type="date"
+                    value={currentDate.toISOString().split('T')[0]}
+                    onChange={(e) => setCurrentDate(new Date(e.target.value))}
+                    className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm outline-none bg-white"
+                />
+            ) : (
+                <input
+                    type="month"
+                    value={currentDate.toISOString().slice(0, 7)}
+                    onChange={(e) => setCurrentDate(new Date(e.target.value + '-01'))}
+                    className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm outline-none bg-white"
+                />
+            )}
+            <button
+                onClick={() => setRefreshTrigger(prev => prev + 1)}
+                className="p-1.5 text-gray-500 hover:text-emerald-600 bg-white border border-gray-200 rounded-lg hover:bg-emerald-50 transition-colors"
+                title="Force Refresh"
+            >
+                <RefreshCcw className="w-4 h-4" />
+            </button>
+        </div>
+      ) : (
+        // Employee Profile Header (Non-Admin View)
+        selectedEmployee && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex items-center gap-4">
+              <img src={selectedEmployee.avatar} alt={selectedEmployee.name} className="w-12 h-12 rounded-full border border-gray-100 object-cover" />
+              <div>
+                  <h3 className="text-lg font-bold text-gray-900">{selectedEmployee.name}</h3>
+                  <p className="text-sm text-gray-500">{selectedEmployee.role} • {selectedEmployee.branch}</p>
+              </div>
+              <div className="ml-auto text-center hidden sm:block">
+                  <p className="text-xs text-gray-500">Live Tracking</p>
+                  <span className={`w-2.5 h-2.5 rounded-full inline-block ${selectedEmployee.isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-gray-400'}`}></span>
+              </div>
+          </div>
+        )
+      )}
 
-            {/* Admin Attendance Edit Modal */}
-            {isEditModalOpen && editModalData && selectedEmployee && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-md animate-in fade-in zoom-in duration-200">
-                        <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-2xl">
-                            <h3 className="font-bold text-gray-800 text-xl">Edit Attendance</h3>
-                            <button onClick={() => setIsEditModalOpen(false)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5"/></button>
-                        </div>
-                        <div className="p-6 space-y-4">
-                            <div className="flex items-center gap-3 bg-blue-50 p-3 rounded-lg border border-blue-100">
-                                <User className="w-5 h-5 text-blue-600" />
-                                <div>
-                                    <p className="text-sm font-bold text-blue-800">{editEmployeeName}</p>
-                                    <p className="text-xs text-blue-600">on {new Date(editModalData.date).toLocaleDateString()}</p>
-                                </div>
-                            </div>
 
-                            <div>
-                                <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                                <select
-                                    id="status"
-                                    name="status"
-                                    value={editModalData.status}
-                                    onChange={handleEditModalChange}
-                                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
-                                >
-                                    {Object.values(AttendanceStatus).map(statusOption => (
-                                        <option key={statusOption} value={statusOption}>{statusOption}</option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label htmlFor="checkIn" className="block text-sm font-medium text-gray-700 mb-1">Check-in Time</label>
-                                    <input
-                                        type="time"
-                                        id="checkIn"
-                                        name="checkIn"
-                                        value={editModalData.checkIn ? new Date(`2000-01-01 ${editModalData.checkIn}`).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : ''}
-                                        onChange={(e) => {
-                                            const newTime = e.target.value;
-                                            setEditModalData(prev => prev ? { ...prev, checkIn: newTime ? new Date(`2000-01-01T${newTime}`).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : undefined } : null);
-                                        }}
-                                        className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
-                                    />
-                                </div>
-                                <div>
-                                    <label htmlFor="checkOut" className="block text-sm font-medium text-gray-700 mb-1">Check-out Time</label>
-                                    <input
-                                        type="time"
-                                        id="checkOut"
-                                        name="checkOut"
-                                        value={editModalData.checkOut ? new Date(`2000-01-01 ${editModalData.checkOut}`).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : ''}
-                                        onChange={(e) => {
-                                            const newTime = e.target.value;
-                                            setEditModalData(prev => prev ? { ...prev, checkOut: newTime ? new Date(`2000-01-01T${newTime}`).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : undefined } : null);
-                                        }}
-                                        className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
-                                    />
-                                </div>
-                            </div>
-                            
-                            <div className="flex justify-between items-center bg-gray-100 p-3 rounded-lg border border-gray-200">
-                                <label htmlFor="isLate" className="text-sm font-medium text-gray-700">Mark as Late</label>
-                                <input
-                                    type="checkbox"
-                                    id="isLate"
-                                    name="isLate"
-                                    checked={editModalData.isLate || false}
-                                    onChange={handleEditModalChange}
-                                    className="h-4 w-4 text-emerald-600 focus:ring-emerald-500 border-gray-300 rounded"
-                                />
-                            </div>
-
-                            <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100 flex justify-between items-center">
-                                <span className="font-bold text-emerald-800 text-sm">Working Duration:</span>
-                                <span className="font-bold text-emerald-600 text-lg">{getDurationString(editModalData.checkIn, editModalData.checkOut) || '--:--'}</span>
-                            </div>
-                        </div>
-                        <div className="p-5 border-t border-gray-100 bg-gray-50 flex justify-end gap-3 rounded-b-2xl">
-                            <button onClick={() => setIsEditModalOpen(false)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-white transition-colors">Cancel</button>
-                            <button onClick={saveEditedAttendance} className="px-6 py-2 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 shadow-md transition-colors flex items-center gap-2">
-                                <Save className="w-4 h-4" /> Save Changes
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Column (Employee Punch Card or Admin Calendar Navigation) */}
+        <div className="lg:col-span-1 space-y-6 flex flex-col">
+            {isAdmin ? (
+                // Admin Calendar Navigation & Summary
+                <>
+                {selectedEmployee ? (
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex-1 flex flex-col justify-between">
+                        <div className="flex items-center justify-between mb-4">
+                            <button onClick={handlePrev} className="p-2 hover:bg-gray-100 rounded-full text-gray-600">
+                                <ChevronLeft className="w-5 h-5" />
+                            </button>
+                            <h3 className="font-bold text-gray-800 text-lg">{currentMonthYearLabel}</h3>
+                            <button onClick={handleNext} className="p-2 hover:bg-gray-100 rounded-full text-gray-600">
+                                <ChevronRight className="w-5 h-5" />
                             </button>
                         </div>
+                        {periodType === 'Daily' && (
+                            <div className="text-center mb-6">
+                                <p className="text-lg font-bold text-gray-800">{currentDate.toLocaleDateString('en-US', {day:'numeric', weekday:'short'})}</p>
+                                <p className="text-sm text-gray-500">{currentDate.toLocaleDateString('en-US', {month:'long', year:'numeric'})}</p>
+                            </div>
+                        )}
+
+                        <div className="flex-1 space-y-4">
+                            <div className="flex items-center gap-4">
+                                <div className="p-3 bg-emerald-50 rounded-xl">
+                                    <CheckCircle className="w-6 h-6 text-emerald-600" />
+                                </div>
+                                <div>
+                                    <p className="text-sm text-gray-500">Present</p>
+                                    <span className="text-xl font-bold text-gray-800">{stats.present}</span>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <div className="p-3 bg-red-50 rounded-xl">
+                                    <XCircle className="w-6 h-6 text-red-600" />
+                                </div>
+                                <div>
+                                    <p className="text-sm text-gray-500">Absent</p>
+                                    <span className="text-xl font-bold text-gray-800">{stats.absent}</span>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <div className="p-3 bg-amber-50 rounded-xl">
+                                    <Clock className="w-6 h-6 text-amber-600" />
+                                </div>
+                                <div>
+                                    <p className="text-sm text-gray-500">Late Entries</p>
+                                    <span className="text-xl font-bold text-gray-800">{stats.late}</span>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <div className="p-3 bg-blue-50 rounded-xl">
+                                    <Timer className="w-6 h-6 text-blue-600" />
+                                </div>
+                                <div>
+                                    <p className="text-sm text-gray-500">Total Hours</p>
+                                    <span className="text-xl font-bold text-gray-800">{formattedTotalMonthlyDuration}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {periodType === 'Monthly' && (
+                            <div className="mt-6 border-t border-gray-100 pt-4 flex gap-3">
+                                <button
+                                    onClick={() => handleMarkAll(AttendanceStatus.PRESENT)}
+                                    className="flex-1 py-2 bg-emerald-50 text-emerald-700 rounded-lg text-sm font-medium hover:bg-emerald-100 transition-colors border border-emerald-100"
+                                >
+                                    Mark All Present
+                                </button>
+                                <button
+                                    onClick={() => handleMarkAll(AttendanceStatus.ABSENT)}
+                                    className="flex-1 py-2 bg-red-50 text-red-700 rounded-lg text-sm font-medium hover:bg-red-100 transition-colors border border-red-100"
+                                >
+                                    Mark All Absent
+                                </button>
+                            </div>
+                        )}
+
+                    </div>
+                ) : (
+                    <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm text-center text-gray-500 flex-1 flex flex-col items-center justify-center">
+                        <Users className="w-16 h-16 opacity-30 mb-4" />
+                        <p>Select an employee from the dropdown above to view their attendance.</p>
+                    </div>
+                )}
+                </>
+            ) : (
+                // Employee's own Punch Card
+                selectedEmployee ? employeePunchCardUI : (
+                    <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm text-center text-gray-500 flex-1 flex flex-col items-center justify-center">
+                        <User className="w-16 h-16 opacity-30 mb-4" />
+                        <p>Loading your profile...</p>
+                    </div>
+                )
+            )}
+        </div>
+
+        {/* Right Column (Calendar Display or Muster Roll) */}
+        <div className="lg:col-span-2 space-y-6">
+            {isAdmin && viewMode === 'Individual' && selectedEmployee && (
+                <AttendanceCalendar
+                    data={attendanceData}
+                    stats={stats}
+                    onDateClick={handleDateClickForAdminEdit}
+                    currentMonthLabel={currentMonthYearLabel}
+                    showStats={periodType === 'Monthly'}
+                />
+            )}
+
+            {isAdmin && viewMode === 'MusterRoll' && (
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div className="p-4 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
+                        <h3 className="font-bold text-gray-800">Muster Roll - {currentMonthYearLabel}</h3>
+                        <button className="text-sm text-emerald-600 font-medium hover:underline flex items-center gap-1">
+                            <Download className="w-4 h-4" /> Export Muster
+                        </button>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-white text-gray-500 font-medium border-b border-gray-200">
+                                <tr>
+                                    <th className="px-4 py-3 sticky left-0 bg-white z-10 w-40">Employee</th>
+                                    {[...Array(currentDate.getDate())].map((_, i) => (
+                                        <th key={i} className="px-2 py-3 text-center w-10">
+                                            {i + 1}
+                                        </th>
+                                    ))}
+                                    <th className="px-4 py-3 text-center">P</th>
+                                    <th className="px-4 py-3 text-center">A</th>
+                                    <th className="px-4 py-3 text-center">L</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {filteredEmployeesForDisplay.map(emp => {
+                                    const empAttendance = getEmployeeAttendance(emp, currentDate.getFullYear(), currentDate.getMonth());
+                                    const dailyRecords = empAttendance.filter(d => parseInt(d.date.split('-')[2]) <= currentDate.getDate());
+
+                                    const summary = dailyRecords.reduce((acc, rec) => {
+                                        if (rec.status === AttendanceStatus.PRESENT || rec.status === AttendanceStatus.HALF_DAY) acc.P++;
+                                        if (rec.status === AttendanceStatus.ABSENT) acc.A++;
+                                        if (rec.isLate) acc.L++;
+                                        return acc;
+                                    }, { P: 0, A: 0, L: 0 });
+
+                                    return (
+                                        <tr key={emp.id} className="hover:bg-gray-50 transition-colors">
+                                            <td className="px-4 py-3 sticky left-0 bg-white z-10 w-40">
+                                                <div className="font-medium text-gray-900">{emp.name}</div>
+                                                <div className="text-xs text-gray-500">{emp.role}</div>
+                                            </td>
+                                            {dailyRecords.map((rec, idx) => (
+                                                <td key={idx} className="px-2 py-3 text-center">
+                                                    <span className={`inline-block w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                                                        rec.status === AttendanceStatus.PRESENT ? 'bg-emerald-100 text-emerald-700' :
+                                                        rec.status === AttendanceStatus.ABSENT ? 'bg-red-100 text-red-700' :
+                                                        rec.status === AttendanceStatus.HALF_DAY ? 'bg-amber-100 text-amber-700' :
+                                                        rec.status === AttendanceStatus.PAID_LEAVE ? 'bg-blue-100 text-blue-700' :
+                                                        rec.status === AttendanceStatus.WEEK_OFF ? 'bg-slate-100 text-slate-500' :
+                                                        'bg-gray-100 text-gray-400'
+                                                    }`}>
+                                                        {rec.status === AttendanceStatus.PRESENT ? (rec.isLate ? 'L' : 'P') :
+                                                         rec.status === AttendanceStatus.ABSENT ? 'A' :
+                                                         rec.status === AttendanceStatus.HALF_DAY ? 'H' :
+                                                         rec.status === AttendanceStatus.PAID_LEAVE ? 'V' :
+                                                         rec.status === AttendanceStatus.WEEK_OFF ? 'W' :
+                                                         '-'}
+                                                    </span>
+                                                </td>
+                                            ))}
+                                            <td className="px-4 py-3 text-center font-bold text-emerald-600">{summary.P}</td>
+                                            <td className="px-4 py-3 text-center font-bold text-red-600">{summary.A}</td>
+                                            <td className="px-4 py-3 text-center font-bold text-orange-600">{summary.L}</td>
+                                        </tr>
+                                    );
+                                })}
+                                {filteredEmployeesForDisplay.length === 0 && (
+                                    <tr><td colSpan={currentDate.getDate() + 4} className="py-8 text-center text-gray-500">No employees selected or found.</td></tr>
+                                )}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             )}
-          </div>
-      );
-  }
 
-  // --- EMPLOYEE VIEW RENDER (Preserved) ---
-  if (selectedEmployee) {
-    const config = selectedEmployee.attendanceConfig || { gpsGeofencing: false, qrScan: false, manualPunch: true };
-    
-    // Duration display
-    const formattedDuration = duration.hours > 0 || duration.minutes > 0 
-        ? `${duration.hours}h ${duration.minutes}m` 
-        : '';
-    
-    return (
-      <div className="space-y-6 max-w-7xl mx-auto">
-        <div className="flex justify-between items-end">
-          <div className="flex items-center gap-3"> {/* Added gap for refresh button */}
-            <h2 className="text-2xl font-bold text-gray-800">My Attendance</h2>
-            <button 
-                onClick={() => setRefreshTrigger(prev => prev + 1)}
-                className="p-2 rounded-full text-gray-500 hover:bg-gray-100 transition-colors"
-                title="Refresh Attendance"
-            >
-                <RefreshCcw className="w-5 h-5" />
-            </button>
-          </div>
-          <div className="text-right hidden sm:block">
-            <p className="text-sm text-gray-500">Today is</p>
-            <p className="text-lg font-bold text-gray-800">{new Date().toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column: Punch Card */}
-          <div className="lg:col-span-1">
-             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 flex flex-col items-center text-center h-full relative overflow-hidden">
-               <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-emerald-500 to-teal-500"></div>
-               <div className="mb-6">
-                  <div className="text-4xl font-mono font-bold text-gray-800 mb-1">
-                    {currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
-                  </div>
-                  <div className="flex flex-col items-center justify-center gap-1 mt-2">
-                    <p className={`text-xs uppercase tracking-widest flex items-center gap-1 ${locationColor}`}>
-                      {locationIcon} {locationDisplay}
-                    </p>
-                    {config.qrScan && ( // Only show camera status if QR scan is enabled
-                        <p className={`text-xs uppercase tracking-widest flex items-center gap-1 ${cameraColor}`}>
-                            {cameraIcon} {cameraDisplay}
-                        </p>
-                    )}
-                  </div>
-               </div>
-               
-               {/* PUNCH BUTTONS */}
-               {/* Replaced PUNCH CARD UI with a Fingerprint Scanner UI */}
-               <div className="w-full flex flex-col items-center justify-center space-y-4">
-                 <div className="relative w-32 h-32 flex items-center justify-center">
-                   <div 
-                     className={`absolute inset-0 rounded-full flex items-center justify-center animate-pulse-slow opacity-60 ${isCheckedIn ? 'bg-red-100' : 'bg-emerald-100'}`}
-                     aria-hidden="true"
-                   ></div>
-                   <div 
-                     onClick={handlePunch} // Attach handler here
-                     className={`relative z-10 w-28 h-28 rounded-full flex items-center justify-center text-white cursor-pointer shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105
-                     ${isCheckedIn ? 'bg-red-500 hover:bg-red-600' : 'bg-emerald-500 hover:bg-emerald-600'}`}
-                     role="button"
-                     tabIndex={0}
-                     aria-label={isCheckedIn ? "Punch Out" : "Punch In"}
-                   >
-                     <Fingerprint className="w-16 h-16" />
-                   </div>
-                 </div>
-                 <p className="text-sm font-semibold text-gray-700">
-                   {isCheckedIn ? 'Tap to Punch Out' : 'Tap to Punch In'}
-                 </p>
-                 <div className="text-xs text-gray-500">
-                   {checkInTime !== '--:--' && <p>Check-in: {checkInTime}</p>}
-                   {checkOutTime !== '--:--' && <p>Check-out: {checkOutTime}</p>}
-                   {formattedDuration && <p>Duration: {formattedDuration}</p>}
-                 </div>
-               </div>
-
-             </div>
-          </div>
-
-          {/* Right Column: Analysis & Stats */}
-          <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
-             {/* Stats Grid */}
-             <div className="grid grid-cols-2 gap-4">
-                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                   <p className="text-xs text-gray-500 font-bold uppercase">Present</p>
-                   <p className="text-2xl font-bold text-gray-800 mt-2">{stats.present}</p>
-                </div>
-                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                   <p className="text-xs text-gray-500 font-bold uppercase">Absent</p>
-                   <p className="text-2xl font-bold text-gray-800 mt-2">{stats.absent}</p>
-                </div>
-                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                   <p className="text-xs text-gray-500 font-bold uppercase">Half Day</p>
-                   <p className="text-2xl font-bold text-gray-800 mt-2">{stats.halfDay}</p>
-                </div>
-                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                   <p className="text-xs text-gray-500 font-bold uppercase">On Leave</p>
-                   <p className="text-2xl font-bold text-gray-800 mt-2">{stats.paidLeave}</p>
-                </div>
-                {/* NEW: Total Monthly Hours Card */}
-                <div className="col-span-2 bg-gradient-to-br from-indigo-500 to-purple-600 p-4 rounded-xl shadow-sm text-white flex items-center justify-between">
-                    <div>
-                        <p className="text-sm font-medium text-indigo-100">Total Monthly Hours</p>
-                        <p className="text-2xl font-bold mt-1">{formattedTotalMonthlyDuration}</p>
-                    </div>
-                    <Timer className="w-8 h-8 text-indigo-200 opacity-70" />
-                </div>
-             </div>
-
-             {/* Analysis Chart */}
-             <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col">
-                <h3 className="text-sm font-bold text-gray-800 mb-4 flex items-center gap-2">
-                   <PieChartIcon className="w-4 h-4 text-emerald-500" /> Monthly Overview
-                </h3>
-                <div className="flex-1 min-h-[160px]">
-                   <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                         <Pie
-                            data={pieData}
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={40}
-                            outerRadius={60}
-                            paddingAngle={5}
-                            dataKey="value"
-                         >
-                            {pieData.map((entry, index) => (
-                               <Cell key={`cell-${index}`} fill={entry.color || COLORS[index % COLORS.length]} />
-                            ))}
-                         </Pie>
-                         <ReTooltip />
-                         <Legend iconSize={8} layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{fontSize: '10px'}} />
-                      </PieChart>
-                   </ResponsiveContainer>
-                </div>
-             </div>
-          </div>
-        </div>
-        
-        {/* Calendar */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-             <AttendanceCalendar 
-                                 data={attendanceData} 
-                                 stats={stats} 
-                             />
+            {!isAdmin && selectedEmployee && (
+                <AttendanceCalendar
+                    data={attendanceData}
+                    stats={stats}
+                    currentMonthLabel={currentMonthYearLabel}
+                    showStats={true}
+                />
+            )}
         </div>
       </div>
-    );
-  }
 
-  return <div className="text-center p-8 text-gray-500">Loading...</div>;
-};
+      {/* Admin Attendance Edit Modal */}
+      {isEditModalOpen && editModalData && selectedEmployee && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md animate-in fade-in zoom-in duration-200">
+                <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-2xl">
+                    <h3 className="font-bold text-gray-800">Edit Attendance - {editModalData.date}</h3>
+                    <button onClick={() => setIsEditModalOpen(false)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5"/></button>
+                </div>
+                <div className="p-6 space-y-4">
+                    <div className="flex items-center gap-3 bg-gray-50 p-3 rounded-lg border border-gray-100">
+                        <img src={selectedEmployee.avatar} alt="" className="w-10 h-10 rounded-full" />
+                        <div>
+                            <p className="font-bold text-gray-900">{editEmployeeName}</p>
+                            <p className="text-xs text-gray-500">{selectedEmployee.role}</p>
+                        </div>
+                    </div>
 
-export default UserAttendance;
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                        <select
+                            value={editModalData.status}
+                            onChange={(e) => setEditModalData(prev => prev ? { ...prev, status: e.target.value as AttendanceStatus } : null)}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
+                        >
+                            {Object.values(AttendanceStatus).map(status => (
+                                <option key={status} value={status}>{status.replace(/_/g, ' ')}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {editModalData.status === AttendanceStatus.PRESENT || editModalData.status === AttendanceStatus.HALF_DAY ? (
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Check-in</label>
+                                <input
+                                    type="time"
+                                    value={editModalData.checkIn ? new Date(`2000-01-01 ${editModalData.checkIn}`).toLocaleTimeString('en-CA', { hour: '2-digit', minute: '2-digit', hour12: false }) : ''}
+                                    onChange={(e) => setEditModalData(prev => prev ? { ...prev, checkIn: new Date(`2000-01-01 ${e.target.value}`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) } : null)}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Check-out</label>
+                                <input
+                                    type="time"
+                                    value={editModalData.checkOut ? new Date(`2000-01-01 ${editModalData.checkOut}`).toLocaleTimeString('en-CA', { hour: '2-digit', minute: '2-digit', hour12: false }) : ''}
+                                    onChange={(e) => setEditModalData(prev => prev ? { ...prev, checkOut: new Date(`2000-01-01 ${e.target.value}`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) } : null)}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                                />
+                            </div>
+                            <div className="col-span-2">
+                                <label className="flex items-center text-sm font-medium text-gray-700">
+                                    <input
+                                        type="checkbox"
+                                        checked={editModalData.isLate || false}
+                                        onChange={(e) => setEditModalData(prev => prev ? { ...prev, isLate: e.target.checked } : null)}
+                                        className="mr-2 h-4 w-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
+                                    />
+                                    Mark as Late
+                                </label>
+                            </div>
+                        </div>
+                    ) : null}
+
+                    <div className="pt-4 flex justify-end gap-3">
+                        <button onClick={() => setIsEditModalOpen(false)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors">Cancel</button>
+                        <button onClick={handleSaveAdminAttendanceEdit} className="px-6 py-2 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 shadow-sm transition-colors">Save Changes</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+      )}
+    </div>
+  );
+}

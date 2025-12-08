@@ -5,7 +5,8 @@ import { Employee, LeaveRequest, UserRole } from '../../types';
 import { MOCK_EMPLOYEES } from '../../constants';
 import { sendSystemNotification } from '../../services/cloudService'; // Import notification service
 
-const ApplyLeave: React.FC = () => {
+// Fix: Changed from a const functional component with separate export to a direct export default function
+export default function ApplyLeave() {
   const [user, setUser] = useState<Employee | null>(null);
   const [leaveTypes, setLeaveTypes] = useState<any[]>([]);
   
@@ -21,7 +22,7 @@ const ApplyLeave: React.FC = () => {
     const saved = localStorage.getItem('leave_history');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        return JSON.parse(saved).filter((item: any) => item && typeof item === 'object');
       } catch (e) {
         console.error("Failed to parse leave history from local storage", e);
       }
@@ -41,16 +42,16 @@ const ApplyLeave: React.FC = () => {
   const findEmployeeById = (id: string): Employee | undefined => {
       // 1. Check Admin Staff
       try {
-        const adminStaff = JSON.parse(localStorage.getItem('staff_data') || '[]');
+        const adminStaff = JSON.parse(localStorage.getItem('staff_data') || '[]').filter((item: any) => item && typeof item === 'object');
         let found = adminStaff.find((e: any) => e.id === id);
         if (found) return { ...found, corporateId: 'admin' }; // Explicitly set admin corporateId
       } catch(e) {}
 
       // 2. Check Corporate Staff
       try {
-        const corporates = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
+        const corporates = JSON.parse(localStorage.getItem('corporate_accounts') || '[]').filter((item: any) => item && typeof item === 'object');
         for (const corp of corporates) {
-            const cStaff = JSON.parse(localStorage.getItem(`staff_data_${corp.email}`) || '[]');
+            const cStaff = JSON.parse(localStorage.getItem(`staff_data_${corp.email}`) || '[]').filter((item: any) => item && typeof item === 'object');
             const found = cStaff.find((e: any) => e.id === id);
             if (found) return { ...found, corporateId: corp.email }; // Explicitly inject corporateId
         }
@@ -87,7 +88,7 @@ const ApplyLeave: React.FC = () => {
           
           if (saved) {
               try {
-                  loadedTypes = JSON.parse(saved);
+                  loadedTypes = JSON.parse(saved).filter((item: any) => item && typeof item === 'object');
               } catch(e) { console.error("Error parsing leave types", e); }
           }
 
@@ -96,7 +97,7 @@ const ApplyLeave: React.FC = () => {
               // Try loading global defaults if not found for specific corp
               const globalSaved = localStorage.getItem('company_leave_types');
               if (globalSaved) {
-                 try { loadedTypes = JSON.parse(globalSaved); } catch(e) {}
+                 try { loadedTypes = JSON.parse(globalSaved).filter((item: any) => item && typeof item === 'object'); } catch(e) {}
               }
           }
 
@@ -341,7 +342,7 @@ const ApplyLeave: React.FC = () => {
 
         {/* History List */}
         <div className="lg:col-span-2">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col h-full">
             <div className="p-6 border-b border-gray-100 flex justify-between items-center">
                <h3 className="font-bold text-gray-800 flex items-center gap-2">
                  <Clock className="w-5 h-5 text-emerald-500" />
@@ -372,23 +373,19 @@ const ApplyLeave: React.FC = () => {
                         item.status === 'Rejected' ? 'bg-red-50 text-red-700 border-red-200' :
                         'bg-yellow-50 text-yellow-700 border-yellow-200'
                       }`}>
-                        {item.status === 'Approved' && <CheckCircle className="w-3 h-3" />}
-                        {item.status === 'Rejected' && <XCircle className="w-3 h-3" />}
-                        {item.status === 'Pending' && <AlertCircle className="w-3 h-3" />}
                         {item.status}
                       </span>
                    </div>
-                   
-                   <div className="flex justify-between items-end">
-                      <p className="text-sm text-gray-500 italic">"{item.reason}"</p>
-                      <span className="text-xs text-gray-400">Applied on {item.appliedOn}</span>
-                   </div>
+                   <p className="text-sm text-gray-700 leading-relaxed italic border-t border-gray-100 pt-3 mt-3">
+                       "{item.reason}"
+                   </p>
                 </div>
               ))}
-              
               {userLeaveHistory.length === 0 && (
-                <div className="p-8 text-center text-gray-400 italic">
-                  No leave history found.
+                <div className="p-8 text-center text-gray-400">
+                    <AlertCircle className="w-10 h-10 mx-auto mb-3" />
+                    <p className="text-sm italic">No leave applications found.</p>
+                    <p className="text-xs mt-1">Submit your first request using the form.</p>
                 </div>
               )}
             </div>
@@ -397,6 +394,4 @@ const ApplyLeave: React.FC = () => {
       </div>
     </div>
   );
-};
-
-export default ApplyLeave;
+}

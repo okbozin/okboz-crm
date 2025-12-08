@@ -1,4 +1,5 @@
 
+
 import React, { useMemo, useState, useEffect } from 'react';
 import { Download, TrendingUp, DollarSign, FileText, CheckCircle, Clock, Plus, AlertCircle, X, Send } from 'lucide-react';
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
@@ -31,16 +32,16 @@ const UserSalary: React.FC = () => {
   const findEmployeeById = (id: string): Employee | undefined => {
       // 1. Check Admin Staff
       try {
-        const adminStaff = JSON.parse(localStorage.getItem('staff_data') || '[]');
+        const adminStaff = JSON.parse(localStorage.getItem('staff_data') || '[]').filter((item: any) => item && typeof item === 'object');
         let found = adminStaff.find((e: any) => e.id === id);
         if (found) return found;
       } catch(e) {}
 
       // 2. Check Corporate Staff
       try {
-        const corporates = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
+        const corporates = JSON.parse(localStorage.getItem('corporate_accounts') || '[]').filter((item: any) => item && typeof item === 'object');
         for (const corp of corporates) {
-            const cStaff = JSON.parse(localStorage.getItem(`staff_data_${corp.email}`) || '[]');
+            const cStaff = JSON.parse(localStorage.getItem(`staff_data_${corp.email}`) || '[]').filter((item: any) => item && typeof item === 'object');
             const found = cStaff.find((e: any) => e.id === id);
             if (found) return found;
         }
@@ -75,7 +76,7 @@ const UserSalary: React.FC = () => {
       if(!user) return;
       
       const loadAdvances = () => {
-          const allAdvances = JSON.parse(localStorage.getItem('salary_advances') || '[]');
+          const allAdvances = JSON.parse(localStorage.getItem('salary_advances') || '[]').filter((item: any) => item && typeof item === 'object');
           const myAdvances = allAdvances.filter((a: SalaryAdvanceRequest) => a.employeeId === user.id);
           setAdvanceHistory(myAdvances.sort((a: any, b: any) => new Date(b.requestDate).getTime() - new Date(a.requestDate).getTime()));
       };
@@ -112,7 +113,7 @@ const UserSalary: React.FC = () => {
           corporateId: user.corporateId === 'admin' ? null : user.corporateId || null, // NEW: Add corporateId from user, ensure null for admin
       };
 
-      const existing = JSON.parse(localStorage.getItem('salary_advances') || '[]');
+      const existing = JSON.parse(localStorage.getItem('salary_advances') || '[]').filter((item: any) => item && typeof item === 'object');
       const updated = [newRequest, ...existing];
       localStorage.setItem('salary_advances', JSON.stringify(updated));
       

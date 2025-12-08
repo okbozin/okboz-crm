@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
@@ -16,7 +17,6 @@ import VendorAttachment from './pages/admin/VendorAttachment';
 import Corporate from './pages/admin/Corporate';
 import Documents from './pages/Documents';
 import Leads from './pages/admin/Leads';
-import TripBooking from './pages/admin/TripBooking'; 
 import TripEarning from './pages/admin/TripEarning';
 import CustomerCare from './pages/admin/CustomerCare';
 import EmailMarketing from './pages/admin/EmailMarketing'; 
@@ -141,7 +141,6 @@ const App: React.FC = () => {
                         <Route path="/admin" element={<Dashboard />} />
                         <Route path="/admin/reports" element={<Reports />} />
                         <Route path="/admin/customer-care" element={<CustomerCare role={userRole} />} />
-                        <Route path="/admin/trips" element={<TripBooking />} /> 
                         <Route path="/admin/trip-earning" element={<TripEarning />} />
                         <Route path="/admin/tracking" element={<LiveTracking />} />
                         <Route path="/admin/leads" element={<Leads />} />

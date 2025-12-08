@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   User, Mail, Phone, MapPin, Briefcase, Calendar, CreditCard, Shield, 
@@ -34,16 +35,16 @@ const UserProfile: React.FC = () => { // Changed to a const declaration
   const findEmployeeById = (id: string): Employee | undefined => {
       // 1. Check Admin Staff
       try {
-        const adminStaff = JSON.parse(localStorage.getItem('staff_data') || '[]');
+        const adminStaff = JSON.parse(localStorage.getItem('staff_data') || '[]').filter((item: any) => item && typeof item === 'object');
         let found = adminStaff.find((e: any) => e.id === id);
         if (found) return found;
       } catch(e) {}
 
       // 2. Check Corporate Staff
       try {
-        const corporates = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
+        const corporates = JSON.parse(localStorage.getItem('corporate_accounts') || '[]').filter((item: any) => item && typeof item === 'object');
         for (const corp of corporates) {
-            const cStaff = JSON.parse(localStorage.getItem(`staff_data_${corp.email}`) || '[]');
+            const cStaff = JSON.parse(localStorage.getItem(`staff_data_${corp.email}`) || '[]').filter((item: any) => item && typeof item === 'object');
             const found = cStaff.find((e: any) => e.id === id);
             if (found) return found;
         }
@@ -133,7 +134,7 @@ const UserProfile: React.FC = () => { // Changed to a const declaration
     let updated = false;
 
     try {
-        const existingStaff: Employee[] = JSON.parse(localStorage.getItem(storageKey) || '[]');
+        const existingStaff: Employee[] = JSON.parse(localStorage.getItem(storageKey) || '[]').filter((item: any) => item && typeof item === 'object');
         const updatedStaff = existingStaff.map(emp => {
             if (emp.id === user.id) {
                 updated = true;

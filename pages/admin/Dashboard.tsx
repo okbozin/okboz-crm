@@ -1,198 +1,95 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { 
+  Users, DollarSign, TrendingUp, Calendar, MapPin, 
+  Building2, Car, Activity, Briefcase
+} from 'lucide-react';
+import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
+  LineChart, Line, PieChart, Pie, Cell 
+} from 'recharts';
+import { Employee, Trip, CorporateAccount } from '../../types';
+import { MOCK_EMPLOYEES } from '../../constants';
 
-import React, { useMemo, useState, useEffect } from 'react';
-// @google/genai: Add missing import for Headset
-import { Users, UserCheck, UserX, MapPin, ArrowRight, Building2, Car, TrendingUp, DollarSign, Clock, BarChart3, Calendar, Truck, CheckCircle, Headset, RefreshCw } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, AreaChart, Area } from 'recharts';
-import { useNavigate } from 'react-router-dom';
-import { MOCK_EMPLOYEES, getEmployeeAttendance } from '../../constants';
-import { AttendanceStatus, Employee, Enquiry, Branch, CorporateAccount } from '../../types';
-import { useTheme } from '../../context/ThemeContext';
+const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
-// Extended interfaces for internal mapping
-interface ExtendedEmployee extends Employee {
-    corporateId: string; // 'admin' or corporate email
-    corporateName: string;
-}
-
-interface ExtendedEnquiry extends Enquiry {
-    assignedCorporate?: string;
-    assignedBranch?: string;
-}
-
-interface Trip {
-    id: string;
-    tripId: string;
-    date: string;
-    branch: string;
-    bookingStatus: string;
-    totalPrice: number;
-    userName: string;
-    transportType: string;
-    ownerId?: string;
-    ownerName?: string;
-}
-
-const Dashboard = () => {
-  const navigate = useNavigate();
-  const { theme } = useTheme();
-
-  const isSuperAdmin = (localStorage.getItem('app_session_id') || 'admin') === 'admin';
+const Dashboard: React.FC = () => {
   const sessionId = localStorage.getItem('app_session_id') || 'admin';
+  const isSuperAdmin = sessionId === 'admin';
 
-  // --- 1. Global Filter States ---
-  const [filterCorporate, setFilterCorporate] = useState<string>('All');
-  const [filterBranch, setFilterBranch] = useState<string>('All');
-  const [filterType, setFilterType] = useState<'Daily' | 'Monthly'>('Daily');
-  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
-  const [selectedMonth, setSelectedMonth] = useState<string>(new Date().toISOString().slice(0, 7));
-  const [refreshTrigger, setRefreshTrigger] = useState(0); // New trigger for updates
+  // State for Filters
+  const [filterCorporate, setFilterCorporate] = useState('All');
+  const [filterBranch, setFilterBranch] = useState('All');
+  const [filterType, setFilterType] = useState<'Daily' | 'Monthly'>('Monthly');
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
 
-  // --- 2. Data Loading States ---
+  // Data State
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [trips, setTrips] = useState<Trip[]>([]);
   const [corporates, setCorporates] = useState<CorporateAccount[]>([]);
-  const [branches, setBranches] = useState<Branch[]>([]);
-  const [employees, setEmployees] = useState<ExtendedEmployee[]>([]);
-  const [enquiries, setEnquiries] = useState<ExtendedEnquiry[]>([]);
-  const [trips, setTrips] = useState<Trip[]>([]); // Added Trips State
-  const [pendingApprovals, setPendingApprovals] = useState<any[]>([]);
+  const [branches, setBranches] = useState<any[]>([]);
 
-  // --- 3. Initial Data Fetching ---
+  // Load Data
   useEffect(() => {
-    // A. Load Corporates
     try {
-        const corps = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
-        setCorporates(corps);
-    } catch (e) {}
+      const loadedCorporates = JSON.parse(localStorage.getItem('corporate_accounts') || '[]').filter((c: any) => c && typeof c === 'object');
+      setCorporates(loadedCorporates);
 
-    // B. Load Branches (Aggregated)
-    try {
-        let allBranches: any[] = [];
-        // Head Office Branches
-        const adminBranches = JSON.parse(localStorage.getItem('branches_data') || '[]');
-        allBranches = [...allBranches, ...adminBranches.map((b: any) => ({...b, corporateId: 'admin'}))];
-        
-        // Corporate Branches
-        const corps = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
-        corps.forEach((c: any) => {
-            const cBranches = JSON.parse(localStorage.getItem(`branches_data_${c.email}`) || '[]');
-            allBranches = [...allBranches, ...cBranches.map((b: any) => ({...b, corporateId: c.email}))];
+      let allEmployees: Employee[] = [];
+      let allTrips: Trip[] = [];
+      let allBranches: any[] = [];
+
+      if (isSuperAdmin) {
+        // Load Admin Data
+        const adminStaff = JSON.parse(localStorage.getItem('staff_data') || '[]').filter((item: any) => item && typeof item === 'object');
+        const adminTrips = JSON.parse(localStorage.getItem('trips_data') || '[]').filter((item: any) => item && typeof item === 'object');
+        const adminBranches = JSON.parse(localStorage.getItem('branches_data') || '[]').filter((item: any) => item && typeof item === 'object');
+
+        allEmployees = [...adminStaff];
+        allTrips = [...adminTrips];
+        allBranches = [...adminBranches];
+
+        // Load Corporate Data
+        loadedCorporates.forEach((c: any) => {
+          const cStaff = JSON.parse(localStorage.getItem(`staff_data_${c.email}`) || '[]').filter((item: any) => item && typeof item === 'object');
+          const cTrips = JSON.parse(localStorage.getItem(`trips_data_${c.email}`) || '[]').filter((item: any) => item && typeof item === 'object');
+          const cBranches = JSON.parse(localStorage.getItem(`branches_data_${c.email}`) || '[]').filter((item: any) => item && typeof item === 'object');
+
+          allEmployees = [...allEmployees, ...cStaff.map((s: any) => ({ ...s, corporateId: c.email }))];
+          allTrips = [...allTrips, ...cTrips.map((t: any) => ({ ...t, ownerId: c.email }))];
+          allBranches = [...allBranches, ...cBranches.map((b: any) => ({ ...b, owner: c.email }))];
         });
-        
-        // Filter branches if not a Super Admin
-        if (!isSuperAdmin) {
-            allBranches = allBranches.filter(b => b.corporateId === sessionId);
-        }
-        setBranches(allBranches);
-    } catch(e) {}
-
-    // C. Load Employees (Aggregated)
-    let allEmployees: ExtendedEmployee[] = [];
-    if (isSuperAdmin) {
-        // Admin's own staff
-        const adminData = localStorage.getItem('staff_data');
-        if (adminData) {
-            try { allEmployees = [...allEmployees, ...JSON.parse(adminData).map((e:any) => ({...e, corporateId: 'admin', corporateName: 'Head Office'}))]; } catch (e) {}
-        } else {
-            allEmployees = []; // No mocks
-        }
-        // Corporate Staff
-        const corps = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
-        corps.forEach((corp: any) => {
-            const corpData = localStorage.getItem(`staff_data_${corp.email}`);
-            if (corpData) {
-                try {
-                    allEmployees = [...allEmployees, ...JSON.parse(corpData).map((e:any) => ({...e, corporateId: corp.email, corporateName: corp.companyName}))];
-                } catch (e) {}
-            }
-        });
-    } else {
-        // Single Corporate/User View
-        const key = `staff_data_${sessionId}`; 
-        try {
-            const saved = localStorage.getItem(key);
-            if (saved) {
-                allEmployees = JSON.parse(saved).map((e:any) => ({...e, corporateId: sessionId, corporateName: 'My Branch'}));
-            }
-        } catch(e) {}
-    }
-    setEmployees(allEmployees);
-
-    // D. Load Vehicle Enquiries (Aggregated / Global)
-    try {
-        const enqs = JSON.parse(localStorage.getItem('global_enquiries_data') || '[]');
-        setEnquiries(enqs);
-    } catch(e) {}
-
-    // E. Load Trips (Aggregated) - NEW
-    let allTrips: Trip[] = [];
-    if (isSuperAdmin) {
-        // Admin Trips
-        try {
-            const adminTrips = JSON.parse(localStorage.getItem('trips_data') || '[]');
-            allTrips = [...allTrips, ...adminTrips.map((t: any) => ({...t, ownerId: 'admin', ownerName: 'Head Office'}))];
-        } catch(e) {}
-        
-        // Corporate Trips
-        const corps = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
-        corps.forEach((c: any) => {
-            const cTrips = localStorage.getItem(`trips_data_${c.email}`);
-            if (cTrips) {
-                try {
-                    allTrips = [...allTrips, ...JSON.parse(cTrips).map((t: any) => ({...t, ownerId: c.email, ownerName: c.companyName}))];
-                } catch(e) {}
-            }
-        });
-    } else {
-        const key = `trips_data_${sessionId}`;
-        try {
-            const saved = localStorage.getItem(key);
-            if (saved) {
-                allTrips = JSON.parse(saved).map((t: any) => ({...t, ownerId: sessionId, ownerName: 'My Branch'}));
-            }
-        } catch(e) {}
-    }
-    setTrips(allTrips);
-
-    // F. Pending Leaves (Mock removed)
-    const savedApprovals = localStorage.getItem(`pending_approvals_${localStorage.getItem('app_session_id') || 'admin'}`);
-    if (savedApprovals) setPendingApprovals(JSON.parse(savedApprovals));
-    else setPendingApprovals([]);
-
-  }, [isSuperAdmin, sessionId, refreshTrigger]);
-
-  // Listen for storage changes to auto-refresh dashboard when attendance is punched in other tabs
-  useEffect(() => {
-    const handleStorageChange = (e: StorageEvent) => {
-      // Refresh if attendance data or staff data changes
-      if (e.key && (e.key.startsWith('attendance_data') || e.key.includes('staff_data'))) {
-        setRefreshTrigger(prev => prev + 1);
+      } else {
+        const keySuffix = `_${sessionId}`;
+        allEmployees = JSON.parse(localStorage.getItem(`staff_data${keySuffix}`) || '[]').filter((item: any) => item && typeof item === 'object');
+        allTrips = JSON.parse(localStorage.getItem(`trips_data${keySuffix}`) || '[]').filter((item: any) => item && typeof item === 'object');
+        allBranches = JSON.parse(localStorage.getItem(`branches_data${keySuffix}`) || '[]').filter((item: any) => item && typeof item === 'object');
       }
-    };
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
 
-  // --- 4. Filtering Logic ---
-  
-  // Available Branches for Dropdown (Dependent on Selected Corporate)
-  const availableBranches = useMemo(() => {
-      if (filterCorporate === 'All') return branches; // Show all branches if All Corps selected
-      if (filterCorporate === 'admin') return branches.filter(b => (b as any).corporateId === 'admin');
-      return branches.filter(b => (b as any).corporateId === filterCorporate);
-  }, [branches, filterCorporate]);
+      setEmployees(allEmployees.length ? allEmployees : (isSuperAdmin ? MOCK_EMPLOYEES : []));
+      setTrips(allTrips);
+      setBranches(allBranches);
+
+    } catch (e) {
+      console.error("Error loading dashboard data", e);
+    }
+  }, [isSuperAdmin, sessionId]);
 
   // Filtered Data Sets
   const filteredEmployees = useMemo(() => {
       return employees.filter(e => {
+          if (!e) return false;
           const matchCorp = filterCorporate === 'All' || e.corporateId === filterCorporate;
-          const matchBranch = filterBranch === 'All' || e.branch === filterBranch;
+          const matchBranch = filterBranch === 'All' || (e.branch && e.branch === filterBranch);
           return matchCorp && matchBranch;
       });
   }, [employees, filterCorporate, filterBranch]);
 
   const filteredTrips = useMemo(() => {
       return trips.filter(t => {
+          if (!t) return false;
           const matchCorp = filterCorporate === 'All' || t.ownerId === filterCorporate || (filterCorporate === 'admin' && t.ownerId === 'admin');
-          const matchBranch = filterBranch === 'All' || t.branch === filterBranch;
+          const matchBranch = filterBranch === 'All' || (t.branch && t.branch === filterBranch);
           
           let matchDate = true;
           if (filterType === 'Daily') {
@@ -204,503 +101,187 @@ const Dashboard = () => {
       });
   }, [trips, filterCorporate, filterBranch, filterType, selectedDate, selectedMonth]);
 
-  const filteredEnquiries = useMemo(() => {
-      return enquiries.filter(e => {
-          const corpKey = e.corporateId || 'admin'; // Use corporateId, fallback to 'admin'
-          const branchKey = e.transportData?.drop || ''; // Assuming branch is derived from transportData or can be added directly to Enquiry
+  // Stats Calculation
+  const stats = useMemo(() => {
+    const totalRevenue = filteredTrips.reduce((sum, t) => sum + (Number(t.totalPrice) || 0), 0);
+    const totalTrips = filteredTrips.length;
+    const completedTrips = filteredTrips.filter(t => t.bookingStatus === 'Completed').length;
+    const activeStaff = filteredEmployees.filter(e => e.status !== 'Inactive').length;
 
-          // Match Corporate
-          let matchCorp = true;
-          if (filterCorporate !== 'All') {
-              if (filterCorporate === 'admin') matchCorp = corpKey === 'admin';
-              else matchCorp = corpKey === filterCorporate; // Matches email
-          }
+    return { totalRevenue, totalTrips, completedTrips, activeStaff };
+  }, [filteredTrips, filteredEmployees]);
 
-          // Match Branch
-          const matchBranch = filterBranch === 'All' || branchKey === filterBranch;
-          
-          // Date Filtering
-          let matchDate = true;
-          const enqDate = e.date || e.createdAt.split('T')[0]; 
-          
-          if (filterType === 'Daily') {
-              matchDate = enqDate === selectedDate;
-          } else {
-              matchDate = enqDate.startsWith(selectedMonth);
-          }
-
-          return matchCorp && matchBranch && matchDate;
-      });
-  }, [enquiries, filterCorporate, filterBranch, filterType, selectedDate, selectedMonth]);
-
-  // --- 5. Statistics Calculation ---
-
-  // Attendance Stats
-  const attendanceStats = useMemo(() => {
-      if (filteredEmployees.length === 0) return { present: 0, absent: 0, late: 0, onField: 0 };
-
-      let present = 0, absent = 0, late = 0;
-      
-      const targetDate = new Date(selectedDate);
-      const targetYear = targetDate.getFullYear();
-      const targetMonth = targetDate.getMonth();
-
-      // If Daily View
-      if (filterType === 'Daily') {
-          filteredEmployees.forEach(emp => {
-              // Ensure we get fresh data
-              const data = getEmployeeAttendance(emp, targetYear, targetMonth);
-              const record = data.find(d => d.date === selectedDate);
-              
-              if (record) {
-                  if (record.status === AttendanceStatus.PRESENT || record.status === AttendanceStatus.HALF_DAY) {
-                      present++;
-                      if (record.isLate) late++;
-                  } else if (record.status === AttendanceStatus.ABSENT) {
-                      absent++;
-                  }
-              }
-          });
-      } else {
-          // Monthly View - Simplified Active Count
-          present = filteredEmployees.filter(e => e.status === 'Active').length;
-          // Calculate total absences in month
-          filteredEmployees.forEach(emp => {
-              const data = getEmployeeAttendance(emp, parseInt(selectedMonth.split('-')[0]), parseInt(selectedMonth.split('-')[1]) - 1);
-              absent += data.filter(d => d.status === AttendanceStatus.ABSENT).length;
-          });
-      }
-
-      return { present, absent, late, onField: 0 }; // onField is removed
-  }, [filteredEmployees, filterType, selectedDate, selectedMonth, refreshTrigger]); // Added refreshTrigger
-
-  // Trip Stats
-  const tripStats = useMemo(() => {
-      const total = filteredTrips.length;
-      const completed = filteredTrips.filter(t => t.bookingStatus === 'Completed').length;
-      const revenue = filteredTrips.filter(t => t.bookingStatus === 'Completed').reduce((sum, t) => sum + (Number(t.totalPrice) || 0), 0);
-      return { total, completed, revenue };
-  }, [filteredTrips]);
-
-  // Vehicle Stats (Dynamic Revenue Parsing)
-  const vehicleStats = useMemo(() => {
-      const total = filteredEnquiries.length;
-      const booked = filteredEnquiries.filter(e => e.status === 'Booked' || e.status === 'Order Accepted' || e.status === 'Driver Assigned' || e.status === 'Completed').length;
-      const conversion = total > 0 ? Math.round((booked / total) * 100) : 0;
-      
-      // Attempt to parse revenue from "Total Estimate: ₹XXX" string in details
-      const amount = filteredEnquiries.reduce((sum, e) => {
-          if (e.status === 'Booked' || e.status === 'Order Accepted' || e.status === 'Driver Assigned' || e.status === 'Completed') {
-              // Try to use estimatedPrice directly if available and numerical
-              if (typeof e.estimatedPrice === 'number') {
-                return sum + e.estimatedPrice;
-              }
-              // Fallback to parsing from details if estimatedPrice is not a number
-              const match = e.details.match(/Estimate: ₹([\d,]+)/) || e.details.match(/₹([\d,]+)/);
-              if (match) {
-                  return sum + parseInt(match[1].replace(/,/g, ''));
-              }
-              return sum; // If no price found, add 0
-          }
-          return sum;
-      }, 0);
-
-      return { total, booked, conversion, amount };
-  }, [filteredEnquiries]);
-
-  // Attendance Chart Data (Weekly Trend)
-  const attendanceChartData = useMemo(() => {
-      const data = [];
-      const baseDate = new Date(selectedDate);
-      
-      for (let i = 6; i >= 0; i--) {
-          const d = new Date(baseDate);
-          d.setDate(d.getDate() - i);
-          const dateStr = d.toISOString().split('T')[0];
-          const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
-
-          // Calculate attendance for this day across filtered employees
-          let p = 0;
-          filteredEmployees.forEach(emp => {
-              const record = getEmployeeAttendance(emp, d.getFullYear(), d.getMonth()).find(r => r.date === dateStr);
-              if (record && (record.status === AttendanceStatus.PRESENT || record.status === AttendanceStatus.HALF_DAY)) p++;
-          });
-
-          data.push({ name: dayName, present: p });
-      }
-      return data;
-  }, [selectedDate, filteredEmployees, refreshTrigger]); // Added refreshTrigger
-
-  // Vehicle Revenue Chart Data
-  const vehicleChartData = useMemo(() => {
-      const data = [];
-      // Calculate revenue trends for last 6 months
-      const today = new Date();
-      for (let i = 5; i >= 0; i--) {
-          const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
-          const monthStr = d.toISOString().slice(0, 7); // YYYY-MM
-          const monthLabel = d.toLocaleDateString('en-US', { month: 'short' });
-          
-          const revenue = filteredEnquiries
-              .filter(e => (e.createdAt || '').startsWith(monthStr) && (e.status === 'Booked' || e.status === 'Order Accepted' || e.status === 'Driver Assigned' || e.status === 'Completed'))
-              .reduce((sum, e) => {
-                  // Use estimatedPrice first if it's a number
-                  if (typeof e.estimatedPrice === 'number') {
-                    return sum + e.estimatedPrice;
-                  }
-                  // Fallback to parsing from details
-                  const match = e.details.match(/Estimate: ₹([\d,]+)/) || e.details.match(/₹([\d,]+)/);
-                  if (match) {
-                      return sum + parseInt(match[1].replace(/,/g, ''));
-                  }
-                  return sum; // Add 0 if no price is found
-              }, 0);
-          
-          data.push({ name: monthLabel, revenue });
-      }
-      return data;
-  }, [filteredEnquiries]);
+  const revenueData = useMemo(() => {
+    // Group by day for the selected month or just show the selected day
+    if (filterType === 'Daily') {
+        // For Daily view, breakdown by transport type
+        const typeCounts: Record<string, number> = {};
+        filteredTrips.forEach(t => {
+            typeCounts[t.transportType] = (typeCounts[t.transportType] || 0) + (Number(t.totalPrice) || 0);
+        });
+        return Object.keys(typeCounts).map(k => ({ name: k, value: typeCounts[k] }));
+    } else {
+        // Monthly view: Group by day
+        const daysInMonth = new Date(parseInt(selectedMonth.split('-')[0]), parseInt(selectedMonth.split('-')[1]), 0).getDate();
+        const data = [];
+        for (let i = 1; i <= daysInMonth; i++) {
+            const dateStr = `${selectedMonth}-${String(i).padStart(2, '0')}`;
+            const dailyRevenue = filteredTrips
+                .filter(t => t.date === dateStr)
+                .reduce((sum, t) => sum + (Number(t.totalPrice) || 0), 0);
+            data.push({ name: String(i), value: dailyRevenue });
+        }
+        return data;
+    }
+  }, [filteredTrips, filterType, selectedMonth]);
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-end gap-4">
+      {/* Filters Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
         <div>
-          <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Dashboard Overview</h2>
-          <p className="text-gray-500 dark:text-gray-400">Welcome back, here is what's happening today.</p>
+          <h2 className="text-2xl font-bold text-gray-800">Dashboard</h2>
+          <p className="text-gray-500 text-sm">Overview of performance and metrics</p>
         </div>
         
-        {/* Global Filter Bar */}
-        <div className="bg-white dark:bg-gray-800 p-2 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm flex flex-wrap gap-2 items-center">
-            {isSuperAdmin && (
-                <select 
-                    value={filterCorporate}
-                    onChange={(e) => { setFilterCorporate(e.target.value); setFilterBranch('All'); }}
-                    className="px-3 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm outline-none bg-gray-50 dark:bg-gray-700 dark:text-white"
-                >
-                    <option value="All">All Corporates</option>
-                    <option value="admin">Head Office</option>
-                    {corporates.map(c => (
-                        <option key={c.id} value={c.email}>{c.companyName}</option>
-                    ))}
-                </select>
-            )}
-            
-            <select 
-                value={filterBranch}
-                onChange={(e) => setFilterBranch(e.target.value)}
-                className="px-3 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm outline-none bg-gray-50 dark:bg-gray-700 dark:text-white"
-            >
-                <option value="All">All Branches</option>
-                {availableBranches.map((b, i) => (
-                    <option key={i} value={b.name}>{b.name}</option>
-                ))}
-            </select>
+        <div className="flex flex-wrap gap-3 items-center">
+           {isSuperAdmin && (
+             <select 
+               value={filterCorporate} 
+               onChange={(e) => setFilterCorporate(e.target.value)}
+               className="p-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+             >
+               <option value="All">All Corporates</option>
+               <option value="admin">Head Office</option>
+               {corporates.map(c => <option key={c.id} value={c.email}>{c.companyName}</option>)}
+             </select>
+           )}
+           
+           <select 
+             value={filterBranch} 
+             onChange={(e) => setFilterBranch(e.target.value)}
+             className="p-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+           >
+             <option value="All">All Branches</option>
+             {branches.map((b: any, i) => <option key={i} value={b.name}>{b.name}</option>)}
+           </select>
 
-            <div className="w-px h-6 bg-gray-200 dark:bg-gray-600 mx-1"></div>
+           <div className="flex bg-gray-100 p-1 rounded-lg">
+              <button 
+                onClick={() => setFilterType('Daily')} 
+                className={`px-3 py-1.5 text-xs font-bold rounded ${filterType === 'Daily' ? 'bg-white text-emerald-600 shadow' : 'text-gray-500'}`}
+              >
+                Daily
+              </button>
+              <button 
+                onClick={() => setFilterType('Monthly')} 
+                className={`px-3 py-1.5 text-xs font-bold rounded ${filterType === 'Monthly' ? 'bg-white text-emerald-600 shadow' : 'text-gray-500'}`}
+              >
+                Monthly
+              </button>
+           </div>
 
-            <div className="flex bg-gray-100 dark:bg-gray-700 p-1 rounded-lg">
-                <button 
-                    onClick={() => setFilterType('Daily')}
-                    className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${filterType === 'Daily' ? 'bg-white dark:bg-gray-600 shadow text-emerald-600 dark:text-emerald-400' : 'text-gray-500 dark:text-gray-400'}`}
-                >
-                    Daily
-                </button>
-                <button 
-                    onClick={() => setFilterType('Monthly')}
-                    className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${filterType === 'Monthly' ? 'bg-white dark:bg-gray-600 shadow text-emerald-600 dark:text-emerald-400' : 'text-gray-500 dark:text-gray-400'}`}
-                >
-                    Monthly
-                </button>
-            </div>
-
-            {filterType === 'Daily' ? (
-                <input 
-                    type="date" 
-                    value={selectedDate} 
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                    className="px-3 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm outline-none bg-white dark:bg-gray-800 dark:text-white"
-                />
-            ) : (
-                <input 
-                    type="month" 
-                    value={selectedMonth} 
-                    onChange={(e) => setSelectedMonth(e.target.value)}
-                    className="px-3 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm outline-none bg-white dark:bg-gray-800 dark:text-white"
-                />
-            )}
-
-            <button 
-                onClick={() => setRefreshTrigger(prev => prev + 1)} 
-                className="p-1.5 text-gray-500 hover:text-emerald-600 bg-white border border-gray-200 rounded-lg hover:bg-emerald-50 transition-colors"
-                title="Force Refresh"
-            >
-                <RefreshCw className="w-4 h-4" />
-            </button>
+           {filterType === 'Daily' ? (
+             <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="p-2 border border-gray-300 rounded-lg text-sm bg-white" />
+           ) : (
+             <input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="p-2 border border-gray-300 rounded-lg text-sm bg-white" />
+           )}
         </div>
       </div>
 
-      {/* Stats Cards Row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        {/* Total Staff Stat - NEW */}
-        <div className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm cursor-pointer hover:border-emerald-300 transition-colors" onClick={() => navigate('/admin/staff')}>
-            <div className="flex justify-between items-start mb-2">
-                <div>
-                    <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total Staff</p>
-                    <h3 className="text-2xl font-bold text-gray-800 dark:text-white mt-1">{filteredEmployees.length}</h3>
-                </div>
-                <div className="p-2 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg text-indigo-600 dark:text-indigo-400">
-                    <Users className="w-5 h-5" />
-                </div>
-            </div>
-            <div className="text-xs text-gray-500 dark:text-gray-400">
-                Active in selected view
-            </div>
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
+           <div>
+              <p className="text-xs font-bold text-gray-500 uppercase">Total Revenue</p>
+              <h3 className="text-2xl font-bold text-emerald-600">₹{stats.totalRevenue.toLocaleString()}</h3>
+           </div>
+           <div className="p-3 bg-emerald-50 text-emerald-600 rounded-lg"><DollarSign className="w-6 h-6"/></div>
         </div>
-
-        {/* Attendance Stat */}
-        <div className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
-            <div className="flex justify-between items-start mb-2">
-                <div>
-                    <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Attendance</p>
-                    <h3 className="text-2xl font-bold text-gray-800 dark:text-white mt-1">
-                        {filterType === 'Daily' ? `${Math.round((attendanceStats.present / (filteredEmployees.length || 1)) * 100)}%` : attendanceStats.present}
-                    </h3>
-                </div>
-                <div className={`p-2 rounded-lg ${attendanceStats.absent > 0 ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400' : 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400'}`}>
-                    <UserCheck className="w-5 h-5" />
-                </div>
-            </div>
-            <div className="flex gap-3 text-xs text-gray-500 dark:text-gray-400">
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500"></span> {attendanceStats.present} Present</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500"></span> {attendanceStats.absent} Absent</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500"></span> {attendanceStats.late} Late</span>
-            </div>
+        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
+           <div>
+              <p className="text-xs font-bold text-gray-500 uppercase">Total Trips</p>
+              <h3 className="text-2xl font-bold text-blue-600">{stats.totalTrips}</h3>
+           </div>
+           <div className="p-3 bg-blue-50 text-blue-600 rounded-lg"><Car className="w-6 h-6"/></div>
         </div>
-
-        {/* Trip Booking Stats */}
-        <div className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm cursor-pointer hover:border-emerald-300 transition-colors" onClick={() => navigate('/admin/trips')}>
-            <div className="flex justify-between items-start mb-2">
-                <div>
-                    <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total Trips</p>
-                    <h3 className="text-2xl font-bold text-gray-800 dark:text-white mt-1">{tripStats.total}</h3>
-                </div>
-                <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-blue-600 dark:text-blue-400">
-                    <Truck className="w-5 h-5" />
-                </div>
-            </div>
-            <div className="flex justify-between items-center text-xs text-gray-500 dark:text-gray-400">
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500"></span> {tripStats.completed} Completed</span>
-                <span className="font-bold text-emerald-600 dark:text-emerald-400">₹{tripStats.revenue.toLocaleString()}</span>
-            </div>
+        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
+           <div>
+              <p className="text-xs font-bold text-gray-500 uppercase">Active Staff</p>
+              <h3 className="text-2xl font-bold text-purple-600">{stats.activeStaff}</h3>
+           </div>
+           <div className="p-3 bg-purple-50 text-purple-600 rounded-lg"><Users className="w-6 h-6"/></div>
         </div>
-
-        {/* Vehicle Enquiries Stat */}
-        <div className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
-            <div className="flex justify-between items-start mb-2">
-                <div>
-                    <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Transport Revenue</p>
-                    <h3 className="text-2xl font-bold text-gray-800 dark:text-white mt-1">₹{(vehicleStats.amount / 1000).toFixed(1)}k</h3>
-                </div>
-                <div className="p-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg text-purple-600 dark:text-purple-400">
-                    <Car className="w-5 h-5" />
-                </div>
-            </div>
-            <div className="flex justify-between items-center text-xs text-gray-500 dark:text-gray-400">
-                <span>{vehicleStats.booked} Booked / {vehicleStats.total} Enquiries</span>
-                <span className="font-bold text-emerald-600 dark:text-emerald-400">{vehicleStats.conversion}% Conv.</span>
-            </div>
-        </div>
-
-        {/* Pending Tasks / Approvals */}
-        <div className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm cursor-pointer hover:border-emerald-300 transition-colors" onClick={() => navigate('/admin/tasks')}>
-            <div className="flex justify-between items-start mb-2">
-                <div>
-                    <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Pending Tasks</p>
-                    <h3 className="text-2xl font-bold text-gray-800 dark:text-white mt-1">{pendingApprovals.length}</h3>
-                </div>
-                <div className="p-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg text-orange-600 dark:text-orange-400">
-                    <Clock className="w-5 h-5" />
-                </div>
-            </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Approvals for Leave, Advances, or Profile Edits.
-            </p>
-        </div>
-      </div>
-
-      {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Attendance Chart */}
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
-              <h3 className="font-bold text-gray-800 dark:text-white mb-6 flex items-center gap-2">
-                  <BarChart3 className="w-5 h-5 text-emerald-500" /> Attendance Trend (Last 7 Days)
+        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
+           <div>
+              <p className="text-xs font-bold text-gray-500 uppercase">Completion Rate</p>
+              <h3 className="text-2xl font-bold text-orange-600">
+                {stats.totalTrips > 0 ? Math.round((stats.completedTrips / stats.totalTrips) * 100) : 0}%
               </h3>
-              <div className="h-64 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={attendanceChartData}>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                          <XAxis 
-                              dataKey="name" 
-                              axisLine={false} 
-                              tickLine={false} 
-                              tick={{fill: '#9ca3af', fontSize: 12}} 
-                              dy={10}
-                          />
-                          <YAxis 
-                              axisLine={false} 
-                              tickLine={false} 
-                              tick={{fill: '#9ca3af', fontSize: 12}} 
-                          />
-                          <Tooltip 
-                              cursor={{fill: 'transparent'}}
-                              contentStyle={{backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e5e7eb', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)'}}
-                          />
-                          <Bar 
-                              dataKey="present" 
-                              fill="#10b981" 
-                              radius={[4, 4, 0, 0]} 
-                              barSize={30}
-                          />
-                      </BarChart>
-                  </ResponsiveContainer>
-              </div>
-          </div>
-
-          {/* Revenue Chart */}
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
-              <h3 className="font-bold text-gray-800 dark:text-white mb-6 flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5 text-purple-500" /> Transport Revenue (Last 6 Months)
-              </h3>
-              <div className="h-64 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={vehicleChartData}>
-                          <defs>
-                              <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                                  <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.1}/>
-                                  <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
-                              </linearGradient>
-                          </defs>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                          <XAxis 
-                              dataKey="name" 
-                              axisLine={false} 
-                              tickLine={false} 
-                              tick={{fill: '#9ca3af', fontSize: 12}} 
-                              dy={10}
-                          />
-                          <YAxis 
-                              axisLine={false} 
-                              tickLine={false} 
-                              tick={{fill: '#9ca3af', fontSize: 12}}
-                              tickFormatter={(value) => `₹${value/1000}k`}
-                          />
-                          <Tooltip 
-                              contentStyle={{backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e5e7eb', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)'}}
-                              formatter={(value: number) => [`₹${value.toLocaleString()}`, 'Revenue']}
-                          />
-                          <Area 
-                              type="monotone" 
-                              dataKey="revenue" 
-                              stroke="#8b5cf6" 
-                              strokeWidth={3}
-                              fillOpacity={1} 
-                              fill="url(#colorRevenue)" 
-                          />
-                      </AreaChart>
-                  </ResponsiveContainer>
-              </div>
-          </div>
+           </div>
+           <div className="p-3 bg-orange-50 text-orange-600 rounded-lg"><Activity className="w-6 h-6"/></div>
+        </div>
       </div>
 
-      {/* Recent Trips / Quick Actions */}
+      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-              <div className="p-5 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
-                  <h3 className="font-bold text-gray-800 dark:text-white">Recent Trips</h3>
-                  <button onClick={() => navigate('/admin/trips')} className="text-sm text-emerald-600 hover:underline">View All</button>
-              </div>
-              <div className="divide-y divide-gray-100 dark:divide-gray-700">
-                  {filteredTrips.slice(0, 5).map((trip) => (
-                      <div key={trip.id} className="p-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                          <div className="flex items-center gap-3">
-                              <div className="p-2 rounded-full bg-blue-100 text-blue-600">
-                                  <Truck className="w-4 h-4" />
-                              </div>
-                              <div>
-                                  <p className="font-bold text-gray-800 dark:text-white text-sm">{trip.userName}</p>
-                                  <p className="text-xs text-gray-500 dark:text-gray-400">{trip.branch} • {trip.tripId}</p>
-                              </div>
-                          </div>
-                          <div className="text-right">
-                              <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${
-                                  trip.bookingStatus === 'Completed' ? 'bg-emerald-100 text-emerald-700' :
-                                  trip.bookingStatus === 'Confirmed' ? 'bg-blue-100 text-blue-700' :
-                                  trip.bookingStatus === 'Cancelled' ? 'bg-red-100 text-red-700' :
-                                  'bg-gray-100 text-gray-700'
-                              }`}>
-                                  {trip.bookingStatus}
-                              </span>
-                              <p className="text--[10px] text-gray-400 mt-1">{trip.date}</p>
-                          </div>
-                      </div>
-                  ))}
-                  {filteredTrips.length === 0 && (
-                      <div className="p-8 text-center text-gray-500 dark:text-gray-400 text-sm">No recent trips found.</div>
+         <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+            <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2">
+               <TrendingUp className="w-5 h-5 text-emerald-600" /> Revenue Trend
+            </h3>
+            <div className="h-80">
+               <ResponsiveContainer width="100%" height="100%">
+                  {filterType === 'Monthly' ? (
+                    <BarChart data={revenueData}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis dataKey="name" axisLine={false} tickLine={false} />
+                        <YAxis axisLine={false} tickLine={false} />
+                        <Tooltip />
+                        <Bar dataKey="value" fill="#10b981" radius={[4, 4, 0, 0]} name="Revenue (₹)" />
+                    </BarChart>
+                  ) : (
+                    <PieChart>
+                        <Pie
+                            data={revenueData}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={60}
+                            outerRadius={80}
+                            paddingAngle={5}
+                            dataKey="value"
+                        >
+                            {revenueData.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                            ))}
+                        </Pie>
+                        <Tooltip />
+                        <Legend />
+                    </PieChart>
                   )}
-              </div>
-          </div>
+               </ResponsiveContainer>
+            </div>
+         </div>
 
-          <div className="space-y-6">
-              <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl p-6 text-white shadow-lg">
-                  <h4 className="font-bold text-lg mb-2">Quick Actions</h4>
-                  <div className="space-y-3">
-                      <button onClick={() => navigate('/admin/trips')} className="w-full py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm font-medium transition-colors text-left px-4 flex items-center gap-2">
-                          <Truck className="w-4 h-4 text-emerald-400" /> Book New Trip
-                      </button>
-                      
-                      <button onClick={() => navigate('/admin/customer-care')} className="w-full py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm font-medium transition-colors text-left px-4 flex items-center gap-2">
-                          <Headset className="w-4 h-4 text-blue-400" /> Create Transport Quote
-                      </button>
-                      
-                      <button onClick={() => navigate('/admin/attendance')} className="w-full py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm font-medium transition-colors text-left px-4 flex items-center gap-2">
-                          <Calendar className="w-4 h-4 text-orange-400" /> Mark Attendance
-                      </button>
+         <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+            <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2">
+               <Building2 className="w-5 h-5 text-blue-600" /> Recent Activity
+            </h3>
+            <div className="space-y-4">
+               {filteredTrips.slice(0, 5).map(trip => (
+                  <div key={trip.id} className="flex justify-between items-center text-sm border-b border-gray-50 pb-3 last:border-0 last:pb-0">
+                     <div>
+                        <p className="font-bold text-gray-800">{trip.customerName || trip.userName || 'Customer'}</p>
+                        <p className="text-xs text-gray-500">{trip.tripCategory} - {trip.transportType}</p>
+                     </div>
+                     <div className="text-right">
+                        <p className="font-bold text-emerald-600">₹{trip.totalPrice}</p>
+                        <p className="text-[10px] text-gray-400">{new Date(trip.date).toLocaleDateString()}</p>
+                     </div>
                   </div>
-              </div>
-
-              <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-5">
-                  <h4 className="font-bold text-gray-800 dark:text-white mb-4">Staff Status</h4>
-                  <div className="space-y-4">
-                      <div>
-                          <div className="flex justify-between text-xs mb-1">
-                              <span className="text-gray-600 dark:text-gray-400">Present</span>
-                              <span className="font-bold text-gray-800 dark:text-white">{attendanceStats.present}</span>
-                          </div>
-                          <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-1.5">
-                              <div className="bg-emerald-500 h-1.5 rounded-full" style={{width: `${(attendanceStats.present / (filteredEmployees.length || 1)) * 100}%`}}></div>
-                          </div>
-                      </div>
-                      <div>
-                          <div className="flex justify-between text-xs mb-1">
-                              <span className="text-gray-600 dark:text-gray-400">Late</span>
-                              <span className="font-bold text-gray-800 dark:text-white">{attendanceStats.late}</span>
-                          </div>
-                          <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-1.5">
-                              <div className="bg-orange-500 h-1.5 rounded-full" style={{width: `${(attendanceStats.late / (filteredEmployees.length || 1)) * 100}%`}}></div>
-                          </div>
-                      </div>
-                      <div>
-                          <div className="flex justify-between text-xs mb-1">
-                              <span className="text-gray-600 dark:text-gray-400">On Field</span>
-                              <span className="font-bold text-gray-800 dark:text-white">{attendanceStats.onField}</span>
-                          </div>
-                          <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-1.5">
-                              <div className="bg-blue-500 h-1.5 rounded-full" style={{width: `${(attendanceStats.onField / (filteredEmployees.length || 1)) * 100}%`}}></div>
-                          </div>
-                      </div>
-                  </div>
-              </div>
-          </div>
+               ))}
+               {filteredTrips.length === 0 && <p className="text-center text-gray-400 text-sm">No recent activity.</p>}
+            </div>
+         </div>
       </div>
     </div>
   );

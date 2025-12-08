@@ -57,7 +57,7 @@ const Payroll: React.FC = () => {
         const adminData = localStorage.getItem('staff_data');
         if (adminData) {
             try { 
-                allEmployees = [...allEmployees, ...JSON.parse(adminData).map((e: any) => ({...e, corporateId: 'admin', corporateName: 'Head Office'}))]; 
+                allEmployees = [...allEmployees, ...JSON.parse(adminData).filter((item: any) => item && typeof item === 'object').map((e: any) => ({...e, corporateId: 'admin', corporateName: 'Head Office'}))]; 
             } catch (e) {}
         } else {
             allEmployees = [...allEmployees, ...MOCK_EMPLOYEES.map(e => ({...e, corporateId: 'admin', corporateName: 'Head Office'}))];
@@ -65,12 +65,12 @@ const Payroll: React.FC = () => {
 
         // 2. Corporate Data
         try {
-            const corporates = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
+            const corporates = JSON.parse(localStorage.getItem('corporate_accounts') || '[]').filter((item: any) => item && typeof item === 'object');
             corporates.forEach((corp: any) => {
                 const cData = localStorage.getItem(`staff_data_${corp.email}`);
                 if (cData) {
                     try { 
-                        allEmployees = [...allEmployees, ...JSON.parse(cData).map((e:any) => ({...e, corporateId: corp.email, corporateName: corp.companyName}))]; 
+                        allEmployees = [...allEmployees, ...JSON.parse(cData).filter((item: any) => item && typeof item === 'object').map((e:any) => ({...e, corporateId: corp.email, corporateName: corp.companyName}))]; 
                     } catch (e) {}
                 }
             });
@@ -81,7 +81,7 @@ const Payroll: React.FC = () => {
         const key = getSessionKey();
         const saved = localStorage.getItem(key);
         if (saved) {
-            try { return JSON.parse(saved).map((e: any) => ({...e, corporateId: sessionId, corporateName: 'My Branch'})); } catch (e) { console.error(e); }
+            try { return JSON.parse(saved).filter((item: any) => item && typeof item === 'object').map((e: any) => ({...e, corporateId: sessionId, corporateName: 'My Branch'})); } catch (e) { console.error(e); }
         }
         return [];
     }
@@ -90,7 +90,7 @@ const Payroll: React.FC = () => {
   // Load Corporates List & Other Data
   useEffect(() => {
       const loadData = () => {
-          const allAdvances = JSON.parse(localStorage.getItem('salary_advances') || '[]');
+          const allAdvances = JSON.parse(localStorage.getItem('salary_advances') || '[]').filter((item: any) => item && typeof item === 'object');
           
           // Filter advances by current corporate for non-super admin
           const filteredAdvances = isSuperAdmin 
@@ -102,7 +102,7 @@ const Payroll: React.FC = () => {
           const savedHistory = localStorage.getItem('payroll_history');
           if (savedHistory) {
               try { 
-                const parsedHistory = JSON.parse(savedHistory);
+                const parsedHistory = JSON.parse(savedHistory).filter((item: any) => item && typeof item === 'object');
                 // Filter history by current corporate for non-super admin
                 const filteredHistory = isSuperAdmin 
                     ? parsedHistory 
@@ -112,7 +112,7 @@ const Payroll: React.FC = () => {
           }
 
           if (isSuperAdmin) {
-              const corps = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
+              const corps = JSON.parse(localStorage.getItem('corporate_accounts') || '[]').filter((item: any) => item && typeof item === 'object');
               setCorporatesList(corps);
           }
       };
@@ -145,7 +145,7 @@ const Payroll: React.FC = () => {
       // For Super Admin, we load all history and then filter the view.
       // For Corporate, we've already filtered history on load.
       // So, here we ensure all history is present in storage.
-      const existingGlobalHistory = JSON.parse(localStorage.getItem('payroll_history') || '[]');
+      const existingGlobalHistory = JSON.parse(localStorage.getItem('payroll_history') || '[]').filter((item: any) => item && typeof item === 'object');
       const currentCorporateHistory = history.filter(h => h.ownerId === sessionId);
       const otherCorpsHistory = existingGlobalHistory.filter((h: PayrollHistoryRecord) => h.ownerId !== sessionId);
       
@@ -273,7 +273,7 @@ const Payroll: React.FC = () => {
       });
       
       // Update global advances storage, then re-filter for current view
-      const allGlobalAdvances = JSON.parse(localStorage.getItem('salary_advances') || '[]');
+      const allGlobalAdvances = JSON.parse(localStorage.getItem('salary_advances') || '[]').filter((item: any) => item && typeof item === 'object');
       const otherAdvances = allGlobalAdvances.filter((a: SalaryAdvanceRequest) => 
         a.id !== selectedAdvance.id && (!isSuperAdmin ? a.corporateId !== sessionId : true)
       );
@@ -293,7 +293,7 @@ const Payroll: React.FC = () => {
       );
       
       // Update global advances storage, then re-filter for current view
-      const allGlobalAdvances = JSON.parse(localStorage.getItem('salary_advances') || '[]');
+      const allGlobalAdvances = JSON.parse(localStorage.getItem('salary_advances') || '[]').filter((item: any) => item && typeof item === 'object');
       const otherAdvances = allGlobalAdvances.filter((a: SalaryAdvanceRequest) => 
         a.id !== selectedAdvance.id && (!isSuperAdmin ? a.corporateId !== sessionId : true)
       );
@@ -324,7 +324,7 @@ const Payroll: React.FC = () => {
       };
       
       // Update global history storage, then re-filter for current view
-      const allGlobalHistory = JSON.parse(localStorage.getItem('payroll_history') || '[]');
+      const allGlobalHistory = JSON.parse(localStorage.getItem('payroll_history') || '[]').filter((item: any) => item && typeof item === 'object');
       const otherCorpsHistory = allGlobalHistory.filter((h: PayrollHistoryRecord) => h.ownerId !== newRecord.ownerId);
       const combinedHistory = [...otherCorpsHistory, newRecord];
       localStorage.setItem('payroll_history', JSON.stringify(combinedHistory));
@@ -340,7 +340,7 @@ const Payroll: React.FC = () => {
       e.stopPropagation();
       if(window.confirm("Are you sure you want to delete this payroll record?")) {
           // Remove from global storage
-          const allGlobalHistory = JSON.parse(localStorage.getItem('payroll_history') || '[]');
+          const allGlobalHistory = JSON.parse(localStorage.getItem('payroll_history') || '[]').filter((item: any) => item && typeof item === 'object');
           const updatedGlobalHistory = allGlobalHistory.filter((h: PayrollHistoryRecord) => h.id !== id);
           localStorage.setItem('payroll_history', JSON.stringify(updatedGlobalHistory));
           
