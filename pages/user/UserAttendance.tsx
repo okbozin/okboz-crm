@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Calendar as CalendarIcon, Clock, MapPin, User, Download, ChevronLeft, ChevronRight, 
-  Search, Filter, X, CheckCircle, AlertTriangle, LogIn, LogOut, RefreshCw 
+  Search, Filter, X, CheckCircle, AlertTriangle, LogIn, LogOut, RefreshCw, Fingerprint 
 } from 'lucide-react';
 import AttendanceCalendar from '../../components/AttendanceCalendar';
 import { 
@@ -55,6 +56,11 @@ export default function UserAttendance({ isAdmin = false }: UserAttendanceProps)
   const [allBranchesList, setAllBranchesList] = useState<any[]>([]);
   const [corporates, setCorporates] = useState<any[]>([]);
 
+  // State for Punch Logic
+  const [isPunching, setIsPunching] = useState(false);
+  const [todayStatus, setTodayStatus] = useState<'In' | 'Out'>('Out');
+  const [lastPunchTime, setLastPunchTime] = useState<string | null>(null);
+
   useEffect(() => {
     const loadData = () => {
         try {
@@ -103,6 +109,27 @@ export default function UserAttendance({ isAdmin = false }: UserAttendanceProps)
       if (storedSessionId) {
         const found = findEmployeeById(storedSessionId);
         setLoggedInUser(found || null);
+        
+        // Determine Initial Punch Status based on LocalStorage Data
+        if (found) {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = today.getMonth();
+            const dateStr = today.toISOString().split('T')[0];
+            
+            const attendance = getEmployeeAttendance(found, year, month);
+            const todayRecord = attendance.find(a => a.date === dateStr);
+            
+            if (todayRecord && todayRecord.checkIn && !todayRecord.checkOut) {
+                setTodayStatus('In');
+                setLastPunchTime(todayRecord.checkIn);
+            } else if (todayRecord && todayRecord.checkOut) {
+                setTodayStatus('Out');
+                setLastPunchTime(todayRecord.checkOut);
+            } else {
+                setTodayStatus('Out');
+            }
+        }
       }
     }
   }, [isAdmin]);
@@ -124,12 +151,11 @@ export default function UserAttendance({ isAdmin = false }: UserAttendanceProps)
   // Date State
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<'Individual' | 'MusterRoll'>('Individual');
-  const [periodType, setPeriodType] = useState<'Monthly'>('Monthly'); // Simplified for now
+  const [periodType, setPeriodType] = useState<'Monthly'>('Monthly'); 
 
   useEffect(() => {
     if (isAdmin) {
       if (filteredEmployeesForDisplay.length > 0) {
-        // If selected employee is not in the filtered list, select the first one
         if (!selectedEmployee || !filteredEmployeesForDisplay.some(e => e.id === selectedEmployee.id)) {
             setSelectedEmployee(filteredEmployeesForDisplay[0]);
             setFilterStaffId(filteredEmployeesForDisplay[0].id);
@@ -149,7 +175,7 @@ export default function UserAttendance({ isAdmin = false }: UserAttendanceProps)
   const attendanceData = useMemo(() => {
       if (!selectedEmployee) return [];
       return getEmployeeAttendance(selectedEmployee, currentDate.getFullYear(), currentDate.getMonth());
-  }, [selectedEmployee, currentDate]);
+  }, [selectedEmployee, currentDate, todayStatus]); // Add todayStatus dependency to refresh on punch
 
   const stats = useMemo(() => {
       const present = attendanceData.filter(d => d.status === AttendanceStatus.PRESENT).length;
@@ -182,31 +208,144 @@ export default function UserAttendance({ isAdmin = false }: UserAttendanceProps)
 
   const handleSaveAdminAttendanceEdit = () => {
       if (!selectedEmployee || !editModalData) return;
-      // In a real app, you would save this to the backend/localStorage
       alert(`Updated attendance for ${selectedEmployee.name} on ${editModalData.date}. (Mock Save)`);
       setIsEditModalOpen(false);
-      // Force refresh or update state logic here
+  };
+
+  // --- PUNCH HANDLER ---
+  const handlePunchAction = () => {
+      if (!selectedEmployee) return;
+      setIsPunching(true);
+
+      // Simulate API Call delay
+      setTimeout(() => {
+          const now = new Date();
+          const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+          const dateStr = now.toISOString().split('T')[0];
+          const year = now.getFullYear();
+          const month = now.getMonth();
+
+          // Get existing data
+          const key = `attendance_data_${selectedEmployee.id}_${year}_${month}`;
+          let currentMonthData: DailyAttendance[] = [];
+          try {
+              const saved = localStorage.getItem(key);
+              currentMonthData = saved ? JSON.parse(saved) : getEmployeeAttendance(selectedEmployee, year, month);
+          } catch(e) {
+              currentMonthData = getEmployeeAttendance(selectedEmployee, year, month);
+          }
+
+          let updatedData = [...currentMonthData];
+          let todayRecordIndex = updatedData.findIndex(d => d.date === dateStr);
+
+          if (todayStatus === 'Out') {
+              // PUNCH IN (Green -> Red)
+              setTodayStatus('In');
+              setLastPunchTime(timeStr);
+              
+              if (todayRecordIndex >= 0) {
+                  updatedData[todayRecordIndex] = {
+                      ...updatedData[todayRecordIndex],
+                      status: AttendanceStatus.PRESENT,
+                      checkIn: timeStr,
+                      isLate: now.getHours() > 9 || (now.getHours() === 9 && now.getMinutes() > 45) // Late after 9:45 AM
+                  };
+              } else {
+                  // Should essentially typically exist from mock generation, but safe fallback
+                  updatedData.push({
+                      date: dateStr,
+                      status: AttendanceStatus.PRESENT,
+                      checkIn: timeStr,
+                      isLate: false
+                  });
+              }
+          } else {
+              // PUNCH OUT (Red -> Green)
+              setTodayStatus('Out');
+              setLastPunchTime(timeStr);
+              
+              if (todayRecordIndex >= 0) {
+                  updatedData[todayRecordIndex] = {
+                      ...updatedData[todayRecordIndex],
+                      checkOut: timeStr
+                  };
+              }
+          }
+
+          // Save to storage
+          localStorage.setItem(key, JSON.stringify(updatedData));
+          setIsPunching(false);
+          // Force refresh of stats/calendar will happen via useMemo dependency on todayStatus
+      }, 1500);
   };
 
   const employeePunchCardUI = (
-      <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col items-center justify-center text-center h-full">
-          <div className="mb-4 p-4 bg-emerald-50 rounded-full">
-              <Clock className="w-10 h-10 text-emerald-600" />
-          </div>
-          <h3 className="text-lg font-bold text-gray-800 mb-1">{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</h3>
-          <p className="text-gray-500 text-sm mb-6">{new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+      <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-xl flex flex-col items-center justify-center text-center h-full relative overflow-hidden">
+          {/* Decorative Background */}
+          <div className={`absolute top-0 left-0 w-full h-2 bg-gradient-to-r ${todayStatus === 'In' ? 'from-red-400 to-orange-500' : 'from-emerald-400 to-teal-500'}`}></div>
           
-          <div className="grid grid-cols-2 gap-4 w-full">
-              <button className="flex flex-col items-center justify-center p-4 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition-colors shadow-sm">
-                  <LogIn className="w-6 h-6 mb-2" />
-                  <span className="font-bold">Punch In</span>
-              </button>
-              <button className="flex flex-col items-center justify-center p-4 bg-red-500 text-white rounded-xl hover:bg-red-600 transition-colors shadow-sm">
-                  <LogOut className="w-6 h-6 mb-2" />
-                  <span className="font-bold">Punch Out</span>
+          <div className="mb-6">
+              <h3 className="text-4xl font-black text-gray-800 tracking-tight">
+                  {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </h3>
+              <p className="text-gray-400 text-sm mt-1 font-medium tracking-wide uppercase">
+                  {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+              </p>
+          </div>
+          
+          {/* Fingerprint Button */}
+          <div className="relative group">
+              {/* Ripple Effect Container */}
+              {isPunching && (
+                  <>
+                    <span className={`absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping ${todayStatus === 'In' ? 'bg-red-400' : 'bg-emerald-400'}`}></span>
+                    <span className={`absolute inline-flex h-full w-full rounded-full opacity-50 animate-ping delay-150 ${todayStatus === 'In' ? 'bg-red-400' : 'bg-emerald-400'}`}></span>
+                  </>
+              )}
+              
+              <button 
+                  onClick={handlePunchAction}
+                  disabled={isPunching}
+                  className={`relative z-10 w-40 h-40 rounded-full flex items-center justify-center border-[6px] transition-all duration-500 transform hover:scale-105 active:scale-95 shadow-2xl
+                      ${todayStatus === 'In' 
+                          ? 'border-red-100 bg-gradient-to-b from-red-50 to-white text-red-500 shadow-red-200/50 hover:border-red-200' 
+                          : 'border-emerald-100 bg-gradient-to-b from-emerald-50 to-white text-emerald-500 shadow-emerald-200/50 hover:border-emerald-200'
+                      }`}
+              >
+                  <Fingerprint className={`w-20 h-20 transition-all duration-500 ${isPunching ? 'opacity-50 blur-[1px]' : 'opacity-100'}`} strokeWidth={1.5} />
+                  
+                  {/* Scanner Light Animation */}
+                  <div className={`absolute inset-0 rounded-full overflow-hidden pointer-events-none`}>
+                      <div className={`absolute top-0 left-0 w-full h-1.5 shadow-[0_0_15px_2px_rgba(255,255,255,0.8)] animate-[scan_2.5s_ease-in-out_infinite] ${todayStatus === 'In' ? 'bg-red-500' : 'bg-emerald-500'}`}></div>
+                  </div>
               </button>
           </div>
-          <p className="text-xs text-gray-400 mt-4">Location: Office (Mock)</p>
+
+          <div className="mt-8 space-y-2">
+              <p className="text-gray-500 text-sm font-medium">
+                  {isPunching ? 'Processing...' : (todayStatus === 'In' ? 'Duty Active' : 'Ready to Start')}
+              </p>
+              <h4 className={`text-xl font-bold ${todayStatus === 'In' ? 'text-red-500' : 'text-emerald-600'}`}>
+                  {isPunching ? 'Scanning...' : (todayStatus === 'In' ? 'Punch Out' : 'Punch In')}
+              </h4>
+          </div>
+
+          {lastPunchTime && (
+              <div className="mt-6 py-2 px-4 bg-gray-50 rounded-lg border border-gray-100 flex items-center gap-2 text-xs font-medium text-gray-500">
+                  <Clock className="w-3.5 h-3.5" />
+                  Last Action: {lastPunchTime}
+              </div>
+          )}
+
+          {/* CSS for Scan Animation */}
+          <style>{`
+            @keyframes scan {
+                0%, 100% { top: 0%; opacity: 0; }
+                10% { opacity: 1; }
+                90% { opacity: 1; }
+                50% { top: 100%; }
+            }
+          `}</style>
       </div>
   );
 
@@ -309,9 +448,7 @@ export default function UserAttendance({ isAdmin = false }: UserAttendanceProps)
                 <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))} className="p-2 hover:bg-gray-100 rounded-full"><ChevronRight className="w-5 h-5 text-gray-600" /></button>
             </div>
 
-            {/* If Admin: No Punch Card in left col usually, but maybe summary? 
-                If User: Show Punch Card.
-            */}
+            {/* Punch Card UI */}
             {!isAdmin && selectedEmployee ? employeePunchCardUI : (
                 <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm text-center text-gray-500 flex-1 flex flex-col items-center justify-center min-h-[200px]">
                     <User className="w-16 h-16 opacity-30 mb-4" />

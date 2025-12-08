@@ -181,6 +181,25 @@ const Dashboard: React.FC = () => {
      return activityList.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()).slice(0, 6);
   }, [employees]);
 
+  // --- NEW: Schedule & Booking Logic ---
+  const scheduleData = useMemo(() => {
+      const todayStr = new Date().toISOString().split('T')[0];
+      // Filter for Today's Scheduled Trips
+      const todayTrips = trips.filter(t => t && t.date === todayStr);
+      // Filter for Upcoming (Future) Trips
+      const upcomingTrips = trips.filter(t => t && t.date > todayStr);
+      
+      // Sort upcoming by date ascending (soonest first)
+      upcomingTrips.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+      return {
+          todayCount: todayTrips.length,
+          upcomingCount: upcomingTrips.length,
+          todayList: todayTrips,
+          upcomingList: upcomingTrips.slice(0, 5) // Show next 5
+      };
+  }, [trips]);
+
 
   // Stats Calculation
   const stats = useMemo(() => {
@@ -323,10 +342,73 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* QUICK ACCESS & ACTIVITY ROW */}
+      {/* QUICK ACCESS & SCHEDULES ROW */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
-        {/* Pending Approvals */}
+        {/* Schedule & Bookings Widget */}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col h-80">
+           <div className="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+              <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                 <Calendar className="w-5 h-5 text-indigo-500" /> Schedules & Bookings
+              </h3>
+              <div className="flex gap-2">
+                  <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full font-bold">
+                     Today: {scheduleData.todayCount}
+                  </span>
+                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full font-bold">
+                     Upcoming: {scheduleData.upcomingCount}
+                  </span>
+              </div>
+           </div>
+           <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {scheduleData.todayList.length === 0 && scheduleData.upcomingList.length === 0 ? (
+                 <div className="h-full flex flex-col items-center justify-center text-gray-400 text-sm">
+                    <Calendar className="w-8 h-8 mb-2 opacity-20" />
+                    No scheduled trips found.
+                 </div>
+              ) : (
+                 <>
+                    {/* Today's Section */}
+                    {scheduleData.todayList.length > 0 && (
+                        <div>
+                            <h4 className="text-xs font-bold text-emerald-600 uppercase mb-2">Today's Schedule</h4>
+                            <div className="space-y-2">
+                                {scheduleData.todayList.map(t => (
+                                    <div key={t.id} className="p-2 border border-emerald-100 bg-emerald-50/50 rounded-lg flex justify-between items-center text-sm">
+                                        <div>
+                                            <p className="font-bold text-gray-800">{t.userName}</p>
+                                            <p className="text-xs text-gray-500">{t.pickup} → {t.drop || 'Drop'}</p>
+                                        </div>
+                                        <span className="text-xs font-bold text-emerald-700 bg-white px-2 py-1 rounded border border-emerald-100">{t.bookingStatus}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Upcoming Section */}
+                    {scheduleData.upcomingList.length > 0 && (
+                        <div>
+                            <h4 className="text-xs font-bold text-gray-500 uppercase mb-2 mt-4">Upcoming</h4>
+                            <div className="space-y-2">
+                                {scheduleData.upcomingList.map(t => (
+                                    <div key={t.id} className="p-2 border border-gray-100 rounded-lg flex justify-between items-center text-sm hover:bg-gray-50">
+                                        <div>
+                                            <p className="font-bold text-gray-800">{t.userName} <span className="text-gray-400 font-normal text-xs">({new Date(t.date).toLocaleDateString()})</span></p>
+                                            <p className="text-xs text-gray-500">{t.tripCategory} - {t.transportType}</p>
+                                        </div>
+                                        <button onClick={() => navigate('/admin/trip-earning')} className="text-xs text-blue-600 hover:underline">View</button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                 </>
+              )}
+           </div>
+        </div>
+
+        {/* Pending Approvals (Kept from original) */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col h-80">
            <div className="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
               <h3 className="font-bold text-gray-800 flex items-center gap-2">
@@ -363,58 +445,6 @@ const Dashboard: React.FC = () => {
                     </div>
                  ))
               )}
-           </div>
-        </div>
-
-        {/* Recent Staff Activity (Login/Logout) */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col h-80">
-            <div className="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
-              <h3 className="font-bold text-gray-800 flex items-center gap-2">
-                 <Clock className="w-5 h-5 text-purple-500" /> Recent Staff Activity
-              </h3>
-              <button 
-                onClick={() => navigate('/admin/tracking')}
-                className="text-xs text-gray-500 hover:text-purple-600 font-medium"
-              >
-                 View All
-              </button>
-           </div>
-           <div className="flex-1 overflow-y-auto p-0">
-               {recentStaffActivity.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-gray-400 text-sm">
-                     <Users className="w-8 h-8 mb-2 opacity-20" />
-                     No recent activity logged.
-                  </div>
-               ) : (
-                  <table className="w-full text-left text-sm">
-                     <tbody className="divide-y divide-gray-50">
-                        {recentStaffActivity.map((activity, idx) => (
-                           <tr key={idx} className="hover:bg-gray-50/50">
-                              <td className="px-4 py-3">
-                                 <div className="flex items-center gap-3">
-                                    <div className="relative">
-                                       <img src={activity.avatar} alt="" className="w-8 h-8 rounded-full border border-gray-100" />
-                                       <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white ${activity.status === 'online' ? 'bg-emerald-500' : 'bg-gray-400'}`}></span>
-                                    </div>
-                                    <div>
-                                       <p className="font-medium text-gray-900">{activity.name}</p>
-                                       <p className="text-[10px] text-gray-500">{activity.role}</p>
-                                    </div>
-                                 </div>
-                              </td>
-                              <td className="px-4 py-3 text-right">
-                                 <p className={`text-xs font-bold ${activity.status === 'online' ? 'text-emerald-600' : 'text-gray-500'}`}>
-                                    {activity.status === 'online' ? 'Logged In' : 'Logged Out'}
-                                 </p>
-                                 <p className="text-[10px] text-gray-400">
-                                    {new Date(activity.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                                 </p>
-                              </td>
-                           </tr>
-                        ))}
-                     </tbody>
-                  </table>
-               )}
            </div>
         </div>
 

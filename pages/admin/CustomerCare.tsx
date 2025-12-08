@@ -4,7 +4,7 @@ import {
   Headset, Search, Filter, Phone, Mail, MapPin, 
   Calendar, User, ArrowRight, Building2, Calculator, 
   Edit2, Plus, Trash2, Car, Settings, ArrowRightLeft, Loader2, AlertTriangle, Copy,
-  X, Save, MessageCircle
+  X, Save, MessageCircle, Clock, CheckCircle
 } from 'lucide-react';
 import { 
   Enquiry, Employee, CorporateAccount, UserRole,
@@ -196,6 +196,7 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
 
   // Distance Calculation Effect
   useEffect(() => {
+    // We need map ready, pickup coords, and either drop or dest coords
     if (!window.google || !pickupCoords || formData.enquiryCategory !== 'Transport') return;
 
     try {
@@ -218,6 +219,7 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
                         if (isOutstation) {
                             setFormData(prev => ({ ...prev, estTotalKm: formattedDist }));
                         } else {
+                            // Automatically update estimated KM for Local trips
                             setFormData(prev => ({ ...prev, estKm: formattedDist }));
                         }
                     } else if (status === 'REQUEST_DENIED' || status === 'OVER_QUERY_LIMIT') {
@@ -404,16 +406,18 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
           </h2>
           <p className="text-gray-500">Manage transport requests, estimates, and general enquiries</p>
         </div>
-        <button 
-            onClick={() => setShowSettings(!showSettings)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${showSettings ? 'bg-slate-800 text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}`}
-        >
-            <Edit2 className="w-4 h-4" /> {showSettings ? 'Hide Rates' : 'Fare Configuration'}
-        </button>
+        {role !== UserRole.EMPLOYEE && (
+            <button 
+                onClick={() => setShowSettings(!showSettings)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${showSettings ? 'bg-slate-800 text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}`}
+            >
+                <Edit2 className="w-4 h-4" /> {showSettings ? 'Hide Rates' : 'Fare Configuration'}
+            </button>
+        )}
       </div>
 
       {/* FARE CONFIGURATION PANEL */}
-      {showSettings && (
+      {showSettings && role !== UserRole.EMPLOYEE && (
         <div className="bg-white p-6 rounded-xl border border-gray-200 animate-in fade-in slide-in-from-top-2 mb-6 shadow-sm">
           <div className="flex items-center justify-between mb-4">
              <h3 className="font-bold text-gray-800 flex items-center gap-2"><Edit2 className="w-4 h-4" /> Fare Configuration</h3>
