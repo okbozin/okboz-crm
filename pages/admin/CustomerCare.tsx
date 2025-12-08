@@ -1,10 +1,10 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Headset, Search, Filter, Phone, Mail, MapPin, 
   Calendar, User, ArrowRight, Building2, Calculator, 
   Edit2, Plus, Trash2, Car, Settings, ArrowRightLeft, Loader2, AlertTriangle, Copy,
-  X, Save, MessageCircle, Clock, CheckCircle
+  X, Save, MessageCircle, Clock, CheckCircle, RefreshCcw
 } from 'lucide-react';
 import { 
   Enquiry, Employee, CorporateAccount, UserRole,
@@ -48,22 +48,25 @@ const DEFAULT_RENTAL_PACKAGES: RentalPackage[] = [
 ];
 
 const DEFAULT_PRICING_SEDAN: PricingRules = {
-  localBaseFare: 200, localBaseKm: 5, localPerKmRate: 20, localWaitingRate: 2,
-  rentalExtraKmRate: 15, rentalExtraHrRate: 100,
-  outstationMinKmPerDay: 300, outstationBaseRate: 0, outstationExtraKmRate: 13,
-  outstationDriverAllowance: 400, outstationNightAllowance: 300 
+  localBaseFare: 100, localBaseKm: 0, localPerKmRate: 0, localWaitingRate: 0,
+  rentalExtraKmRate: 0, rentalExtraHrRate: 0,
+  outstationMinKmPerDay: 0, outstationBaseRate: 4300, outstationExtraKmRate: 0,
+  outstationDriverAllowance: 0, outstationNightAllowance: 0 
 };
 
 const DEFAULT_PRICING_SUV: PricingRules = {
-  localBaseFare: 300, localBaseKm: 5, localPerKmRate: 25, localWaitingRate: 3,
-  rentalExtraKmRate: 18, rentalExtraHrRate: 150,
-  outstationMinKmPerDay: 300, outstationBaseRate: 0, outstationExtraKmRate: 17,
-  outstationDriverAllowance: 500, outstationNightAllowance: 400 
+  localBaseFare: 150, localBaseKm: 0, localPerKmRate: 0, localWaitingRate: 0,
+  rentalExtraKmRate: 0, rentalExtraHrRate: 0,
+  outstationMinKmPerDay: 0, outstationBaseRate: 5500, outstationExtraKmRate: 0,
+  outstationDriverAllowance: 0, outstationNightAllowance: 0 
 };
 
 const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
   const sessionId = localStorage.getItem('app_session_id') || 'admin';
   const isSuperAdmin = sessionId === 'admin';
+  
+  // Ref for scrolling to form
+  const formRef = useRef<HTMLDivElement>(null);
 
   // --- Data Loading ---
   const [enquiries, setEnquiries] = useState<Enquiry[]>(() => {
@@ -122,7 +125,6 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
   const [newPackage, setNewPackage] = useState({ name: '', hours: '', km: '', priceSedan: '', priceSuv: '' });
 
   // State to track which Corporate's settings we are editing.
-  // Super Admin can change this. Corporate user is locked to their sessionId.
   const [settingsTargetId, setSettingsTargetId] = useState(isSuperAdmin ? 'admin' : sessionId);
 
   const [pricing, setPricing] = useState<Record<'Sedan' | 'SUV', PricingRules>>({ Sedan: DEFAULT_PRICING_SEDAN, SUV: DEFAULT_PRICING_SUV });
@@ -131,7 +133,6 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
   // Load Settings when Target ID changes
   useEffect(() => {
       const loadSettings = () => {
-          // Construct key based on target ID. 'admin' gets the root key, others get suffixed.
           const suffix = settingsTargetId === 'admin' ? '' : `_${settingsTargetId}`;
           
           const pricingKey = `transport_pricing_rules_v2${suffix}`;
@@ -140,7 +141,6 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
           if (pricingSaved) {
               setPricing(JSON.parse(pricingSaved));
           } else {
-              // Fallback to defaults if specific corporate settings don't exist yet
               setPricing({ Sedan: DEFAULT_PRICING_SEDAN, SUV: DEFAULT_PRICING_SUV });
           }
 
@@ -156,21 +156,20 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
       loadSettings();
   }, [settingsTargetId]);
 
-  // Save Settings whenever pricing/packages change
+  // Save Settings
   useEffect(() => {
       const suffix = settingsTargetId === 'admin' ? '' : `_${settingsTargetId}`;
-      
       localStorage.setItem(`transport_pricing_rules_v2${suffix}`, JSON.stringify(pricing));
       localStorage.setItem(`transport_rental_packages_v2${suffix}`, JSON.stringify(rentalPackages));
   }, [pricing, rentalPackages, settingsTargetId]);
 
 
   // --- Form & Calculator State ---
-  const [searchTerm, setSearchTerm] = useState('');
+  const [editingEnquiryId, setEditingEnquiryId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
-    enquiryCategory: 'Transport' as EnquiryCategory, // Default to Transport
+    enquiryCategory: 'Transport' as EnquiryCategory,
     
     // Transport Specifics
     tripType: 'Local' as TripType,
@@ -188,7 +187,7 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
     
     // Output
     estimate: 0,
-    notes: '', // Auto-generated or Manual
+    notes: '',
     
     // Assignment
     assignCorporate: isSuperAdmin ? 'admin' : sessionId,
@@ -199,6 +198,11 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
     priority: 'Warm'
   });
 
+  // Filter States
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('All');
+  const [dateFilter, setDateFilter] = useState('');
+
   // Maps State
   const [pickupCoords, setPickupCoords] = useState<google.maps.LatLngLiteral | null>(null);
   const [dropCoords, setDropCoords] = useState<google.maps.LatLngLiteral | null>(null);
@@ -208,18 +212,15 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
 
   // --- Google Maps Script Loader ---
   useEffect(() => {
-    // 1. Check global failure flag
     if (window.gm_authFailure_detected) {
       setMapError("Google Maps Error: Billing is not enabled. Please enable billing in Google Cloud Console.");
       return;
     }
-    // 2. Handle Missing API Key
     const apiKey = localStorage.getItem('maps_api_key');
     if (!apiKey) {
       setMapError("API Key is missing. Add in Settings > Integrations.");
       return;
     }
-    // 3. Global Auth Failure Handler
     const originalAuthFailure = window.gm_authFailure;
     window.gm_authFailure = () => {
       window.gm_authFailure_detected = true;
@@ -227,11 +228,9 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
       if (originalAuthFailure) originalAuthFailure();
     };
 
-    // 4. Validate Existing Script
     const scriptId = 'google-maps-script';
     let script = document.getElementById(scriptId) as HTMLScriptElement;
 
-    // Check if script is already fully loaded AND includes the 'places' library
     if (window.google && window.google.maps && window.google.maps.places) {
       setIsMapReady(true);
       return;
@@ -240,7 +239,7 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
     if (!script) {
         script = document.createElement('script');
         script.id = scriptId;
-        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`; // Ensure libraries=places
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
         script.async = true;
         script.defer = true;
         script.onload = () => {
@@ -266,8 +265,6 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
 
   // Distance Calculation Effect
   useEffect(() => {
-    // We need map ready, pickup coords, and either drop or dest coords
-    // Also ensuring user is in Transport mode
     if (!window.google || !pickupCoords || formData.enquiryCategory !== 'Transport') return;
 
     try {
@@ -284,15 +281,12 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
                     if (status === "OK" && response.rows[0].elements[0].status === "OK") {
                         const distanceInMeters = response.rows[0].elements[0].distance.value;
                         let distanceInKm = distanceInMeters / 1000;
-                        
                         if (isRoundTrip) distanceInKm = distanceInKm * 2; 
-
                         const formattedDist = distanceInKm.toFixed(1);
 
                         if (isOutstation) {
                             setFormData(prev => ({ ...prev, estTotalKm: formattedDist }));
                         } else {
-                            // Automatically update estimated KM for Local trips
                             setFormData(prev => ({ ...prev, estKm: formattedDist }));
                         }
                     } else {
@@ -325,29 +319,69 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
       formData.tripType, formData.outstationSubType, formData.vehicleType, 
       formData.estKm, formData.waitingMins, formData.packageId, 
       formData.days, formData.estTotalKm, formData.nights, 
-      pricing // Dependency on pricing rules
+      pricing, formData.name, formData.pickup, formData.drop, formData.destination
   ]);
 
   const calculateEstimate = () => {
       let total = 0;
       let msg = '';
       const currentRules = pricing[formData.vehicleType];
+      const customerName = formData.name || 'Customer';
+      const pickupLoc = formData.pickup || 'TBD';
 
       if (formData.tripType === 'Local') {
           const dist = parseFloat(formData.estKm) || 0;
           const wait = parseFloat(formData.waitingMins) || 0;
+          const dropLoc = formData.drop || '';
+          
           let extraKmCost = 0;
           if (dist > currentRules.localBaseKm) {
               extraKmCost = (dist - currentRules.localBaseKm) * currentRules.localPerKmRate;
           }
           total = currentRules.localBaseFare + extraKmCost + (wait * currentRules.localWaitingRate);
-          msg = `Local Trip (${formData.vehicleType}): Pickup ${formData.pickup} -> Drop ${formData.drop}, ${dist}km. Est: ₹${Math.round(total)}`;
+          
+          msg = `Hello ${customerName},
+Here is your Local estimate from OK BOZ! 🚕
+
+*Local Trip Estimate*
+🚘 Vehicle: ${formData.vehicleType}
+📍 Pickup: ${pickupLoc}
+📍 Drop: ${dropLoc}
+
+📝 Details: Local Trip: ${dist}km
+⏳ Waiting Time: ${wait} mins
+
+
+💰 *Base Fare: ₹${Math.round(total)}*
+(Includes Base Fare + Km)
+
+*Toll and Parking Extra.*
+
+Book now with OK BOZ Transport!`;
+
       } 
       else if (formData.tripType === 'Rental') {
           const pkg = rentalPackages.find(p => p.id === formData.packageId);
           if (pkg) {
               total = formData.vehicleType === 'Sedan' ? pkg.priceSedan : pkg.priceSuv;
-              msg = `Rental Package (${formData.vehicleType} - ${pkg.name}): ₹${Math.round(total)}`;
+              msg = `Hello ${customerName},
+Here is your Rental estimate from OK BOZ! 🚕
+
+*Rental Trip Estimate*
+🚘 Vehicle: ${formData.vehicleType}
+📍 Pickup: ${pickupLoc}
+
+
+📝 Details: 
+
+📦 Package: ${pkg.name}
+
+💰 *Base Fare: ₹${Math.round(total)}*
+(Includes Package Rate)
+
+*Toll and Parking Extra.*
+
+Book now with OK BOZ Transport!`;
           } else {
               msg = 'Select a package';
           }
@@ -355,6 +389,7 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
       else if (formData.tripType === 'Outstation') {
           const days = parseFloat(formData.days) || 1;
           const km = parseFloat(formData.estTotalKm) || 0;
+          const destLoc = formData.destination || '';
           const driverCost = currentRules.outstationDriverAllowance * days;
           
           if (formData.outstationSubType === 'RoundTrip') {
@@ -364,12 +399,49 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
               const chargeableKm = Math.max(km, minKm);
               const kmCost = chargeableKm * currentRules.outstationExtraKmRate;
               total = kmCost + driverCost + nightCost;
-              msg = `Outstation Round Trip (${formData.vehicleType}): ${formData.destination}, ${days} days, ${km} km. Est: ₹${Math.round(total)}`;
+              
+              msg = `Hello ${customerName},
+Here is your Outstation estimate from OK BOZ! 🚕
+
+*Outstation Trip Estimate*
+🚘 Vehicle: ${formData.vehicleType}
+📍 Pickup: ${pickupLoc}
+
+🌍 Destination: ${destLoc}
+📝 Details: Round Trip: ${days} days, ${km} km
+
+
+
+💰 *Base Fare: ₹${Math.round(total)}*
+(Includes Driver Allowance + Km)
+
+*Toll and Parking Extra.*
+
+Book now with OK BOZ Transport!`;
+
           } else {
               const kmCost = km * currentRules.outstationExtraKmRate;
               const base = currentRules.outstationBaseRate || 0;
               total = base + kmCost + driverCost;
-              msg = `Outstation One Way (${formData.vehicleType}): ${formData.destination}, ${km} km. Est: ₹${Math.round(total)}`;
+              
+              msg = `Hello ${customerName},
+Here is your Outstation estimate from OK BOZ! 🚕
+
+*Outstation Trip Estimate*
+🚘 Vehicle: ${formData.vehicleType}
+📍 Pickup: ${pickupLoc}
+
+🌍 Destination: ${destLoc}
+📝 Details: One Way: ${km} km
+
+
+
+💰 *Base Fare: ₹${Math.round(total)}*
+(Includes Driver Allowance + Km)
+
+*Toll and Parking Extra.*
+
+Book now with OK BOZ Transport!`;
           }
       }
       setFormData(prev => ({ ...prev, estimate: Math.round(total), notes: msg }));
@@ -391,105 +463,142 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
     }));
   };
 
-  const handleSavePackage = () => {
-    if (!newPackage.name || !newPackage.priceSedan) return;
-    
-    if (editingPackageId) {
-        setRentalPackages(prev => prev.map(p => p.id === editingPackageId ? {
-            ...p,
-            name: newPackage.name,
-            hours: parseFloat(newPackage.hours.toString()) || 0,
-            km: parseFloat(newPackage.km.toString()) || 0,
-            priceSedan: parseFloat(newPackage.priceSedan.toString()) || 0,
-            priceSuv: parseFloat(newPackage.priceSuv.toString()) || 0,
-        } : p));
-        setEditingPackageId(null);
-    } else {
-        const pkg: RentalPackage = {
-            id: `pkg-${Date.now()}`,
-            name: newPackage.name,
-            hours: parseFloat(newPackage.hours.toString()) || 0,
-            km: parseFloat(newPackage.km.toString()) || 0,
-            priceSedan: parseFloat(newPackage.priceSedan.toString()) || 0,
-            priceSuv: parseFloat(newPackage.priceSuv.toString()) || 0,
-        };
-        setRentalPackages([...rentalPackages, pkg]);
-    }
-    
-    setShowAddPackage(false);
-    setNewPackage({ name: '', hours: '', km: '', priceSedan: '', priceSuv: '' });
-  };
-
-  const handleEditPackage = (pkg: RentalPackage) => {
-      setNewPackage({
-          name: pkg.name,
-          hours: pkg.hours.toString(),
-          km: pkg.km.toString(),
-          priceSedan: pkg.priceSedan.toString(),
-          priceSuv: pkg.priceSuv.toString()
-      });
-      setEditingPackageId(pkg.id);
-      setShowAddPackage(true);
-  };
-
   const handleSaveEnquiry = () => {
       if (!formData.name || !formData.phone) {
           alert("Name and Phone are required.");
           return;
       }
 
-      const newEnquiry: Enquiry = {
-          id: `ENQ-${Date.now()}`,
-          type: 'Customer',
-          initialInteraction: 'Incoming',
-          name: formData.name,
-          phone: formData.phone,
-          city: '', // Could derive from assigned branch
-          details: formData.notes,
-          status: 'New',
-          createdAt: new Date().toLocaleString(),
-          date: formData.followUpDate || new Date().toISOString().split('T')[0], // Store for scheduling
-          enquiryCategory: formData.enquiryCategory,
-          tripType: formData.tripType,
-          vehicleType: formData.vehicleType,
-          outstationSubType: formData.outstationSubType,
-          transportData: {
-              pickup: formData.pickup,
-              drop: formData.drop,
-              estKm: formData.estKm,
-              waitingMins: formData.waitingMins,
-              packageId: formData.packageId,
-              destination: formData.destination,
-              days: formData.days,
-              estTotalKm: formData.estTotalKm,
-              nights: formData.nights
-          },
-          estimatedPrice: formData.estimate,
-          assignedTo: formData.assignStaff,
-          nextFollowUp: formData.followUpDate, // Add follow up
-          history: [],
-          priority: formData.priority as any
-      };
+      let updatedEnquiries = [...enquiries];
 
-      const updatedEnquiries = [newEnquiry, ...enquiries];
+      if (editingEnquiryId) {
+          updatedEnquiries = updatedEnquiries.map(enq => {
+              if (enq.id === editingEnquiryId) {
+                  return {
+                      ...enq,
+                      name: formData.name,
+                      phone: formData.phone,
+                      enquiryCategory: formData.enquiryCategory,
+                      tripType: formData.tripType,
+                      vehicleType: formData.vehicleType,
+                      outstationSubType: formData.outstationSubType,
+                      transportData: {
+                          pickup: formData.pickup,
+                          drop: formData.drop,
+                          estKm: formData.estKm,
+                          waitingMins: formData.waitingMins,
+                          packageId: formData.packageId,
+                          destination: formData.destination,
+                          days: formData.days,
+                          estTotalKm: formData.estTotalKm,
+                          nights: formData.nights
+                      },
+                      estimatedPrice: formData.estimate,
+                      details: formData.notes,
+                      assignedTo: formData.assignStaff,
+                      nextFollowUp: formData.followUpDate,
+                      priority: formData.priority as any
+                  };
+              }
+              return enq;
+          });
+      } else {
+          const newEnquiry: Enquiry = {
+              id: `ENQ-${Date.now()}`,
+              type: 'Customer',
+              initialInteraction: 'Incoming',
+              name: formData.name,
+              phone: formData.phone,
+              city: '',
+              details: formData.notes,
+              status: 'New',
+              createdAt: new Date().toLocaleString(),
+              date: formData.followUpDate || new Date().toISOString().split('T')[0],
+              enquiryCategory: formData.enquiryCategory,
+              tripType: formData.tripType,
+              vehicleType: formData.vehicleType,
+              outstationSubType: formData.outstationSubType,
+              transportData: {
+                  pickup: formData.pickup,
+                  drop: formData.drop,
+                  estKm: formData.estKm,
+                  waitingMins: formData.waitingMins,
+                  packageId: formData.packageId,
+                  destination: formData.destination,
+                  days: formData.days,
+                  estTotalKm: formData.estTotalKm,
+                  nights: formData.nights
+              },
+              estimatedPrice: formData.estimate,
+              assignedTo: formData.assignStaff,
+              nextFollowUp: formData.followUpDate,
+              history: [],
+              priority: formData.priority as any
+          };
+          updatedEnquiries = [newEnquiry, ...updatedEnquiries];
+      }
+
       setEnquiries(updatedEnquiries);
       localStorage.setItem('global_enquiries_data', JSON.stringify(updatedEnquiries));
       
-      // Reset critical fields
+      // Reset form
+      setEditingEnquiryId(null);
       setFormData(prev => ({
           ...prev, 
           name: '', phone: '', pickup: '', drop: '', destination: '', 
-          estKm: '', estTotalKm: '', notes: '', estimate: 0
+          estKm: '', estTotalKm: '', notes: '', estimate: 0,
+          assignStaff: ''
       }));
-      alert("Enquiry Created Successfully!");
+      alert(editingEnquiryId ? "Enquiry Updated!" : "Enquiry Created Successfully!");
   };
 
-  // Filtered Lists for Assignment
-  const availableBranches = useMemo(() => {
-      if (formData.assignCorporate === 'admin') return allBranches.filter(b => b && b.owner === 'admin');
-      return allBranches.filter(b => b && b.owner === formData.assignCorporate);
-  }, [allBranches, formData.assignCorporate]);
+  const handleEditEnquiry = (enq: Enquiry) => {
+      setEditingEnquiryId(enq.id);
+      setFormData(prev => ({
+          ...prev,
+          name: enq.name,
+          phone: enq.phone,
+          enquiryCategory: enq.enquiryCategory || 'Transport',
+          tripType: enq.tripType || 'Local',
+          vehicleType: enq.vehicleType || 'Sedan',
+          outstationSubType: enq.outstationSubType || 'RoundTrip',
+          pickup: enq.transportData?.pickup || '',
+          drop: enq.transportData?.drop || '',
+          estKm: enq.transportData?.estKm || '',
+          waitingMins: enq.transportData?.waitingMins || '',
+          packageId: enq.transportData?.packageId || '',
+          destination: enq.transportData?.destination || '',
+          days: enq.transportData?.days || '1',
+          estTotalKm: enq.transportData?.estTotalKm || '',
+          nights: enq.transportData?.nights || '0',
+          estimate: enq.estimatedPrice || 0,
+          notes: enq.details,
+          assignStaff: enq.assignedTo || '',
+          followUpDate: enq.nextFollowUp || '',
+          priority: enq.priority || 'Warm'
+      }));
+      // Scroll to form
+      formRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
 
+  const updateStatus = (id: string, newStatus: string) => {
+      const updated = enquiries.map(e => e.id === id ? { ...e, status: newStatus as any } : e);
+      setEnquiries(updated);
+      localStorage.setItem('global_enquiries_data', JSON.stringify(updated));
+  };
+
+  // Filtered List
+  const filteredEnquiries = enquiries.filter(e => {
+      const matchesSearch = e.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                            e.phone.includes(searchTerm) || 
+                            e.id.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesStatus = statusFilter === 'All' || e.status === statusFilter;
+      const matchesDate = !dateFilter || e.createdAt.includes(dateFilter); // simplified date check
+      
+      return matchesSearch && matchesStatus && matchesDate;
+  });
+
+  // Available Staff for Assignment
   const availableStaff = useMemo(() => {
       let staff = allStaff.filter(s => s && s.corporateId === (formData.assignCorporate === 'admin' ? 'admin' : formData.assignCorporate));
       if (formData.assignBranch && formData.assignBranch !== 'All Branches') {
@@ -497,11 +606,6 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
       }
       return staff.filter(s => s.status !== 'Inactive');
   }, [allStaff, formData.assignCorporate, formData.assignBranch]);
-
-  const filteredEnquiries = enquiries.filter(e => 
-      e.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      e.phone.includes(searchTerm)
-  );
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-20">
@@ -645,64 +749,6 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
                     <input type="number" name="rentalExtraKmRate" value={pricing[settingsVehicleType].rentalExtraKmRate} onChange={handlePricingChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
                   </div>
               </div>
-
-              <div className="flex-1 border-t border-gray-100 pt-4">
-                  <div className="flex justify-between items-center mb-3">
-                      <label className="text-xs font-bold text-gray-700">Rental Packages</label>
-                      <button 
-                        onClick={() => { setShowAddPackage(!showAddPackage); setEditingPackageId(null); setNewPackage({ name: '', hours: '', km: '', priceSedan: '', priceSuv: '' }); }}
-                        className="text-[10px] bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg border border-blue-100 hover:bg-blue-100 flex items-center gap-1 font-bold transition-colors"
-                      >
-                        <Plus className="w-3 h-3" /> New
-                      </button>
-                  </div>
-                  
-                  {showAddPackage && (
-                      <div className="bg-blue-50 p-3 rounded-xl border border-blue-100 mb-3 space-y-3 animate-in fade-in slide-in-from-top-2">
-                          <input placeholder="Pkg Name (e.g. 10hr/100km)" className="w-full p-2 text-xs border rounded-lg outline-none focus:ring-2 focus:ring-blue-500" value={newPackage.name} onChange={e => setNewPackage({...newPackage, name: e.target.value})} />
-                          <div className="flex gap-2">
-                              <input placeholder="Hrs" type="number" className="w-full p-2 text-xs border rounded-lg outline-none" value={newPackage.hours} onChange={e => setNewPackage({...newPackage, hours: e.target.value})} />
-                              <input placeholder="Km" type="number" className="w-full p-2 text-xs border rounded-lg outline-none" value={newPackage.km} onChange={e => setNewPackage({...newPackage, km: e.target.value})} />
-                          </div>
-                          <div className="flex gap-2">
-                              <input placeholder="Sedan ₹" type="number" className="w-full p-2 text-xs border rounded-lg outline-none" value={newPackage.priceSedan} onChange={e => setNewPackage({...newPackage, priceSedan: e.target.value})} />
-                              <input placeholder="SUV ₹" type="number" className="w-full p-2 text-xs border rounded-lg outline-none" value={newPackage.priceSuv} onChange={e => setNewPackage({...newPackage, priceSuv: e.target.value})} />
-                          </div>
-                          <div className="flex gap-2 justify-end">
-                              <button onClick={() => { setShowAddPackage(false); setEditingPackageId(null); }} className="text-xs text-gray-500 hover:text-gray-700 font-medium">Cancel</button>
-                              <button onClick={handleSavePackage} className="bg-blue-600 text-white text-xs font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors shadow-sm">{editingPackageId ? 'Update Package' : 'Save Package'}</button>
-                          </div>
-                      </div>
-                  )}
-
-                  <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar pr-1">
-                      {rentalPackages.map(pkg => (
-                          <div key={pkg.id} className="flex justify-between items-center p-3 hover:bg-gray-50 rounded-lg border border-transparent hover:border-gray-200 group transition-all">
-                              <div>
-                                  <div className="text-xs font-bold text-gray-800">{pkg.name}</div>
-                                  <div className="text-[10px] text-gray-500 font-medium">{pkg.hours}hr / {pkg.km}km</div>
-                              </div>
-                              <div className="text-right flex items-center gap-3">
-                                  <div className="text-[10px] text-gray-600 font-mono text-right">
-                                      <div><span className="text-gray-400">S:</span> {pkg.priceSedan}</div>
-                                      <div><span className="text-gray-400">X:</span> {pkg.priceSuv}</div>
-                                  </div>
-                                  <div className="flex gap-1"> 
-                                      <button onClick={(e) => { e.stopPropagation(); handleEditPackage(pkg); }} className="text-gray-400 hover:text-blue-500 p-1.5 rounded-full hover:bg-blue-50">
-                                          <Edit2 className="w-3 h-3" />
-                                      </button>
-                                      <button onClick={(e) => {
-                                          e.stopPropagation();
-                                          if (window.confirm('Remove package?')) setRentalPackages(prev => prev.filter(p => p.id !== pkg.id));
-                                      }} className="text-gray-400 hover:text-red-500 p-1.5 rounded-full hover:bg-red-50">
-                                          <Trash2 className="w-3 h-3" />
-                                      </button>
-                                  </div>
-                              </div>
-                          </div>
-                      ))}
-                  </div>
-              </div>
             </div>
           </div>
           
@@ -717,14 +763,169 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      {/* FILTER & ORDER LIST SECTION */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden mb-6">
+          <div className="p-4 border-b border-gray-200 flex flex-col md:flex-row gap-4 bg-gray-50/50">
+              <div className="flex-1 relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <input 
+                      type="text" 
+                      placeholder="Search Orders (ID, Name, Phone)..." 
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                  />
+              </div>
+              <div className="flex gap-2">
+                  <select 
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                      className="px-3 py-2 border border-gray-200 rounded-lg focus:outline-none bg-white text-sm"
+                  >
+                      <option value="All">All Status</option>
+                      <option value="New">New</option>
+                      <option value="In Progress">In Progress</option>
+                      <option value="Booked">Booked</option>
+                      <option value="Completed">Completed</option>
+                      <option value="Cancelled">Cancelled</option>
+                  </select>
+                  <input 
+                      type="date" 
+                      value={dateFilter}
+                      onChange={(e) => setDateFilter(e.target.value)}
+                      className="px-3 py-2 border border-gray-200 rounded-lg focus:outline-none bg-white text-sm"
+                  />
+                  <button 
+                      onClick={() => {setSearchTerm(''); setStatusFilter('All'); setDateFilter('');}}
+                      className="p-2 text-gray-500 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors border border-gray-200"
+                  >
+                      <RefreshCcw className="w-4 h-4" />
+                  </button>
+              </div>
+          </div>
+
+          <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm whitespace-nowrap">
+                  <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-200">
+                      <tr>
+                          <th className="px-6 py-4">Order ID / Date</th>
+                          <th className="px-6 py-4">Customer</th>
+                          <th className="px-6 py-4">Trip/Enquiry Info</th>
+                          <th className="px-6 py-4">Assigned To</th>
+                          <th className="px-6 py-4">Status</th>
+                          <th className="px-6 py-4 text-right">Actions</th>
+                      </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                      {filteredEnquiries.map(enq => {
+                          const assignedName = allStaff.find(s => s.id === enq.assignedTo)?.name || 'Unassigned';
+                          const tripInfo = enq.enquiryCategory === 'Transport' 
+                              ? `${enq.tripType} (${enq.vehicleType})${enq.estimatedPrice ? `. Est: ₹${enq.estimatedPrice}` : ''}`
+                              : enq.details.substring(0, 30);
+                          
+                          return (
+                              <tr key={enq.id} className={`hover:bg-gray-50 transition-colors ${editingEnquiryId === enq.id ? 'bg-indigo-50/50' : ''}`}>
+                                  <td className="px-6 py-4">
+                                      <div className="font-bold text-gray-900">{enq.id}</div>
+                                      <div className="text-xs text-gray-500">{enq.createdAt ? new Date(enq.createdAt).toLocaleDateString() : '-'}</div>
+                                  </td>
+                                  <td className="px-6 py-4">
+                                      <div className="font-bold text-gray-800">{enq.name}</div>
+                                      <div className="text-xs text-gray-500">{enq.phone}</div>
+                                  </td>
+                                  <td className="px-6 py-4 max-w-xs truncate text-gray-600" title={enq.details}>
+                                      {enq.enquiryCategory === 'Transport' ? (
+                                          <div>
+                                              <span className="font-medium">{tripInfo}</span>
+                                              {enq.transportData?.pickup && (
+                                                  <div className="text-xs text-gray-400 mt-0.5 truncate">
+                                                      {enq.transportData.pickup} &rarr; {enq.transportData.drop || enq.transportData.destination}
+                                                  </div>
+                                              )}
+                                          </div>
+                                      ) : (
+                                          enq.details || 'No details'
+                                      )}
+                                  </td>
+                                  <td className="px-6 py-4 text-gray-600">
+                                      {assignedName}
+                                  </td>
+                                  <td className="px-6 py-4">
+                                      <span className={`px-2 py-1 rounded-full text-xs font-bold border ${
+                                          enq.status === 'New' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                          enq.status === 'Completed' ? 'bg-green-50 text-green-700 border-green-200' :
+                                          enq.status === 'Cancelled' ? 'bg-red-50 text-red-700 border-red-200' :
+                                          'bg-gray-100 text-gray-600 border-gray-200'
+                                      }`}>
+                                          {enq.status}
+                                      </span>
+                                  </td>
+                                  <td className="px-6 py-4 text-right">
+                                      <div className="flex items-center justify-end gap-2">
+                                          <button 
+                                              onClick={() => handleEditEnquiry(enq)}
+                                              className="text-gray-400 hover:text-indigo-600 p-1.5 hover:bg-indigo-50 rounded transition-colors"
+                                              title="Edit / Assign"
+                                          >
+                                              <Edit2 className="w-4 h-4" />
+                                          </button>
+                                          <button 
+                                              className="bg-blue-50 text-blue-600 hover:bg-blue-100 px-2 py-1 rounded text-xs font-bold transition-colors"
+                                              onClick={() => handleEditEnquiry(enq)} // Re-using edit to focus on form for assignment
+                                          >
+                                              Assign Driver
+                                          </button>
+                                          <button 
+                                              onClick={() => updateStatus(enq.id, 'Completed')}
+                                              className="bg-green-50 text-green-600 hover:bg-green-100 px-2 py-1 rounded text-xs font-bold transition-colors"
+                                          >
+                                              Complete
+                                          </button>
+                                          <button 
+                                              onClick={() => updateStatus(enq.id, 'Cancelled')}
+                                              className="bg-red-50 text-red-600 hover:bg-red-100 px-2 py-1 rounded text-xs font-bold transition-colors"
+                                          >
+                                              Cancel
+                                          </button>
+                                      </div>
+                                  </td>
+                              </tr>
+                          );
+                      })}
+                      {filteredEnquiries.length === 0 && (
+                          <tr>
+                              <td colSpan={6} className="py-12 text-center text-gray-500">
+                                  No enquiries found matching filters.
+                              </td>
+                          </tr>
+                      )}
+                  </tbody>
+              </table>
+          </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8" ref={formRef}>
         
         {/* LEFT COLUMN: ENQUIRY FORM */}
         <div className="space-y-6">
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
-                <h3 className="text-lg font-bold text-gray-800 mb-6 flex items-center gap-2">
-                    <User className="w-5 h-5 text-gray-500" /> Customer Info
-                </h3>
+            <div className={`bg-white p-6 rounded-2xl shadow-sm border transition-colors ${editingEnquiryId ? 'border-indigo-500 ring-1 ring-indigo-500' : 'border-gray-200'}`}>
+                <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                        <User className="w-5 h-5 text-gray-500" /> 
+                        {editingEnquiryId ? 'Update Enquiry' : 'Customer Info'}
+                    </h3>
+                    {editingEnquiryId && (
+                        <button 
+                            onClick={() => {
+                                setEditingEnquiryId(null);
+                                setFormData(prev => ({ ...prev, name: '', phone: '', pickup: '', drop: '', destination: '', estKm: '', estTotalKm: '', notes: '', estimate: 0, assignStaff: '' }));
+                            }}
+                            className="text-xs text-red-500 hover:underline flex items-center gap-1"
+                        >
+                            <X className="w-3 h-3" /> Cancel Edit
+                        </button>
+                    )}
+                </div>
                 
                 <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
@@ -939,7 +1140,7 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
                         onChange={e => setFormData({...formData, assignStaff: e.target.value})}
                     >
                         <option value="">Select Staff</option>
-                        {allStaff.filter(s => s.corporateId === (formData.assignCorporate === 'admin' ? 'admin' : formData.assignCorporate)).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        {availableStaff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
                 </div>
 
@@ -949,9 +1150,10 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
                     </button>
                     <button 
                         onClick={handleSaveEnquiry}
-                        className="py-3 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 shadow-lg shadow-emerald-200 transition-colors flex items-center justify-center gap-2"
+                        className={`py-3 text-white font-bold rounded-xl shadow-lg transition-colors flex items-center justify-center gap-2 ${editingEnquiryId ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200' : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200'}`}
                     >
-                        <CheckCircle className="w-4 h-4" /> Book Now
+                        {editingEnquiryId ? <RefreshCcw className="w-4 h-4"/> : <CheckCircle className="w-4 h-4" />} 
+                        {editingEnquiryId ? 'Update Enquiry' : 'Book Now'}
                     </button>
                 </div>
             </div>
@@ -971,7 +1173,7 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
                         </p>
                     </div>
                     <div className="absolute right-0 bottom-0 opacity-10 transform translate-x-1/4 translate-y-1/4">
-                        <DollarSign size={200} />
+                        <Calculator size={200} />
                     </div>
                 </div>
             )}
@@ -992,7 +1194,6 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
                 <div className="p-6 bg-gray-50/50">
                     <div className="bg-white p-4 rounded-xl rounded-tl-none border border-gray-100 shadow-sm text-sm text-gray-700 leading-relaxed whitespace-pre-wrap relative">
                         <div className="absolute -left-2 top-0 w-0 h-0 border-t-[10px] border-t-white border-l-[10px] border-l-transparent"></div>
-                        <p className="font-bold text-gray-900 mb-2">Hello {formData.name || 'Customer'},</p>
                         <p>{formData.notes || "Estimate details will appear here..."}</p>
                     </div>
                 </div>
@@ -1017,23 +1218,5 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
     </div>
   );
 };
-
-// Simple Icon Component for Display
-const DollarSign = ({ size = 24 }: { size?: number }) => (
-    <svg 
-      xmlns="http://www.w3.org/2000/svg" 
-      width={size} 
-      height={size} 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="2" 
-      strokeLinecap="round" 
-      strokeLinejoin="round"
-    >
-      <line x1="12" y1="1" x2="12" y2="23"></line>
-      <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-    </svg>
-);
 
 export default CustomerCare;
