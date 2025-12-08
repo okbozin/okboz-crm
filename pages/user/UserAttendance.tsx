@@ -251,54 +251,49 @@ export default function UserAttendance({ isAdmin = false }: UserAttendanceProps)
 
       const year = currentDate.getFullYear();
       const month = currentDate.getMonth();
-      const daysInMonth = new Date(year, month + 1, 0).getDate();
-      
-      const newAttendance: DailyAttendance[] = [];
-      const employeeWeekOff = selectedEmployee.weekOff || 'Sunday'; // Default Sunday
+      const key = `attendance_data_${selectedEmployee.id}_${year}_${month}`;
 
-      for (let i = 1; i <= daysInMonth; i++) {
-          const currentDayDate = new Date(year, month, i);
-          const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
-          const dayName = currentDayDate.toLocaleDateString('en-US', { weekday: 'long' });
-          currentDayDate.setHours(0, 0, 0, 0);
+      // Use the current attendanceData as the base to ensure we respect existing Week Offs and Joining Dates
+      // This is safer than regenerating the loop manually and potentially mismatching the logic
+      const updatedData = attendanceData.map(day => {
+          // 1. Skip Week Offs (Don't overwrite weekends)
+          if (day.status === AttendanceStatus.WEEK_OFF) return day;
 
-          // Check for Joining Date
+          // 2. Skip Pre-Joining Dates (Don't mark absent/present before they joined)
+          const currentDayDate = new Date(day.date);
           const joiningDate = new Date(selectedEmployee.joiningDate);
           joiningDate.setHours(0,0,0,0);
+          currentDayDate.setHours(0,0,0,0);
           
-          if (currentDayDate < joiningDate) {
-              // Pre-joining
-              newAttendance.push({ date: dateStr, status: AttendanceStatus.NOT_MARKED });
-              continue;
-          }
+          if (currentDayDate < joiningDate) return day;
 
-          // Is it a Week Off?
-          if (dayName === employeeWeekOff) {
-              newAttendance.push({ date: dateStr, status: AttendanceStatus.WEEK_OFF });
-              continue;
-          }
-
-          // Apply Status
+          // 3. Apply New Status
           if (status === AttendanceStatus.PRESENT) {
-              newAttendance.push({
-                  date: dateStr,
+              return {
+                  ...day,
                   status: AttendanceStatus.PRESENT,
                   checkIn: '09:30 AM',
                   checkOut: '06:30 PM',
                   isLate: false
-              });
+              };
           } else {
-              newAttendance.push({
-                  date: dateStr,
+              return {
+                  ...day,
                   status: AttendanceStatus.ABSENT,
-              });
+                  checkIn: undefined,
+                  checkOut: undefined,
+                  isLate: false
+              };
           }
-      }
+      });
 
-      // Save
-      const key = `attendance_data_${selectedEmployee.id}_${year}_${month}`;
-      localStorage.setItem(key, JSON.stringify(newAttendance));
-      setRefreshKey(prev => prev + 1);
+      // Save to storage
+      localStorage.setItem(key, JSON.stringify(updatedData));
+      
+      // Force refresh with a small timeout to ensure storage write completes
+      setTimeout(() => {
+          setRefreshKey(prev => prev + 1);
+      }, 50);
   };
 
   // --- PUNCH HANDLER ---
