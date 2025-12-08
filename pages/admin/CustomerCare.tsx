@@ -121,30 +121,48 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
   const [editingPackageId, setEditingPackageId] = useState<string | null>(null);
   const [newPackage, setNewPackage] = useState({ name: '', hours: '', km: '', priceSedan: '', priceSuv: '' });
 
-  const [pricing, setPricing] = useState<Record<'Sedan' | 'SUV', PricingRules>>(() => {
-    const saved = localStorage.getItem(isSuperAdmin ? 'transport_pricing_rules_v2' : `transport_pricing_rules_v2_${sessionId}`);
-    if (!saved && !isSuperAdmin) {
-        const globalSettings = localStorage.getItem('transport_pricing_rules_v2');
-        if (globalSettings) return JSON.parse(globalSettings);
-    }
-    return saved ? JSON.parse(saved) : { Sedan: DEFAULT_PRICING_SEDAN, SUV: DEFAULT_PRICING_SUV };
-  });
+  // State to track which Corporate's settings we are editing.
+  // Super Admin can change this. Corporate user is locked to their sessionId.
+  const [settingsTargetId, setSettingsTargetId] = useState(isSuperAdmin ? 'admin' : sessionId);
 
-  const [rentalPackages, setRentalPackages] = useState<RentalPackage[]>(() => {
-    const saved = localStorage.getItem(isSuperAdmin ? 'transport_rental_packages_v2' : `transport_rental_packages_v2_${sessionId}`);
-    if (!saved && !isSuperAdmin) {
-        const globalPkgs = localStorage.getItem('transport_rental_packages_v2');
-        if (globalPkgs) return JSON.parse(globalPkgs);
-    }
-    return saved ? JSON.parse(saved) : DEFAULT_RENTAL_PACKAGES;
-  });
+  const [pricing, setPricing] = useState<Record<'Sedan' | 'SUV', PricingRules>>({ Sedan: DEFAULT_PRICING_SEDAN, SUV: DEFAULT_PRICING_SUV });
+  const [rentalPackages, setRentalPackages] = useState<RentalPackage[]>(DEFAULT_RENTAL_PACKAGES);
 
-  // Persist Settings
+  // Load Settings when Target ID changes
   useEffect(() => {
-      const suffix = isSuperAdmin ? '' : `_${sessionId}`;
+      const loadSettings = () => {
+          // Construct key based on target ID. 'admin' gets the root key, others get suffixed.
+          const suffix = settingsTargetId === 'admin' ? '' : `_${settingsTargetId}`;
+          
+          const pricingKey = `transport_pricing_rules_v2${suffix}`;
+          const pricingSaved = localStorage.getItem(pricingKey);
+          
+          if (pricingSaved) {
+              setPricing(JSON.parse(pricingSaved));
+          } else {
+              // Fallback to defaults if specific corporate settings don't exist yet
+              setPricing({ Sedan: DEFAULT_PRICING_SEDAN, SUV: DEFAULT_PRICING_SUV });
+          }
+
+          const pkgKey = `transport_rental_packages_v2${suffix}`;
+          const pkgSaved = localStorage.getItem(pkgKey);
+          
+          if (pkgSaved) {
+              setRentalPackages(JSON.parse(pkgSaved));
+          } else {
+              setRentalPackages(DEFAULT_RENTAL_PACKAGES);
+          }
+      };
+      loadSettings();
+  }, [settingsTargetId]);
+
+  // Save Settings whenever pricing/packages change
+  useEffect(() => {
+      const suffix = settingsTargetId === 'admin' ? '' : `_${settingsTargetId}`;
+      
       localStorage.setItem(`transport_pricing_rules_v2${suffix}`, JSON.stringify(pricing));
       localStorage.setItem(`transport_rental_packages_v2${suffix}`, JSON.stringify(rentalPackages));
-  }, [pricing, rentalPackages, isSuperAdmin, sessionId]);
+  }, [pricing, rentalPackages, settingsTargetId]);
 
 
   // --- Form & Calculator State ---
@@ -518,9 +536,29 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
           <div className="flex items-center justify-between mb-6">
              <div className="flex items-center gap-3">
                  <h3 className="font-bold text-slate-800 flex items-center gap-2 text-lg"><Edit2 className="w-5 h-5 text-indigo-500" /> Fare Configuration</h3>
-                 <span className={`text-[10px] px-2 py-0.5 rounded border uppercase tracking-wide font-bold ${isSuperAdmin ? 'bg-purple-100 text-purple-700 border-purple-200' : 'bg-blue-100 text-blue-700 border-blue-200'}`}>
-                    {isSuperAdmin ? 'Global Master' : 'Franchise Custom'}
-                 </span>
+                 
+                 {/* Corporate Selection for Admin */}
+                 {isSuperAdmin ? (
+                    <div className="relative">
+                        <select 
+                            value={settingsTargetId}
+                            onChange={(e) => setSettingsTargetId(e.target.value)}
+                            className="bg-white border border-indigo-200 text-indigo-800 text-xs font-bold py-1.5 pl-3 pr-8 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm appearance-none cursor-pointer"
+                        >
+                            <option value="admin">Head Office (Global)</option>
+                            {corporates.map((c) => (
+                                <option key={c.id} value={c.email}>{c.companyName}</option>
+                            ))}
+                        </select>
+                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-indigo-500">
+                            <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                        </div>
+                    </div>
+                 ) : (
+                    <span className="text-[10px] px-2 py-0.5 rounded border uppercase tracking-wide font-bold bg-blue-100 text-blue-700 border-blue-200">
+                        Franchise Custom
+                    </span>
+                 )}
              </div>
              
              {/* Vehicle Type Toggle */}
