@@ -7,7 +7,7 @@ import {
   MessageCircle, Plus, Trash2, Edit2, 
   MapPin as MapPinIcon, 
   Save, UploadCloud, 
-  AlertCircle, Shield, Smartphone, RotateCw, CalendarCheck, MessageSquare, Timer, AlertTriangle
+  AlertCircle, Shield, Smartphone, RotateCw, CalendarCheck, MessageSquare, Timer, AlertTriangle, Car
 } from 'lucide-react';
 import { MOCK_EMPLOYEES } from '../../constants';
 
@@ -22,6 +22,7 @@ type SettingCategory =
   | 'Shifts & Breaks' | 'Attendance Modes' | 'Attendance Rules'
   | 'Custom Paid Leaves' | 'Holiday List'
   | 'Auto Live Track'
+  | 'Transport Settings'
   | 'Calendar Month' | 'Attendance Cycle' | 'Payout Date' | 'Import Settings' | 'Incentive Types' | 'Salary Templates' | 'Round Off'
   | 'App Notifications'
   | 'Request A Feature';
@@ -76,7 +77,7 @@ const MyCompanyReport = () => {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-      <SectionHeader title="My Company Report" icon={FileText} desc="Overview of company health and statistics." />
+      <SectionHeader title="My Company Report" icon={FileText} desc="View key metrics about your workforce, including total count, active status, and estimated payroll." />
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
           <p className="text-gray-500 text-sm mb-1">Total Active Employees</p>
@@ -129,7 +130,7 @@ const MyTeamAdmins = () => {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-      <SectionHeader title="My Team (Admins)" icon={Shield} desc="Manage sub-admins and HR managers." />
+      <SectionHeader title="My Team (Admins)" icon={Shield} desc="Control access permissions by adding sub-admins or HR managers who can help manage the system." />
       
       <div className="bg-white p-4 rounded-xl border border-gray-200 mb-6">
          <h4 className="text-sm font-bold text-gray-700 mb-3">Add New Admin</h4>
@@ -227,7 +228,7 @@ const DepartmentsAndRoles = () => {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-      <SectionHeader title="Departments & Roles" icon={Building2} desc="Define organization structure." />
+      <SectionHeader title="Departments & Roles" icon={Building2} desc="Configure the structural hierarchy of your organization by defining departments and job roles." />
       
       <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
           <div className="flex border-b border-gray-200">
@@ -282,7 +283,7 @@ const DepartmentsAndRoles = () => {
 // 4. Custom Fields
 const CustomFields = () => (
   <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-    <SectionHeader title="Custom Fields" icon={Settings2} desc="Add extra fields to employee profiles." />
+    <SectionHeader title="Custom Fields" icon={Settings2} desc="Define additional data fields to capture specific employee information." />
     <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm text-center">
        <p className="text-gray-500 mb-4">No custom fields defined.</p>
        <button className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 flex items-center gap-2 mx-auto">
@@ -319,7 +320,7 @@ const InactiveEmployees = () => {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-      <SectionHeader title="Inactive Employees" icon={UserX} desc="View and restore former employees." />
+      <SectionHeader title="Inactive Employees" icon={UserX} desc="Access records of former employees and restore them if necessary." />
       {inactiveStaff.length > 0 ? (
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
           <table className="w-full text-left text-sm">
@@ -416,7 +417,7 @@ const ShiftsAndBreaks = () => {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-      <SectionHeader title="Shifts & Breaks" icon={Clock} desc="Configure working hours (12-hour AM/PM)." />
+      <SectionHeader title="Shifts & Breaks" icon={Clock} desc="Set up work schedules, shift timings, and break durations." />
       <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
         
         {/* Editor */}
@@ -533,7 +534,7 @@ const AttendanceModes = () => {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-      <SectionHeader title="Attendance Modes" icon={Smartphone} desc="Configure default allowed methods for staff." />
+      <SectionHeader title="Attendance Modes" icon={Smartphone} desc="Choose how employees can mark attendance (GPS, QR, Manual)." />
       <div className="space-y-3">
         <ToggleSwitch label="Enable GPS Geofencing" checked={modes.gpsGeofencing} onChange={() => handleToggle('gpsGeofencing')} />
         <ToggleSwitch label="Enable QR Scan" checked={modes.qrScan} onChange={() => handleToggle('qrScan')} />
@@ -543,7 +544,7 @@ const AttendanceModes = () => {
   );
 };
 
-// 8. Attendance Rules (New Component)
+// 8. Attendance Rules (Moved out of EmployeeSettings)
 const AttendanceRules = () => {
   const [rules, setRules] = useState(() => {
     const saved = localStorage.getItem(getStorageKey('company_attendance_rules'));
@@ -563,7 +564,7 @@ const AttendanceRules = () => {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-      <SectionHeader title="Attendance Rules & Penalties" icon={Timer} desc="Grace periods, late logic, and penalties." />
+      <SectionHeader title="Attendance Rules & Penalties" icon={Timer} desc="Configure grace periods, late penalties, and overtime logic." />
       
       <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm space-y-6">
         
@@ -712,7 +713,7 @@ const CustomPaidLeaves = () => {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-      <SectionHeader title="Custom Paid Leaves" icon={Plane} desc="Define leave types and annual quotas." />
+      <SectionHeader title="Custom Paid Leaves" icon={Plane} desc="Manage leave types and set annual quotas for employees." />
       <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
          <div className="flex gap-2 mb-4">
             <input value={leaveForm.name} onChange={e=>setLeaveForm({...leaveForm, name: e.target.value})} className="flex-1 border rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="Leave Name" />
@@ -819,7 +820,7 @@ const HolidayList = () => {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-      <SectionHeader title="Holiday List (2024-2026)" icon={CalendarCheck} desc="Manage company holidays." />
+      <SectionHeader title="Holiday List (2024-2026)" icon={CalendarCheck} desc="Maintain the company holiday calendar for the year." />
       <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
          <div className="flex gap-2 mb-4 p-4 bg-gray-50 rounded-lg border border-gray-100">
             <input value={form.name} onChange={e=>setForm({...form, name: e.target.value})} className="flex-1 border rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white" placeholder="Holiday Name" />
@@ -860,7 +861,7 @@ const AutoLiveTrack = () => {
     
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-            <SectionHeader title="Auto Live Track" icon={MapPinIcon} desc="Enable automatic GPS tracking for field staff." />
+            <SectionHeader title="Auto Live Track" icon={MapPinIcon} desc="Enable automatic GPS tracking for field staff during working hours." />
             <ToggleSwitch label="Enable Live Tracking" checked={enabled} onChange={() => setEnabled(!enabled)} />
             <div className="bg-blue-50 p-4 rounded-lg text-sm text-blue-700 mt-4 border border-blue-100">
                 <AlertCircle className="w-4 h-4 inline mr-2" />
@@ -870,14 +871,171 @@ const AutoLiveTrack = () => {
     );
 };
 
-// 12. Calendar Month
+// 12. Transport Settings (NEW)
+// Defaults for Transport Settings
+const DEFAULT_RENTAL_PACKAGES = [
+  { id: '1hr', name: '1 Hr / 10 km', hours: 1, km: 10, priceSedan: 200, priceSuv: 300 },
+  { id: '2hr', name: '2 Hr / 20 km', hours: 2, km: 20, priceSedan: 400, priceSuv: 600 },
+  { id: '4hr', name: '4 Hr / 40 km', hours: 4, km: 40, priceSedan: 800, priceSuv: 1100 },
+  { id: '8hr', name: '8 Hr / 80 km', hours: 8, km: 80, priceSedan: 1600, priceSuv: 2200 },
+];
+
+const DEFAULT_PRICING_SEDAN = {
+  localBaseFare: 200, localBaseKm: 5, localPerKmRate: 20, localWaitingRate: 2,
+  rentalExtraKmRate: 15, rentalExtraHrRate: 100,
+  outstationMinKmPerDay: 300, outstationBaseRate: 0, outstationExtraKmRate: 13,
+  outstationDriverAllowance: 400, outstationNightAllowance: 300 
+};
+
+const DEFAULT_PRICING_SUV = {
+  localBaseFare: 300, localBaseKm: 5, localPerKmRate: 25, localWaitingRate: 3,
+  rentalExtraKmRate: 18, rentalExtraHrRate: 150,
+  outstationMinKmPerDay: 300, outstationBaseRate: 0, outstationExtraKmRate: 17,
+  outstationDriverAllowance: 500, outstationNightAllowance: 400 
+};
+
+const TransportSettings = () => {
+  const sessionId = localStorage.getItem('app_session_id') || 'admin';
+  const isSuperAdmin = sessionId === 'admin';
+  const getSessionKey = (baseKey: string) => isSuperAdmin ? baseKey : `${baseKey}_${sessionId}`;
+
+  const [settingsVehicleType, setSettingsVehicleType] = useState<'Sedan' | 'SUV'>('Sedan');
+  const [showAddPackage, setShowAddPackage] = useState(false);
+  const [newPackage, setNewPackage] = useState({ name: '', hours: '', km: '', priceSedan: '', priceSuv: '' });
+
+  const [pricing, setPricing] = useState<any>(() => {
+    const saved = localStorage.getItem(getSessionKey('transport_pricing_rules_v2'));
+    if (!saved && !isSuperAdmin) {
+        // Fallback to global defaults if no specific settings found
+        const globalSettings = localStorage.getItem('transport_pricing_rules_v2');
+        if (globalSettings) return JSON.parse(globalSettings);
+    }
+    return saved ? JSON.parse(saved) : { Sedan: DEFAULT_PRICING_SEDAN, SUV: DEFAULT_PRICING_SUV };
+  });
+
+  const [rentalPackages, setRentalPackages] = useState<any[]>(() => {
+    const saved = localStorage.getItem(getSessionKey('transport_rental_packages_v2'));
+    if (!saved && !isSuperAdmin) {
+        const globalPkgs = localStorage.getItem('transport_rental_packages_v2');
+        if (globalPkgs) return JSON.parse(globalPkgs);
+    }
+    return saved ? JSON.parse(saved) : DEFAULT_RENTAL_PACKAGES;
+  });
+
+  useEffect(() => {
+      localStorage.setItem(getSessionKey('transport_pricing_rules_v2'), JSON.stringify(pricing));
+      localStorage.setItem(getSessionKey('transport_rental_packages_v2'), JSON.stringify(rentalPackages));
+  }, [pricing, rentalPackages]);
+
+  const handlePricingChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setPricing((prev: any) => ({
+      ...prev,
+      [settingsVehicleType]: {
+        ...prev[settingsVehicleType],
+        [name]: parseFloat(value) || 0
+      }
+    }));
+  };
+
+  const handleAddPackage = () => {
+    if (!newPackage.name || !newPackage.priceSedan) return;
+    const pkg = {
+      id: `pkg-${Date.now()}`,
+      name: newPackage.name,
+      hours: parseFloat(newPackage.hours) || 0,
+      km: parseFloat(newPackage.km) || 0,
+      priceSedan: parseFloat(newPackage.priceSedan) || 0,
+      priceSuv: parseFloat(newPackage.priceSuv) || 0,
+    };
+    setRentalPackages([...rentalPackages, pkg]);
+    setShowAddPackage(false);
+    setNewPackage({ name: '', hours: '', km: '', priceSedan: '', priceSuv: '' });
+  };
+
+  const removePackage = (id: string) => {
+    if (window.confirm('Remove this package?')) {
+      setRentalPackages(prev => prev.filter(p => p.id !== id));
+    }
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+      <SectionHeader title="Transport Settings" icon={Car} desc="Configure vehicle rates, rental packages, and outstation pricing rules." />
+      
+      <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+             <h3 className="font-bold text-gray-800 text-sm uppercase">Vehicle Configuration</h3>
+             <div className="bg-gray-100 rounded-lg p-1 flex">
+                <button onClick={() => setSettingsVehicleType('Sedan')} className={`px-4 py-1 text-xs font-bold rounded transition-colors ${settingsVehicleType === 'Sedan' ? 'bg-white text-emerald-600 shadow-sm' : 'text-gray-500'}`}>Sedan</button>
+                <button onClick={() => setSettingsVehicleType('SUV')} className={`px-4 py-1 text-xs font-bold rounded transition-colors ${settingsVehicleType === 'SUV' ? 'bg-white text-emerald-600 shadow-sm' : 'text-gray-500'}`}>SUV</button>
+             </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Local Rules */}
+            <div className="space-y-3 bg-gray-50 p-4 rounded-lg border border-gray-200">
+              <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide border-b border-gray-200 pb-2 mb-2">Local Rules</h4>
+              <div><label className="text-xs text-gray-500 block mb-1">Base Fare (₹)</label><input type="number" name="localBaseFare" value={pricing[settingsVehicleType].localBaseFare} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm bg-white" /></div>
+              <div><label className="text-xs text-gray-500 block mb-1">Base Km Included</label><input type="number" name="localBaseKm" value={pricing[settingsVehicleType].localBaseKm} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm bg-white" /></div>
+              <div><label className="text-xs text-gray-500 block mb-1">Extra Km Rate (₹/km)</label><input type="number" name="localPerKmRate" value={pricing[settingsVehicleType].localPerKmRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm bg-white" /></div>
+              <div><label className="text-xs text-gray-500 block mb-1">Waiting Charge (₹/min)</label><input type="number" name="localWaitingRate" value={pricing[settingsVehicleType].localWaitingRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm bg-white" /></div>
+            </div>
+
+            {/* Outstation Rules */}
+            <div className="space-y-3 bg-gray-50 p-4 rounded-lg border border-gray-200">
+              <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide border-b border-gray-200 pb-2 mb-2">Outstation Rules</h4>
+              <div><label className="text-xs text-gray-500 block mb-1">Min Km / Day</label><input type="number" name="outstationMinKmPerDay" value={pricing[settingsVehicleType].outstationMinKmPerDay} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm bg-white" /></div>
+              <div><label className="text-xs text-gray-500 block mb-1">Per Km Rate (₹/km)</label><input type="number" name="outstationExtraKmRate" value={pricing[settingsVehicleType].outstationExtraKmRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm bg-white" /></div>
+              <div><label className="text-xs text-gray-500 block mb-1">Driver Allowance (₹/day)</label><input type="number" name="outstationDriverAllowance" value={pricing[settingsVehicleType].outstationDriverAllowance} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm bg-white" /></div>
+              <div><label className="text-xs text-gray-500 block mb-1">Driver Night Allowance</label><input type="number" name="outstationNightAllowance" value={pricing[settingsVehicleType].outstationNightAllowance} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm bg-white" /></div>
+            </div>
+
+            {/* Rental Rules */}
+            <div className="space-y-3 bg-gray-50 p-4 rounded-lg border border-gray-200">
+              <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide border-b border-gray-200 pb-2 mb-2">Rental Rules</h4>
+              <div className="grid grid-cols-2 gap-2">
+                  <div><label className="text-xs text-gray-500 block mb-1">Extra Hr (₹)</label><input type="number" name="rentalExtraHrRate" value={pricing[settingsVehicleType].rentalExtraHrRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm bg-white" /></div>
+                  <div><label className="text-xs text-gray-500 block mb-1">Extra Km (₹)</label><input type="number" name="rentalExtraKmRate" value={pricing[settingsVehicleType].rentalExtraKmRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-sm bg-white" /></div>
+              </div>
+              
+              <div className="mt-4 pt-2 border-t border-gray-200">
+                  <div className="flex justify-between items-center mb-2">
+                      <label className="text-xs font-bold text-gray-700">Packages</label>
+                      <button onClick={() => setShowAddPackage(!showAddPackage)} className="text-[10px] bg-blue-50 text-blue-600 px-2 py-1 rounded border border-blue-100 hover:bg-blue-100 font-bold"><Plus className="w-3 h-3" /></button>
+                  </div>
+                  {showAddPackage && (
+                      <div className="bg-white p-2 rounded border border-blue-100 mb-2 space-y-2 text-xs">
+                          <input placeholder="Name" className="w-full p-1 border rounded" value={newPackage.name} onChange={e => setNewPackage({...newPackage, name: e.target.value})} />
+                          <div className="flex gap-1"><input placeholder="Hrs" className="w-1/2 p-1 border rounded" value={newPackage.hours} onChange={e => setNewPackage({...newPackage, hours: e.target.value})} /><input placeholder="Km" className="w-1/2 p-1 border rounded" value={newPackage.km} onChange={e => setNewPackage({...newPackage, km: e.target.value})} /></div>
+                          <div className="flex gap-1"><input placeholder="Sedan ₹" className="w-1/2 p-1 border rounded" value={newPackage.priceSedan} onChange={e => setNewPackage({...newPackage, priceSedan: e.target.value})} /><input placeholder="SUV ₹" className="w-1/2 p-1 border rounded" value={newPackage.priceSuv} onChange={e => setNewPackage({...newPackage, priceSuv: e.target.value})} /></div>
+                          <button onClick={handleAddPackage} className="w-full bg-blue-600 text-white py-1 rounded font-bold">Add</button>
+                      </div>
+                  )}
+                  <div className="space-y-1 max-h-32 overflow-y-auto custom-scrollbar">
+                      {rentalPackages.map(pkg => (
+                          <div key={pkg.id} className="flex justify-between items-center p-2 bg-white rounded border border-gray-200">
+                              <div><div className="text-xs font-bold">{pkg.name}</div><div className="text-[10px] text-gray-500">{pkg.hours}h/{pkg.km}km</div></div>
+                              <div className="text-right flex items-center gap-1"><div className="text-[10px]">S:{pkg.priceSedan} X:{pkg.priceSuv}</div><button onClick={() => removePackage(pkg.id)} className="text-red-400 hover:text-red-600"><Trash2 className="w-3 h-3"/></button></div>
+                          </div>
+                      ))}
+                  </div>
+              </div>
+            </div>
+          </div>
+      </div>
+    </div>
+  );
+};
+
+// 13. Calendar Month
 const CalendarMonth = () => {
     const [startMonth, setStartMonth] = useState(() => localStorage.getItem(getStorageKey('company_settings_financial_year')) || 'April');
     useEffect(() => { localStorage.setItem(getStorageKey('company_settings_financial_year'), startMonth); }, [startMonth]);
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-            <SectionHeader title="Calendar Month" icon={Calendar} desc="Set financial year start." />
+            <SectionHeader title="Calendar Month" icon={Calendar} desc="Define the start month of your financial or leave year." />
             <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
                 <label className="block text-sm font-medium text-gray-700 mb-2">Financial Year Start</label>
                 <select value={startMonth} onChange={(e) => setStartMonth(e.target.value)} className="w-full p-2 border rounded-lg bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
@@ -888,14 +1046,14 @@ const CalendarMonth = () => {
     );
 };
 
-// 13. Attendance Cycle
+// 14. Attendance Cycle
 const AttendanceCycle = () => {
     const [cycle, setCycle] = useState(() => localStorage.getItem(getStorageKey('company_settings_attendance_cycle')) || 'Calendar Month');
     useEffect(() => { localStorage.setItem(getStorageKey('company_settings_attendance_cycle'), cycle); }, [cycle]);
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-            <SectionHeader title="Attendance Cycle" icon={RotateCw} desc="Define attendance calculation period." />
+            <SectionHeader title="Attendance Cycle" icon={RotateCw} desc="Set the period for attendance calculation (e.g., 1st-30th or 26th-25th)." />
             <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
                 <label className="block text-sm font-medium text-gray-700 mb-2">Cycle Period</label>
                 <select value={cycle} onChange={(e) => setCycle(e.target.value)} className="w-full p-2 border rounded-lg bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
@@ -907,14 +1065,14 @@ const AttendanceCycle = () => {
     );
 };
 
-// 14. Payout Date
+// 15. Payout Date
 const PayoutDate = () => {
     const [payoutDate, setPayoutDate] = useState(() => localStorage.getItem(getStorageKey('company_global_payout_day')) || '5');
     useEffect(() => { localStorage.setItem(getStorageKey('company_global_payout_day'), payoutDate); }, [payoutDate]);
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-            <SectionHeader title="Payout Date" icon={DollarSign} desc="Set monthly salary payout day." />
+            <SectionHeader title="Payout Date" icon={DollarSign} desc="Set the default monthly salary payout date." />
             <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
                 <label className="block text-sm font-medium text-gray-700 mb-2">Day of Month (1-28)</label>
                 <input type="number" min="1" max="28" value={payoutDate} onChange={(e) => setPayoutDate(e.target.value)} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none" />
@@ -923,17 +1081,17 @@ const PayoutDate = () => {
     );
 };
 
-// 15. Import Settings
+// 16. Import Settings
 const ImportSettings = () => (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-        <SectionHeader title="Import Settings" icon={UploadCloud} desc="Configure data import defaults." />
+        <SectionHeader title="Import Settings" icon={UploadCloud} desc="Configure default behaviors for bulk data imports." />
         <div className="bg-white p-6 rounded-xl border border-gray-200 text-center text-gray-500 shadow-sm">
             Import configurations are managed automatically based on CSV headers.
         </div>
     </div>
 );
 
-// 16. Incentive Types
+// 17. Incentive Types
 const IncentiveTypes = () => {
     const [types, setTypes] = useState<string[]>(() => {
         const saved = localStorage.getItem(getStorageKey('company_incentive_types'));
@@ -945,7 +1103,7 @@ const IncentiveTypes = () => {
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-            <SectionHeader title="Incentive Types" icon={Award} desc="Define incentive categories." />
+            <SectionHeader title="Incentive Types" icon={Award} desc="Define categories for performance-based incentives." />
             <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
                 <div className="flex gap-2 mb-4">
                     <input value={newType} onChange={e=>setNewType(e.target.value)} className="flex-1 border rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="Incentive Name" />
@@ -964,24 +1122,24 @@ const IncentiveTypes = () => {
     );
 };
 
-// 17. Salary Templates
+// 18. Salary Templates
 const SalaryTemplates = () => (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-        <SectionHeader title="Salary Templates" icon={File} desc="Manage salary structures." />
+        <SectionHeader title="Salary Templates" icon={File} desc="Create and manage salary structures and breakdown templates." />
         <div className="bg-white p-6 rounded-xl border border-gray-200 text-center text-gray-500 shadow-sm">
             Standard Template: Basic (50%), HRA (30%), Allowance (20%) is currently active.
         </div>
     </div>
 );
 
-// 18. Round Off
+// 19. Round Off
 const RoundOff = () => {
     const [round, setRound] = useState(() => localStorage.getItem(getStorageKey('company_settings_round_off')) || 'None');
     useEffect(() => { localStorage.setItem(getStorageKey('company_settings_round_off'), round); }, [round]);
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-            <SectionHeader title="Round Off" icon={RotateCcw} desc="Round off attendance times." />
+            <SectionHeader title="Round Off" icon={RotateCcw} desc="Configure how attendance time is rounded for calculation." />
             <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
                 <select value={round} onChange={(e) => setRound(e.target.value)} className="w-full p-2 border rounded-lg bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
                     <option>None</option><option>Nearest 15 Mins</option><option>Nearest 30 Mins</option>
@@ -991,23 +1149,23 @@ const RoundOff = () => {
     );
 };
 
-// 19. App Notifications
+// 20. App Notifications
 const AppNotifications = () => {
     const [enabled, setEnabled] = useState(() => localStorage.getItem(getStorageKey('company_settings_notifications')) === 'true');
     useEffect(() => { localStorage.setItem(getStorageKey('company_settings_notifications'), String(enabled)); }, [enabled]);
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-            <SectionHeader title="App Notifications" icon={Bell} desc="Enable system notifications." />
+            <SectionHeader title="App Notifications" icon={Bell} desc="Manage system-wide alerts and in-app notifications." />
             <ToggleSwitch label="Enable In-App Alerts" checked={enabled} onChange={() => setEnabled(!enabled)} />
         </div>
     );
 };
 
-// 20. Request A Feature
+// 21. Request A Feature
 const RequestAFeature = () => (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-        <SectionHeader title="Request A Feature" icon={MessageSquare} desc="Feedback and suggestions." />
+        <SectionHeader title="Request A Feature" icon={MessageSquare} desc="Share your ideas and feedback to help us improve." />
         <div className="bg-white p-6 rounded-xl border border-gray-200 text-center shadow-sm">
             <textarea className="w-full border rounded-lg p-3 mb-3 text-sm focus:ring-2 focus:ring-emerald-500 outline-none" rows={4} placeholder="Describe your idea..."></textarea>
             <button className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg text-sm font-bold transition-colors">Submit</button>
@@ -1039,7 +1197,7 @@ const EmployeeSettings: React.FC = () => {
   
     return (
       <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-        <SectionHeader title="Attendance Rules & Penalties" icon={Timer} desc="Grace periods, late logic, and penalties." />
+        <SectionHeader title="Attendance Rules & Penalties" icon={Timer} desc="Configure grace periods, late penalties, and overtime logic." />
         
         <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm space-y-6">
           
@@ -1165,6 +1323,7 @@ const EmployeeSettings: React.FC = () => {
       case 'Custom Paid Leaves': return <CustomPaidLeaves />;
       case 'Holiday List': return <HolidayList />;
       case 'Auto Live Track': return <AutoLiveTrack />;
+      case 'Transport Settings': return <TransportSettings />;
       case 'Calendar Month': return <CalendarMonth />;
       case 'Attendance Cycle': return <AttendanceCycle />;
       case 'Payout Date': return <PayoutDate />;
@@ -1190,6 +1349,7 @@ const EmployeeSettings: React.FC = () => {
     { category: 'Custom Paid Leaves', icon: Plane },
     { category: 'Holiday List', icon: CalendarCheck },
     { category: 'Auto Live Track', icon: MapPinIcon },
+    { category: 'Transport Settings', icon: Car },
     { category: 'Calendar Month', icon: Calendar },
     { category: 'Attendance Cycle', icon: RotateCw },
     { category: 'Payout Date', icon: DollarSign },
