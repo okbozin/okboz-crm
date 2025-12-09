@@ -1,10 +1,11 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { 
   Plus, Search, DollarSign, 
   PieChart, FileText, 
   CheckCircle, X, Download,
-  Smartphone, Zap, Wifi, Users, ArrowUpCircle, ArrowDownCircle, Wallet, TrendingUp, TrendingDown, Building2, Upload, Loader2, Paperclip, Eye, Edit2, Trash2, Printer, Percent, AlertTriangle
+  Smartphone, Zap, Wifi, Users, ArrowUpCircle, ArrowDownCircle, Wallet, TrendingUp, TrendingDown, Building2, Upload, Loader2, Paperclip, Eye, Edit2, Trash2, Printer, Percent, AlertTriangle, Calendar, CheckSquare, RefreshCcw, Clock
 } from 'lucide-react';
 import { PieChart as RePieChart, Pie, Cell, ResponsiveContainer, Tooltip as ReTooltip, Legend } from 'recharts';
 import { uploadFileToCloud } from '../../services/cloudService';
@@ -134,6 +135,24 @@ const Expenses: React.FC = () => {
   const [rawReceiptPreviewUrl, setRawReceiptPreviewUrl] = useState<string | null>(null); 
   const [showInvoiceViewer, setShowInvoiceViewer] = useState(false); 
   const [invoiceData, setInvoiceData] = useState<Expense | null>(null); 
+  
+  // Custom Category State
+  const [customCategory, setCustomCategory] = useState('');
+
+  // Settlement Data State
+  const [settlementData, setSettlementData] = useState<Record<string, any>>({});
+  // Temporary state for payment method selection in the UI
+  const [selectedPaymentMethods, setSelectedPaymentMethods] = useState<Record<string, string>>({});
+
+  // Load Settlement Data
+  useEffect(() => {
+      const saved = localStorage.getItem('partner_settlements');
+      if (saved) {
+          try {
+              setSettlementData(JSON.parse(saved));
+          } catch(e) {}
+      }
+  }, []);
 
   // Upload State
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -187,6 +206,7 @@ const Expenses: React.FC = () => {
 
   const resetForm = () => {
     setFormData(initialFormState);
+    setCustomCategory('');
     setSelectedFile(null);
     setEditingExpenseId(null);
     setIsModalOpen(false);
@@ -200,11 +220,26 @@ const Expenses: React.FC = () => {
 
   const handleEdit = (expense: Expense) => {
     setEditingExpenseId(expense.id);
+    
+    const list = expense.type === 'Expense' ? EXPENSE_CATEGORIES : INCOME_CATEGORIES;
+    const isStandard = list.includes(expense.category);
+    
+    let catForForm = expense.category;
+    let customCatVal = '';
+
+    // If category is NOT in the standard list, it's a custom one.
+    // We set the form dropdown to "Other..." and fill the custom input.
+    if (!isStandard) {
+         if (expense.type === 'Expense') catForForm = 'Other Expenses';
+         else catForForm = 'Other Income';
+         customCatVal = expense.category;
+    }
+
     setFormData({
         type: expense.type,
         transactionNumber: expense.transactionNumber,
         title: expense.title,
-        category: expense.category,
+        category: catForForm,
         amount: expense.amount,
         date: expense.date,
         paymentMethod: expense.paymentMethod,
@@ -212,6 +247,7 @@ const Expenses: React.FC = () => {
         description: expense.description,
         receiptUrl: expense.receiptUrl, 
     });
+    setCustomCategory(customCatVal);
     setSelectedFile(null); 
     setIsModalOpen(true);
   };
@@ -239,10 +275,48 @@ const Expenses: React.FC = () => {
     setRawReceiptPreviewUrl(null);
   };
 
+  // --- Settlement Handlers ---
+  const handleSettle = (key: string, amount: number) => {
+      const method = selectedPaymentMethods[key] || 'Bank Transfer';
+      
+      const updatedData = {
+          ...settlementData,
+          [key]: {
+              status: 'Settled',
+              date: new Date().toISOString(),
+              amount: amount,
+              paymentMethod: method
+          }
+      };
+      
+      setSettlementData(updatedData);
+      localStorage.setItem('partner_settlements', JSON.stringify(updatedData));
+  };
+
+  const handleUnsettle = (key: string) => {
+      if(!window.confirm("Are you sure you want to mark this as Unsettled?")) return;
+      
+      const updatedData = { ...settlementData };
+      delete updatedData[key];
+      
+      setSettlementData(updatedData);
+      localStorage.setItem('partner_settlements', JSON.stringify(updatedData));
+  };
+
+  const handlePaymentMethodSelect = (key: string, method: string) => {
+      setSelectedPaymentMethods(prev => ({...prev, [key]: method}));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.title || !formData.amount || !formData.transactionNumber) {
         alert("Please fill all required fields including Transaction Number.");
+        return;
+    }
+    
+    // Validate Custom Category
+    if ((formData.category === 'Other Expenses' || formData.category === 'Other Income') && !customCategory.trim()) {
+        alert("Please specify the custom category name.");
         return;
     }
 
@@ -272,12 +346,17 @@ const Expenses: React.FC = () => {
         }
     }
 
+    // Determine Final Category
+    const finalCategory = (formData.category === 'Other Expenses' || formData.category === 'Other Income') 
+                          ? customCategory.trim() 
+                          : formData.category;
+
     const transactionData: Expense = {
       id: editingExpenseId || Date.now().toString(),
       transactionNumber: formData.transactionNumber || `TXN-${Date.now()}`,
       type: formData.type as 'Income' | 'Expense',
       title: formData.title || '',
-      category: formData.category || 'Other Expenses',
+      category: finalCategory || 'Other Expenses',
       amount: formData.amount || 0,
       date: formData.date || new Date().toISOString().split('T')[0],
       paymentMethod: formData.paymentMethod || 'Cash',
@@ -414,7 +493,7 @@ const Expenses: React.FC = () => {
            <div className="relative z-10">
               <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Net Balance</p>
               <h3 className={`text-2xl font-bold ${stats.balance >= 0 ? 'text-indigo-600' : 'text-red-600'}`}>
-                  ₹{stats.balance.toLocaleString()}
+                  {stats.balance >= 0 ? '₹' : '-₹'}{Math.abs(stats.balance).toLocaleString()}
               </h3>
               <p className={`text-xs font-medium flex items-center gap-1 mt-1 ${stats.balance >= 0 ? 'text-indigo-600' : 'text-red-600'}`}>
                  {stats.balance >= 0 ? 'Profit' : 'Loss'}
@@ -436,24 +515,84 @@ const Expenses: React.FC = () => {
                       Profit Distribution ({activeCorporate.companyName})
                   </h3>
                   <span className={`px-3 py-1 rounded-full text-xs font-bold bg-white/20 text-white border border-white/30`}>
-                      {stats.balance >= 0 ? 'Net Profit' : 'Net Loss'} Split
+                      {monthFilter}
                   </span>
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {activeCorporate.partners.map((partner, index) => {
                       const shareAmount = (stats.balance * partner.percentage) / 100;
+                      const isLoss = stats.balance < 0;
+                      
+                      // Settlement Key: CorporateID + Month + PartnerIndex
+                      const settlementKey = `${activeCorporate.id}_${monthFilter}_${index}`;
+                      const settlementInfo = settlementData[settlementKey]; // { status: 'Settled' | 'Pending', paymentMethod, date, amount }
+                      const isSettled = settlementInfo?.status === 'Settled';
+
                       return (
-                          <div key={index} className="bg-white/10 rounded-lg p-4 border border-white/20 hover:bg-white/20 transition-colors backdrop-blur-sm">
+                          <div key={index} className={`rounded-lg p-4 border transition-colors backdrop-blur-sm relative overflow-hidden ${
+                              isLoss 
+                                ? 'bg-red-900/30 border-red-400/50' 
+                                : 'bg-white/10 border-white/20 hover:bg-white/20'
+                          }`}>
                               <div className="flex justify-between items-start mb-2">
                                   <span className="font-bold text-white">{partner.name}</span>
                                   <span className="text-xs font-mono bg-white/20 px-2 py-0.5 rounded text-white">{partner.percentage}%</span>
                               </div>
-                              <div className="text-xl font-bold text-white">
-                                  {stats.balance >= 0 ? '₹' : '-₹'}{Math.abs(shareAmount).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                              
+                              <div className={`text-xl font-bold ${isLoss ? 'text-red-200' : 'text-emerald-300'}`}>
+                                  {isLoss ? '-₹' : '₹'}{Math.abs(shareAmount).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                               </div>
-                              <div className="text-[10px] text-blue-100 mt-1 uppercase tracking-wider font-medium opacity-80">
-                                  {stats.balance >= 0 ? 'Share of Profit' : 'Share of Loss'}
+                              
+                              <div className={`text-[10px] uppercase tracking-wider font-medium opacity-80 mb-3 ${isLoss ? 'text-red-200' : 'text-blue-100'}`}>
+                                  {isLoss ? 'Share of Loss' : 'Share of Profit'}
+                              </div>
+
+                              {/* Settlement Controls */}
+                              <div className="pt-3 border-t border-white/10">
+                                  {isSettled ? (
+                                      <div className="flex flex-col gap-1">
+                                          <div className="flex items-center gap-1.5 text-xs text-green-300 font-bold bg-green-900/40 px-2 py-1 rounded w-fit">
+                                              <CheckCircle className="w-3 h-3" /> 
+                                              Settled via {settlementInfo.paymentMethod}
+                                          </div>
+                                          <div className="flex justify-between items-center mt-1">
+                                              <span className="text-[10px] text-white/60">{new Date(settlementInfo.date).toLocaleDateString()}</span>
+                                              <button 
+                                                  onClick={() => handleUnsettle(settlementKey)}
+                                                  className="text-[10px] text-red-300 hover:text-red-100 hover:underline flex items-center gap-1"
+                                              >
+                                                  <RefreshCcw className="w-3 h-3" /> Undo
+                                              </button>
+                                          </div>
+                                      </div>
+                                  ) : (
+                                      <div className="space-y-2">
+                                          <div className="flex justify-between items-center">
+                                              <span className="text-xs text-yellow-300 font-bold bg-yellow-900/40 px-2 py-0.5 rounded flex items-center gap-1">
+                                                  <Clock className="w-3 h-3" /> Pending
+                                              </span>
+                                          </div>
+                                          <div className="flex gap-2">
+                                              <select 
+                                                  className="bg-black/20 border border-white/20 text-white text-xs rounded px-2 py-1 outline-none focus:border-white/50 w-full"
+                                                  value={selectedPaymentMethods[settlementKey] || 'Bank Transfer'}
+                                                  onChange={(e) => handlePaymentMethodSelect(settlementKey, e.target.value)}
+                                              >
+                                                  <option className="text-black">Bank Transfer</option>
+                                                  <option className="text-black">Cash</option>
+                                                  <option className="text-black">Cheque</option>
+                                                  <option className="text-black">UPI</option>
+                                              </select>
+                                              <button 
+                                                  onClick={() => handleSettle(settlementKey, shareAmount)}
+                                                  className="bg-white/20 hover:bg-white/30 text-white text-xs px-3 py-1 rounded font-medium border border-white/20 transition-colors whitespace-nowrap"
+                                              >
+                                                  Mark Settled
+                                              </button>
+                                          </div>
+                                      </div>
+                                  )}
                               </div>
                           </div>
                       );
@@ -642,9 +781,29 @@ const Expenses: React.FC = () => {
                  <div className="grid grid-cols-2 gap-4">
                     <div>
                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Category</label>
-                       <select name="category" value={formData.category} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none bg-white">
+                       <select 
+                          name="category" 
+                          value={formData.category} 
+                          onChange={(e) => {
+                             handleInputChange(e);
+                             if (e.target.value !== 'Other Expenses' && e.target.value !== 'Other Income') {
+                                 setCustomCategory('');
+                             }
+                          }} 
+                          className="w-full p-2 border border-gray-300 rounded-lg outline-none bg-white"
+                        >
                           {(formData.type === 'Expense' ? EXPENSE_CATEGORIES : INCOME_CATEGORIES).map(c => <option key={c}>{c}</option>)}
                        </select>
+                       {(formData.category === 'Other Expenses' || formData.category === 'Other Income') && (
+                           <input 
+                              type="text" 
+                              placeholder="Enter custom category"
+                              value={customCategory}
+                              onChange={(e) => setCustomCategory(e.target.value)}
+                              className="w-full p-2 mt-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                              required
+                           />
+                       )}
                     </div>
                     <div>
                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Amount (₹)</label>
@@ -658,12 +817,23 @@ const Expenses: React.FC = () => {
                        <input type="date" name="date" value={formData.date} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none" required />
                     </div>
                     <div>
-                       <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Status</label>
-                       <select name="status" value={formData.status} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none bg-white">
-                          <option>Paid</option>
-                          <option>Pending</option>
+                       <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Payment Method</label>
+                       <select name="paymentMethod" value={formData.paymentMethod} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none bg-white">
+                          <option>Bank Transfer</option>
+                          <option>Cash</option>
+                          <option>UPI</option>
+                          <option>Cheque</option>
+                          <option>Card</option>
                        </select>
                     </div>
+                 </div>
+
+                 <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Status</label>
+                    <select name="status" value={formData.status} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none bg-white">
+                       <option>Paid</option>
+                       <option>Pending</option>
+                    </select>
                  </div>
 
                  <div>
