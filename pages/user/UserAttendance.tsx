@@ -480,6 +480,70 @@ export default function UserAttendance({ isAdmin = false }: UserAttendanceProps)
   // Check restrictions - Logic corrected: if mode is 'BranchRadius', Remote is restricted.
   const isBranchRestricted = selectedEmployee?.attendanceConfig?.manualPunchMode === 'BranchRadius';
 
+
+  // --- BULK ACTION LOGIC (NEW) ---
+  const handleBulkMarkAttendance = (status: AttendanceStatus) => {
+    if (!selectedEmployee) {
+      alert("Please select an employee first.");
+      return;
+    }
+    if (!window.confirm(`Are you sure you want to mark ALL eligible days of ${currentMonthYearLabel} as ${status.replace('_', ' ')} for ${selectedEmployee.name}?`)) {
+      return;
+    }
+
+    setIsPunching(true); // Use isPunching to disable buttons
+
+    const [year, month] = [currentDate.getFullYear(), currentDate.getMonth()];
+    const key = `attendance_data_${selectedEmployee.id}_${year}_${month}`;
+    let currentMonthData = getEmployeeAttendance(selectedEmployee, year, month);
+    
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const todayStr = today.toISOString().split('T')[0];
+
+    const updatedData = currentMonthData.map(day => {
+      const dayDate = new Date(day.date);
+      dayDate.setHours(0,0,0,0); // Normalize
+
+      // Do not override Week Off, Holiday, or future dates
+      if (day.status === AttendanceStatus.WEEK_OFF || day.status === AttendanceStatus.HOLIDAY || dayDate > today) {
+        return day;
+      }
+      
+      // Removed the specific check for `day.date === todayStr && day.status === AttendanceStatus.NOT_MARKED`
+      // This allows bulk marking to apply to today's NOT_MARKED entries.
+
+      if (status === AttendanceStatus.PRESENT) {
+        return {
+          ...day,
+          status: AttendanceStatus.PRESENT,
+          checkIn: '09:30 AM',
+          checkOut: '06:30 PM',
+          isLate: false, // Assume not late if bulk marked present
+          punchInLocation: day.punchInLocation || { lat: 0, lng: 0, address: 'Bulk Marked Present', timestamp: new Date(day.date).toISOString() },
+          punchOutLocation: day.punchOutLocation || { lat: 0, lng: 0, address: 'Bulk Marked Present', timestamp: new Date(day.date).toISOString() },
+        };
+      } else if (status === AttendanceStatus.ABSENT) {
+        return {
+          ...day,
+          status: AttendanceStatus.ABSENT,
+          checkIn: undefined,
+          checkOut: undefined,
+          isLate: undefined,
+          punchInLocation: undefined,
+          punchOutLocation: undefined,
+        };
+      }
+      return day;
+    });
+
+    localStorage.setItem(key, JSON.stringify(updatedData));
+    setRefreshKey(prev => prev + 1); // Trigger re-render
+    setIsPunching(false);
+    alert(`Attendance for ${selectedEmployee.name} updated successfully to ${status.replace('_', ' ')}!`);
+  };
+
+
   // --- RENDER ---
 
   const employeePunchCardUI = (
@@ -677,8 +741,21 @@ export default function UserAttendance({ isAdmin = false }: UserAttendanceProps)
             {viewMode === 'Monthly' && selectedEmployee && (
                 <>
                     {isAdmin && (
-                        <div className="flex gap-2 justify-end">
-                            {/* Potential Bulk Actions */}
+                        <div className="flex gap-3 justify-end">
+                            <button
+                                onClick={() => handleBulkMarkAttendance(AttendanceStatus.PRESENT)}
+                                disabled={!selectedEmployee || isPunching}
+                                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-colors disabled:opacity-50"
+                            >
+                                <CheckSquare className="w-4 h-4" /> Mark All Present
+                            </button>
+                            <button
+                                onClick={() => handleBulkMarkAttendance(AttendanceStatus.ABSENT)}
+                                disabled={!selectedEmployee || isPunching}
+                                className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-colors disabled:opacity-50"
+                            >
+                                <XSquare className="w-4 h-4" /> Mark All Absent
+                            </button>
                         </div>
                     )}
                     <AttendanceCalendar
