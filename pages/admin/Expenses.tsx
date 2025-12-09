@@ -1,12 +1,17 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { 
   Plus, Search, Filter, Download, Trash2, Edit2, 
   TrendingUp, TrendingDown, Wallet, ArrowUpCircle, ArrowDownCircle,
-  Users, Clock, CheckCircle, RefreshCcw, X, Building2
+  Users, Clock, CheckCircle, RefreshCcw, X, Building2, PieChart as PieChartIcon,
+  Upload, FileText, Loader2, Link as LinkIcon
 } from 'lucide-react';
+import { 
+  PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend 
+} from 'recharts';
 import { CorporateAccount } from '../../types';
+import { uploadFileToCloud } from '../../services/cloudService';
 
 interface Expense {
   id: string;
@@ -19,10 +24,17 @@ interface Expense {
   description: string;
   franchiseName?: string;
   transactionNumber?: string;
+  status?: 'Paid' | 'Pending' | 'Failed';
+  receiptUrl?: string;
   ownerId?: string; 
 }
 
-const CATEGORIES = ['Rent', 'Salaries', 'Utilities', 'Marketing', 'Maintenance', 'Software', 'Other', 'Sales', 'Service', 'Trip Income'];
+const CATEGORIES = [
+    'Rent', 'Salaries', 'Utilities', 'Marketing', 'Maintenance', 'Software', 
+    'Sales', 'Service', 'Trip Income', 'Office Supplies', 'Travel', 
+    'Consulting', 'Insurance', 'Taxes', 'Other Expenses'
+];
+const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#6366f1', '#14b8a6', '#84cc16'];
 
 const Expenses: React.FC = () => {
   const location = useLocation();
@@ -48,14 +60,20 @@ const Expenses: React.FC = () => {
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [formData, setFormData] = useState({
     title: '',
     amount: '',
     type: 'Expense',
-    category: 'Other',
+    category: 'Other Expenses',
     date: new Date().toISOString().split('T')[0],
     paymentMethod: 'Bank Transfer',
-    description: ''
+    transactionNumber: '',
+    status: 'Paid',
+    description: '',
+    receiptUrl: ''
   });
 
   // Load Data
@@ -109,17 +127,45 @@ const Expenses: React.FC = () => {
         title: '',
         amount: '',
         type: 'Expense',
-        category: 'Other',
+        category: 'Other Expenses',
         date: new Date().toISOString().split('T')[0],
         paymentMethod: 'Bank Transfer',
-        description: ''
+        transactionNumber: '',
+        status: 'Paid',
+        description: '',
+        receiptUrl: ''
       });
       setIsModalOpen(true);
   };
 
-  const handleSaveTransaction = (e: React.FormEvent) => {
+  const handleSaveTransaction = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!formData.title || !formData.amount) return;
+
+      setIsUploading(true);
+      let receiptUrl = formData.receiptUrl;
+
+      // Handle File Upload
+      if (fileInputRef.current?.files?.[0]) {
+          try {
+              const file = fileInputRef.current.files[0];
+              const path = `receipts/${formData.date}_${Date.now()}_${file.name}`;
+              const cloudUrl = await uploadFileToCloud(file, path);
+              
+              if (cloudUrl) {
+                  receiptUrl = cloudUrl;
+              } else {
+                  // Fallback to Base64 for local demo if cloud fails
+                  receiptUrl = await new Promise((resolve) => {
+                      const reader = new FileReader();
+                      reader.onloadend = () => resolve(reader.result as string);
+                      reader.readAsDataURL(file);
+                  });
+              }
+          } catch (error) {
+              console.error("Receipt upload failed", error);
+          }
+      }
 
       const ownerId = isSuperAdmin ? 'admin' : sessionId; 
       const franchiseName = isSuperAdmin ? 'Head Office' : 'My Branch';
@@ -132,7 +178,10 @@ const Expenses: React.FC = () => {
           category: formData.category,
           date: formData.date,
           paymentMethod: formData.paymentMethod,
+          transactionNumber: formData.transactionNumber,
+          status: formData.status as 'Paid' | 'Pending' | 'Failed',
           description: formData.description,
+          receiptUrl: receiptUrl,
           ownerId: ownerId,
           franchiseName: franchiseName 
       };
@@ -162,6 +211,7 @@ const Expenses: React.FC = () => {
           console.error("Error saving expense", e);
       }
 
+      setIsUploading(false);
       setIsModalOpen(false);
   };
 
@@ -209,7 +259,9 @@ const Expenses: React.FC = () => {
 
   // derived state
   const filteredExpenses = expenses.filter(exp => {
-    const matchesSearch = exp.title.toLowerCase().includes(searchTerm.toLowerCase()) || (exp.franchiseName && exp.franchiseName.toLowerCase().includes(searchTerm.toLowerCase())) || (exp.transactionNumber && exp.transactionNumber.toLowerCase().includes(searchTerm.toLowerCase()));
+    const matchesSearch = exp.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          (exp.franchiseName && exp.franchiseName.toLowerCase().includes(searchTerm.toLowerCase())) || 
+                          (exp.transactionNumber && exp.transactionNumber.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesCategory = categoryFilter === 'All' || exp.category === categoryFilter;
     const matchesType = typeFilter === 'All' || exp.type === typeFilter;
     const matchesMonth = exp.date.startsWith(monthFilter);
@@ -256,7 +308,7 @@ const Expenses: React.FC = () => {
     const chartData = Object.keys(categoryData).map(key => ({
       name: key,
       value: categoryData[key]
-    }));
+    })).sort((a, b) => b.value - a.value); // Sort descending
 
     return { totalIncome, totalExpense, balance, chartData };
   }, [filteredExpenses]); 
@@ -369,6 +421,36 @@ const Expenses: React.FC = () => {
           </select>
           <input type="month" value={monthFilter} onChange={e => setMonthFilter(e.target.value)} className="px-3 py-2 border rounded-lg bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500" />
       </div>
+
+      {/* Expense Breakdown Chart */}
+      {stats.chartData.length > 0 && (
+        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm animate-in fade-in slide-in-from-bottom-2">
+           <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2">
+              <PieChartIcon className="w-5 h-5 text-emerald-600" /> Expense Breakdown
+           </h3>
+           <div className="h-80 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                 <PieChart>
+                    <Pie
+                       data={stats.chartData}
+                       cx="50%"
+                       cy="50%"
+                       innerRadius={80}
+                       outerRadius={120}
+                       paddingAngle={5}
+                       dataKey="value"
+                    >
+                       {stats.chartData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                       ))}
+                    </Pie>
+                    <Tooltip formatter={(value: number) => `₹${value.toLocaleString()}`} itemStyle={{ color: '#1f2937' }} />
+                    <Legend verticalAlign="middle" align="right" layout="vertical" iconType="circle" />
+                 </PieChart>
+              </ResponsiveContainer>
+           </div>
+        </div>
+      )}
 
       {/* PARTNERSHIP DISTRIBUTION SECTION (If corporate has partners and not viewing admin expenses) */}
       {!isAdminExpensesTab && activeCorporate && activeCorporate.partners && activeCorporate.partners.length > 0 && (
@@ -493,9 +575,12 @@ const Expenses: React.FC = () => {
                   <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-200">
                       <tr>
                           <th className="px-6 py-4">Date</th>
+                          <th className="px-6 py-4">Transaction ID</th>
                           <th className="px-6 py-4">Description</th>
                           <th className="px-6 py-4">Category</th>
                           <th className="px-6 py-4">Method</th>
+                          <th className="px-6 py-4">Status</th>
+                          <th className="px-6 py-4">Receipt</th>
                           {isSuperAdmin && !isAdminExpensesTab && <th className="px-6 py-4">Franchise</th>}
                           <th className="px-6 py-4 text-right">Amount</th>
                           <th className="px-6 py-4 text-right">Actions</th>
@@ -505,6 +590,7 @@ const Expenses: React.FC = () => {
                       {filteredExpenses.map(item => (
                           <tr key={item.id} className="hover:bg-gray-50 transition-colors">
                               <td className="px-6 py-4 text-gray-600">{new Date(item.date).toLocaleDateString()}</td>
+                              <td className="px-6 py-4 text-xs font-mono text-gray-500">{item.transactionNumber || '-'}</td>
                               <td className="px-6 py-4">
                                   <div className="font-bold text-gray-800">{item.title}</div>
                                   <div className="text-xs text-gray-500 truncate max-w-xs">{item.description}</div>
@@ -515,6 +601,24 @@ const Expenses: React.FC = () => {
                                   </span>
                               </td>
                               <td className="px-6 py-4 text-gray-600">{item.paymentMethod}</td>
+                              <td className="px-6 py-4">
+                                  <span className={`px-2 py-1 rounded-full text-xs font-bold border ${
+                                      item.status === 'Paid' ? 'bg-green-50 text-green-700 border-green-100' :
+                                      item.status === 'Pending' ? 'bg-yellow-50 text-yellow-700 border-yellow-100' :
+                                      'bg-red-50 text-red-700 border-red-100'
+                                  }`}>
+                                      {item.status || 'Paid'}
+                                  </span>
+                              </td>
+                              <td className="px-6 py-4">
+                                  {item.receiptUrl ? (
+                                      <a href={item.receiptUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline flex items-center gap-1">
+                                          <LinkIcon className="w-3 h-3" /> View
+                                      </a>
+                                  ) : (
+                                      <span className="text-gray-400 text-xs">-</span>
+                                  )}
+                              </td>
                               {isSuperAdmin && !isAdminExpensesTab && (
                                   <td className="px-6 py-4">
                                       <span className="bg-indigo-50 text-indigo-700 px-2 py-1 rounded text-xs border border-indigo-100 font-medium">
@@ -537,7 +641,10 @@ const Expenses: React.FC = () => {
                                                   category: item.category,
                                                   date: item.date,
                                                   paymentMethod: item.paymentMethod,
-                                                  description: item.description
+                                                  transactionNumber: item.transactionNumber || '',
+                                                  status: item.status || 'Paid',
+                                                  description: item.description,
+                                                  receiptUrl: item.receiptUrl || ''
                                               });
                                               setIsModalOpen(true);
                                           }}
@@ -556,7 +663,7 @@ const Expenses: React.FC = () => {
                           </tr>
                       ))}
                       {filteredExpenses.length === 0 && (
-                          <tr><td colSpan={isSuperAdmin && !isAdminExpensesTab ? 7 : 6} className="py-12 text-center text-gray-400">No transactions found.</td></tr>
+                          <tr><td colSpan={isSuperAdmin && !isAdminExpensesTab ? 10 : 9} className="py-12 text-center text-gray-400">No transactions found.</td></tr>
                       )}
                   </tbody>
               </table>
@@ -612,12 +719,40 @@ const Expenses: React.FC = () => {
                           </div>
                       </div>
 
+                      <div className="grid grid-cols-2 gap-4">
+                          <div>
+                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Transaction No. (Optional)</label>
+                              <input value={formData.transactionNumber} onChange={e => setFormData({...formData, transactionNumber: e.target.value})} className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="e.g. UPI-12345" />
+                          </div>
+                          <div>
+                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Status</label>
+                              <select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})} className="w-full px-4 py-2 border rounded-lg bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
+                                  <option>Paid</option>
+                                  <option>Pending</option>
+                                  <option>Failed</option>
+                              </select>
+                          </div>
+                      </div>
+
+                      <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Upload Receipt / File</label>
+                          <div className="flex gap-2">
+                              <input 
+                                ref={fileInputRef}
+                                type="file" 
+                                className="w-full px-4 py-2 border rounded-lg text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100" 
+                                accept="image/*,.pdf"
+                              />
+                          </div>
+                      </div>
+
                       <div>
                           <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Description (Optional)</label>
                           <textarea rows={3} value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none resize-none" placeholder="Additional details..." />
                       </div>
 
-                      <button type="submit" className="w-full bg-emerald-600 text-white py-3 rounded-lg font-bold hover:bg-emerald-700 transition-colors shadow-lg mt-2">
+                      <button type="submit" disabled={isUploading} className="w-full bg-emerald-600 text-white py-3 rounded-lg font-bold hover:bg-emerald-700 transition-colors shadow-lg mt-2 disabled:opacity-70 flex justify-center items-center gap-2">
+                          {isUploading && <Loader2 className="w-4 h-4 animate-spin" />}
                           {editingId ? 'Update Transaction' : 'Save Transaction'}
                       </button>
                   </form>
