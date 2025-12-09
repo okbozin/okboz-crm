@@ -1,9 +1,10 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  Phone, User, MapPin, Calendar, FileText, CheckCircle, Search, 
-  Plus, Filter, RefreshCcw, MessageCircle, Mail, Clock, 
-  ArrowRight, History, AlertCircle, X, PhoneIncoming, PhoneOutgoing, UserPlus,
-  Pencil, Trash2, Edit2, Car, Building2, Save, Copy, Loader2, ArrowRightLeft
+  Phone, User, MapPin, Calendar, CheckCircle, Search, 
+  Plus, Filter, RefreshCcw, MessageCircle, Mail, 
+  ArrowRight, AlertCircle, X,
+  Trash2, Edit2, Car, Building2, Save, Copy, Loader2, ArrowRightLeft, Calculator
 } from 'lucide-react';
 import { Enquiry, UserRole, Employee, Branch, CorporateAccount } from '../../types';
 import Autocomplete from '../../components/Autocomplete';
@@ -30,8 +31,8 @@ interface PricingRules {
   rentalExtraKmRate: number;
   rentalExtraHrRate: number;
   outstationMinKmPerDay: number;
-  outstationBaseRate: number; // This one is probably for RoundTrip or deprecated, keeping for now
-  outstationBaseRateOneWay: number; // NEW: Explicit field for OneWay base rate
+  outstationBaseRate: number; // For Round Trip Base (usually 0, calc by km)
+  outstationBaseRateOneWay: number; // NEW: For One Way Base
   outstationExtraKmRate: number;
   outstationDriverAllowance: number;
   outstationNightAllowance: number;
@@ -47,7 +48,7 @@ const DEFAULT_PRICING_SEDAN: PricingRules = {
   rentalExtraKmRate: 15, rentalExtraHrRate: 100,
   outstationMinKmPerDay: 300, outstationBaseRate: 0, outstationExtraKmRate: 13,
   outstationDriverAllowance: 400, outstationNightAllowance: 300,
-  outstationBaseRateOneWay: 0 // Default for the new field
+  outstationBaseRateOneWay: 0 
 };
 
 const DEFAULT_PRICING_SUV: PricingRules = {
@@ -55,7 +56,7 @@ const DEFAULT_PRICING_SUV: PricingRules = {
   rentalExtraKmRate: 18, rentalExtraHrRate: 150,
   outstationMinKmPerDay: 300, outstationBaseRate: 0, outstationExtraKmRate: 17,
   outstationDriverAllowance: 500, outstationNightAllowance: 400,
-  outstationBaseRateOneWay: 0 // Default for the new field
+  outstationBaseRateOneWay: 0 
 };
 
 const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
@@ -64,8 +65,10 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
   
   // --- Data Loading ---
   const [enquiries, setEnquiries] = useState<Enquiry[]>(() => {
-    const saved = localStorage.getItem('global_enquiries_data');
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem('global_enquiries_data');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) { return []; }
   });
 
   const [corporates, setCorporates] = useState<CorporateAccount[]>(() => {
@@ -78,31 +81,25 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
   // --- Configuration State ---
   const [showSettings, setShowSettings] = useState(false);
   const [settingsVehicleType, setSettingsVehicleType] = useState<'Sedan' | 'SUV'>('Sedan');
-  // NEW: State for Outstation Subtype in Settings Panel
   const [settingsOutstationSubType, setSettingsOutstationSubType] = useState<'RoundTrip' | 'OneWay'>('RoundTrip');
   
-  // Configuration Context State (For Editing)
   const [confOwner, setConfOwner] = useState(isSuperAdmin ? 'admin' : sessionId);
-  const [confBranch, setConfBranch] = useState('Global'); // 'Global' means applies to all branches under this owner unless overridden
+  const [confBranch, setConfBranch] = useState('Global'); 
 
   const [showAddPackage, setShowAddPackage] = useState(false);
   const [editingPackageId, setEditingPackageId] = useState<string | null>(null);
   const [newPackage, setNewPackage] = useState({ name: '', hours: '', km: '', priceSedan: '', priceSuv: '' });
 
-  // Initial Load with default or currently stored global settings
   const [pricing, setPricing] = useState<Record<'Sedan' | 'SUV', PricingRules>>({ Sedan: DEFAULT_PRICING_SEDAN, SUV: DEFAULT_PRICING_SUV });
   const [rentalPackages, setRentalPackages] = useState<RentalPackage[]>(DEFAULT_RENTAL_PACKAGES);
 
-  // Helper to generate the storage key based on selected context
   const getConfigKey = (baseKey: string, owner: string, branch: string) => {
-      // Clean branch name for key usage
       const cleanBranch = branch === 'Global' ? '' : `_${branch.replace(/\s+/g, '_')}`;
       return `${baseKey}_${owner}${cleanBranch}`;
   };
 
-  // Effect: Load Settings when Context (Owner/Branch) changes
   useEffect(() => {
-      if (!showSettings) return; // Only load when settings panel is open
+      if (!showSettings) return; 
 
       const loadConfig = () => {
           const pricingKey = getConfigKey('transport_pricing_rules_v2', confOwner, confBranch);
@@ -114,7 +111,7 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
           if (savedPricing) {
               setPricing(JSON.parse(savedPricing));
           } else {
-              // Fallback to Global if Branch specific not found, or Defaults
+              // Fallback to Global if branch specific not found
               if (confBranch !== 'Global') {
                   const globalKey = getConfigKey('transport_pricing_rules_v2', confOwner, 'Global');
                   const globalPricing = localStorage.getItem(globalKey);
@@ -141,30 +138,26 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
       loadConfig();
   }, [confOwner, confBranch, showSettings]);
 
-  // Effect: Save Settings when changed
+  // Save Settings
   useEffect(() => {
-    if (!showSettings) return; // Prevent overwriting on initial mount before load
-    
+    if (!showSettings) return; 
     const pricingKey = getConfigKey('transport_pricing_rules_v2', confOwner, confBranch);
     const pkgKey = getConfigKey('transport_rental_packages_v2', confOwner, confBranch);
-
     localStorage.setItem(pricingKey, JSON.stringify(pricing));
     localStorage.setItem(pkgKey, JSON.stringify(rentalPackages));
   }, [pricing, rentalPackages, confOwner, confBranch, showSettings]);
 
-  // Load Branches & Staff (Aggregated)
+  // Load Branch/Staff Data
   useEffect(() => {
     let allBranches: Branch[] = [];
     let allStaff: Employee[] = [];
 
     if (isSuperAdmin) {
-        // Admin Data
         const adminBranches = JSON.parse(localStorage.getItem('branches_data') || '[]');
         const adminStaff = JSON.parse(localStorage.getItem('staff_data') || '[]');
         allBranches = [...adminBranches];
-        allStaff = [...allStaff, ...adminStaff]; // Fix: Append to allStaff
+        allStaff = [...allStaff, ...adminStaff]; 
         
-        // Corp Data
         corporates.forEach(c => {
             const cBranches = JSON.parse(localStorage.getItem(`branches_data_${c.email}`) || '[]');
             const cStaff = JSON.parse(localStorage.getItem(`staff_data_${c.email}`) || '[]');
@@ -172,7 +165,6 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
             allStaff = [...allStaff, ...cStaff];
         });
     } else {
-        // Corporate/Employee View
         const keySuffix = role === UserRole.CORPORATE ? sessionId : localStorage.getItem('logged_in_employee_corporate_id') || sessionId;
         allBranches = JSON.parse(localStorage.getItem(`branches_data_${keySuffix}`) || '[]');
         allStaff = JSON.parse(localStorage.getItem(`staff_data_${keySuffix}`) || '[]');
@@ -192,28 +184,24 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
     phoneNumber: '',
     name: '',
     email: '',
-    // Trip Details
     tripType: 'Local' as 'Local' | 'Rental' | 'Outstation',
-    outstationSubType: 'RoundTrip' as 'OneWay' | 'RoundTrip', // New State for Subtype
+    outstationSubType: 'RoundTrip' as 'OneWay' | 'RoundTrip',
     vehicleType: 'Sedan' as 'Sedan' | 'SUV',
     pickup: '',
     drop: '',
     estKm: '',
     waitMins: '',
-    packageId: '', // For Rental
-    destination: '', // For Outstation
-    days: '1', // For Outstation
-    estTotalKm: '', // For Outstation (calculated distance)
-    nights: '0', // NEW: For Outstation Round Trip
+    packageId: '',
+    destination: '',
+    days: '1',
+    estTotalKm: '',
+    nights: '0',
     requirementDetails: '',
-    // Assignment
-    assignCorporate: isSuperAdmin ? '' : sessionId, // Default assignment based on role
+    assignCorporate: isSuperAdmin ? '' : sessionId,
     assignBranch: '',
     assignStaff: '',
-    // Schedule
     followUpDate: new Date().toISOString().split('T')[0],
     followUpTime: '',
-    // Meta
     status: 'New'
   };
   const [formData, setFormData] = useState(initialFormState);
@@ -221,18 +209,18 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
   // --- Map & Distance State ---
   const [pickupCoords, setPickupCoords] = useState<google.maps.LatLngLiteral | null>(null);
   const [dropCoords, setDropCoords] = useState<google.maps.LatLngLiteral | null>(null);
-  const [destCoords, setDestCoords] = useState<google.maps.LatLngLiteral | null>(null); // For Outstation Destination
+  const [destCoords, setDestCoords] = useState<google.maps.LatLngLiteral | null>(null); 
   const [isMapReady, setIsMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
   
-  // Select default package if Rental selected
+  // Initialize Rental Package
   useEffect(() => {
      if (formData.tripType === 'Rental' && !formData.packageId && rentalPackages.length > 0) {
          setFormData(prev => ({ ...prev, packageId: rentalPackages[0].id }));
      }
   }, [formData.tripType, rentalPackages]);
 
-  // --- Google Maps Script Loader ---
+  // Load Google Maps
   useEffect(() => {
     if (window.gm_authFailure_detected) {
       setMapError("Map Error: Billing not enabled OR API Key Invalid.");
@@ -244,7 +232,6 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
       return;
     }
     
-    // Check if script exists
     if (window.google && window.google.maps && window.google.maps.places) {
       setIsMapReady(true);
       return;
@@ -267,19 +254,18 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
     }
   }, []);
 
-  // --- Distance Calculation Effect ---
+  // Distance Calculation
   useEffect(() => {
     if (!isMapReady || !window.google) return;
     
-    // Only calculate if not Rental (Rental has fixed packages)
     if (formData.tripType === 'Rental') {
-        setFormData(prev => ({...prev, estKm: '', estTotalKm: ''})); // Clear distance for rental
+        setFormData(prev => ({...prev, estKm: '', estTotalKm: ''})); 
         return;
     }
 
     const calculateDistance = (origin: google.maps.LatLngLiteral | null, destination: google.maps.LatLngLiteral | null, isRoundTripCalculation: boolean, isOutstationState: boolean) => {
         if (!origin || !destination) {
-            setFormData(prev => ({...prev, estKm: '', estTotalKm: ''})); // Clear if points not set
+            setFormData(prev => ({...prev, estKm: '', estTotalKm: ''}));
             return;
         }
         try {
@@ -306,15 +292,11 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
                         } else {
                             setFormData(prev => ({ ...prev, estKm: formattedDist }));
                         }
-                    } else {
-                        console.warn("Distance calc failed:", status);
-                        setFormData(prev => ({...prev, estKm: '', estTotalKm: ''})); // Clear on error
                     }
                 }
             );
         } catch (e) {
             console.error("Error initializing Distance Matrix Service:", e);
-            setFormData(prev => ({...prev, estKm: '', estTotalKm: ''})); // Clear on error
         }
     };
 
@@ -328,17 +310,13 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
   }, [pickupCoords, dropCoords, destCoords, isMapReady, formData.tripType, formData.outstationSubType]);
 
 
-  // --- Estimate Calculation ---
-  // State for the rules message to display in the enquiry form
   const [currentRulesMessage, setCurrentRulesMessage] = useState('');
   
-  // The pricing rules that will be used for calculation based on the selected assignment context.
   const [activeEstimatePricing, setActiveEstimatePricing] = useState<Record<'Sedan' | 'SUV', PricingRules>>({ Sedan: DEFAULT_PRICING_SEDAN, SUV: DEFAULT_PRICING_SUV });
   const [activeEstimatePackages, setActiveEstimatePackages] = useState<RentalPackage[]>(DEFAULT_RENTAL_PACKAGES);
 
-  // Effect: Fetch specific pricing for the estimation when form changes context
+  // Load context-aware pricing for estimate
   useEffect(() => {
-      // Determine context for estimation
       let owner = 'admin';
       let branch = 'Global'; 
 
@@ -350,7 +328,6 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
           if (b) branch = b.name;
       }
 
-      // Helper to fetch (similar to loadConfig but returns data)
       const fetchContextData = () => {
           const pricingKey = getConfigKey('transport_pricing_rules_v2', owner, branch);
           const pkgKey = getConfigKey('transport_rental_packages_v2', owner, branch);
@@ -358,8 +335,7 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
           let pRules = localStorage.getItem(pricingKey);
           let pPkgs = localStorage.getItem(pkgKey);
 
-          // Fallback logic (Order of precedence: Specific Branch > Global for Owner > Default)
-          if (!pRules) { // If no specific branch rules found
+          if (!pRules) {
               const globalKey = getConfigKey('transport_pricing_rules_v2', owner, 'Global');
               pRules = localStorage.getItem(globalKey);
           }
@@ -376,7 +352,7 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
       };
 
       fetchContextData();
-  }, [formData.assignCorporate, formData.assignBranch, branches, sessionId, isSuperAdmin, showSettings]); // Re-run if assignment context changes, or if settings are saved/opened.
+  }, [formData.assignCorporate, formData.assignBranch, branches, sessionId, isSuperAdmin, showSettings]);
 
   const estimate = useMemo(() => {
      const rules = activeEstimatePricing[formData.vehicleType];
@@ -400,7 +376,7 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
      } 
      else if (formData.tripType === 'Outstation') {
          const km = parseFloat(formData.estTotalKm) || 0;
-         const days = parseFloat(formData.days) || 1; // Use days from form
+         const days = parseFloat(formData.days) || 1; 
          
          const minKm = rules.outstationMinKmPerDay * days;
          const chargeableKm = Math.max(km, minKm);
@@ -411,7 +387,6 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
              baseRate = rules.outstationBaseRateOneWay || 0;
          }
 
-         // Only apply night allowance if RoundTrip is selected
          const nightsInput = parseFloat(formData.nights) || 0;
          const nightAllowance = formData.outstationSubType === 'RoundTrip' ? (rules.outstationNightAllowance * nightsInput || 0) : 0;
 
@@ -421,7 +396,6 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
      return Math.round(total);
   }, [formData.tripType, formData.vehicleType, formData.estKm, formData.waitMins, formData.packageId, formData.outstationSubType, formData.destination, formData.days, formData.estTotalKm, formData.nights, activeEstimatePricing, activeEstimatePackages]);
 
-  // Effect to update currentRulesMessage for the form
   useEffect(() => {
     const rules = activeEstimatePricing[formData.vehicleType];
     let message = '';
@@ -433,7 +407,7 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
     } else if (formData.tripType === 'Outstation') {
         if (formData.outstationSubType === 'RoundTrip') {
             message = `Min ${rules.outstationMinKmPerDay}km/day. Rate ₹${rules.outstationExtraKmRate}/km. Driver ₹${rules.outstationDriverAllowance}/day. Night Allow ₹${rules.outstationNightAllowance}/night.`;
-        } else { // OneWay
+        } else { 
             message = `Min ${rules.outstationMinKmPerDay}km/day. Rate ₹${rules.outstationExtraKmRate}/km. Base ₹${rules.outstationBaseRateOneWay || 0}. Driver ₹${rules.outstationDriverAllowance}/day. No Night Allowance.`;
         }
     }
@@ -474,7 +448,6 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
       return relevantStaff;
   }, [staff, branches, formData.assignCorporate, formData.assignBranch, isSuperAdmin]);
 
-  // --- Configuration Handlers ---
   const handlePricingChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setPricing(prev => ({
@@ -490,7 +463,6 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
     if (!newPackage.name || !newPackage.priceSedan) return;
     
     if (editingPackageId) {
-        // Update existing
         setRentalPackages(prev => prev.map(p => p.id === editingPackageId ? {
             ...p,
             name: newPackage.name,
@@ -501,7 +473,6 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
         } : p));
         setEditingPackageId(null);
     } else {
-        // Add new
         const pkg: RentalPackage = {
           id: `pkg-${Date.now()}`,
           name: newPackage.name,
@@ -534,9 +505,6 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
     }
   };
 
-
-  // --- Action Handlers ---
-
   const handleSave = (action: 'Schedule' | 'Save' | 'Book') => {
       let status: Enquiry['status'] = 'New';
       if (action === 'Schedule') status = 'Scheduled';
@@ -548,7 +516,6 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
           return;
       }
 
-      // Determine Owner
       let ownerId = 'admin';
       if (formData.assignCorporate) ownerId = formData.assignCorporate;
       else if (role === UserRole.CORPORATE) ownerId = sessionId;
@@ -570,18 +537,18 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
           nextFollowUp: (formData.followUpDate && formData.followUpTime) ? `${formData.followUpDate} ${formData.followUpTime}` : undefined,
           tripType: formData.tripType,
           vehicleType: formData.vehicleType,
-          outstationSubType: formData.outstationSubType, // Save subtype
+          outstationSubType: formData.outstationSubType,
           estimatedPrice: estimate,
           transportData: {
               pickup: formData.pickup,
-              drop: formData.drop || formData.destination, // Use destination for outstation drop
+              drop: formData.drop || formData.destination, 
               estKm: formData.estKm,
               waitingMins: formData.waitMins,
               packageId: formData.packageId,
-              destination: formData.destination, // Save destination explicitly
+              destination: formData.destination, 
               days: formData.days,
               estTotalKm: formData.estTotalKm,
-              nights: formData.nights, // Save nights
+              nights: formData.nights, 
           },
           history: []
       };
@@ -599,17 +566,17 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
           name: enq.name,
           email: enq.email || '',
           tripType: enq.tripType || 'Local',
-          outstationSubType: enq.outstationSubType || 'RoundTrip', // Populate subtype
+          outstationSubType: enq.outstationSubType || 'RoundTrip', 
           vehicleType: enq.vehicleType || 'Sedan',
           pickup: enq.transportData?.pickup || '',
           drop: enq.transportData?.drop || '',
           estKm: enq.transportData?.estKm || '',
           waitMins: enq.transportData?.waitingMins || '',
           packageId: enq.transportData?.packageId || '',
-          destination: enq.transportData?.destination || '', // Populate destination
-          days: enq.transportData?.days || '1', // Populate days
+          destination: enq.transportData?.destination || '', 
+          days: enq.transportData?.days || '1', 
           estTotalKm: enq.transportData?.estTotalKm || '',
-          nights: enq.transportData?.nights || '0', // Populate nights
+          nights: enq.transportData?.nights || '0', 
           requirementDetails: enq.details || '',
           assignCorporate: enq.corporateId || '',
           assignBranch: '', 
@@ -630,7 +597,6 @@ const CustomerCare: React.FC<CustomerCareProps> = ({ role }) => {
       }
   };
   
-  // Filter Logic
   const filteredEnquiries = useMemo(() => {
     return enquiries.filter(e => {
         let isVisible = true;
@@ -672,7 +638,6 @@ Book now with OK BOZ Transport! 🚕
       window.open(url, '_blank');
   };
 
-  // Branches used for configuration selection (different from form selection)
   const configAvailableBranches = useMemo(() => {
       const owner = confOwner;
       return branches.filter(b => b.owner === owner);
@@ -702,13 +667,11 @@ Book now with OK BOZ Transport! 🚕
       {showSettings && (
         <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 animate-in fade-in slide-in-from-top-2">
           
-          {/* Top Bar: Scope Selection & Vehicle Toggle */}
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
              
              <div className="flex items-center gap-4">
                  <h3 className="font-bold text-slate-800 flex items-center gap-2"><Edit2 className="w-4 h-4" /> Edit Rates</h3>
                  
-                 {/* Configuration Context Selectors */}
                  <div className="flex gap-2">
                      {isSuperAdmin && (
                          <select 
@@ -741,17 +704,16 @@ Book now with OK BOZ Transport! 🚕
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Local Rules */}
             <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm space-y-3">
-               <h4 className="text-sm font-bold text-emerald-600 uppercase border-b pb-2">Local</h4>
+               <h4 className="text-sm font-bold text-emerald-600 uppercase border-b pb-2">Local Rules ({settingsVehicleType})</h4>
                <div><label className="text-xs text-gray-500 block">Base Fare (₹)</label><input type="number" name="localBaseFare" value={pricing[settingsVehicleType].localBaseFare} onChange={handlePricingChange} className="w-full p-2 border rounded text-xs"/></div>
-               <div><label className="text-xs text-gray-500 block">Base Km</label><input type="number" name="localBaseKm" value={pricing[settingsVehicleType].localBaseKm} onChange={handlePricingChange} className="w-full p-2 border rounded text-xs"/></div>
-               <div><label className="text-xs text-gray-500 block">Per Km (₹)</label><input type="number" name="localPerKmRate" value={pricing[settingsVehicleType].localPerKmRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-xs"/></div>
-               <div><label className="text-xs text-gray-500 block">Waiting (₹/min)</label><input type="number" name="localWaitingRate" value={pricing[settingsVehicleType].localWaitingRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-xs"/></div>
+               <div><label className="text-xs text-gray-500 block">Base Km Included</label><input type="number" name="localBaseKm" value={pricing[settingsVehicleType].localBaseKm} onChange={handlePricingChange} className="w-full p-2 border rounded text-xs"/></div>
+               <div><label className="text-xs text-gray-500 block">Extra Km Rate (₹/km)</label><input type="number" name="localPerKmRate" value={pricing[settingsVehicleType].localPerKmRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-xs"/></div>
+               <div><label className="text-xs text-gray-500 block">Waiting Charge (₹/min)</label><input type="number" name="localWaitingRate" value={pricing[settingsVehicleType].localWaitingRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-xs"/></div>
             </div>
             {/* Outstation Rules */}
             <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm space-y-3">
-               <h4 className="text-sm font-bold text-orange-600 uppercase border-b pb-2">Outstation</h4>
+               <h4 className="text-sm font-bold text-orange-600 uppercase border-b pb-2">Outstation Rules ({settingsVehicleType})</h4>
                
-               {/* Outstation Subtype Toggle for Settings */}
                <div className="flex bg-gray-100 p-1 rounded-lg mb-3">
                   <button 
                     onClick={() => setSettingsOutstationSubType('RoundTrip')}
@@ -767,10 +729,9 @@ Book now with OK BOZ Transport! 🚕
                   </button>
                </div>
 
-               <div><label className="text-xs text-gray-500 block">Min Km/Day</label><input type="number" name="outstationMinKmPerDay" value={pricing[settingsVehicleType].outstationMinKmPerDay} onChange={handlePricingChange} className="w-full p-2 border rounded text-xs"/></div>
-               <div><label className="text-xs text-gray-500 block">Per Km (₹)</label><input type="number" name="outstationExtraKmRate" value={pricing[settingsVehicleType].outstationExtraKmRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-xs"/></div>
+               <div><label className="text-xs text-gray-500 block">Min Km / Day</label><input type="number" name="outstationMinKmPerDay" value={pricing[settingsVehicleType].outstationMinKmPerDay} onChange={handlePricingChange} className="w-full p-2 border rounded text-xs"/></div>
+               <div><label className="text-xs text-gray-500 block">Per Km Rate (₹/km)</label><input type="number" name="outstationExtraKmRate" value={pricing[settingsVehicleType].outstationExtraKmRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-xs"/></div>
                
-               {/* Conditional rendering for Base Rate (One Way Only) */}
                {settingsOutstationSubType === 'OneWay' ? (
                    <div>
                        <label className="text-xs text-gray-500 block">Base Rate (One Way Only)</label>
@@ -783,12 +744,11 @@ Book now with OK BOZ Transport! 🚕
                    </div>
                )}
                
-               <div><label className="text-xs text-gray-500 block">Driver Allowance</label><input type="number" name="outstationDriverAllowance" value={pricing[settingsVehicleType].outstationDriverAllowance} onChange={handlePricingChange} className="w-full p-2 border rounded text-xs"/></div>
+               <div><label className="text-xs text-gray-500 block">Driver Allowance (₹/day)</label><input type="number" name="outstationDriverAllowance" value={pricing[settingsVehicleType].outstationDriverAllowance} onChange={handlePricingChange} className="w-full p-2 border rounded text-xs"/></div>
                
-               {/* Conditional rendering for Driver Night Allowance */}
                {settingsOutstationSubType === 'RoundTrip' ? (
                    <div>
-                       <label className="text-xs text-gray-500 block">Driver Night Allowance</label>
+                       <label className="text-xs text-gray-500 block">Driver Night Allowance (₹/night)</label>
                        <input type="number" name="outstationNightAllowance" value={pricing[settingsVehicleType].outstationNightAllowance} onChange={handlePricingChange} className="w-full p-2 border rounded text-xs"/>
                    </div>
                ) : (
@@ -800,9 +760,9 @@ Book now with OK BOZ Transport! 🚕
             </div>
             {/* Rental Rules */}
             <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm space-y-3">
-               <h4 className="text-sm font-bold text-blue-600 uppercase border-b pb-2">Rental</h4>
-               <div><label className="text-xs text-gray-500 block">Extra Hr/Rate</label><input type="number" name="rentalExtraHrRate" value={pricing[settingsVehicleType].rentalExtraHrRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-xs"/></div>
-               <div><label className="text-xs text-gray-500 block">Extra Km/Rate</label><input type="number" name="rentalExtraKmRate" value={pricing[settingsVehicleType].rentalExtraKmRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-xs"/></div>
+               <h4 className="text-sm font-bold text-blue-600 uppercase border-b pb-2">Rental Rules ({settingsVehicleType})</h4>
+               <div><label className="text-xs text-gray-500 block">Extra Hr (₹)</label><input type="number" name="rentalExtraHrRate" value={pricing[settingsVehicleType].rentalExtraHrRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-xs"/></div>
+               <div><label className="text-xs text-gray-500 block">Extra Km (₹)</label><input type="number" name="rentalExtraKmRate" value={pricing[settingsVehicleType].rentalExtraKmRate} onChange={handlePricingChange} className="w-full p-2 border rounded text-xs"/></div>
                <div className="flex justify-between items-center"><label className="text-xs font-bold">Packages</label>
                <button onClick={() => { 
                    setShowAddPackage(!showAddPackage); 
@@ -1018,7 +978,6 @@ Book now with OK BOZ Transport! 🚕
                   </div>
 
                   <div className="space-y-4">
-                      {/* Pickup and Drop/Destination Autocompletes */}
                       <div className="grid grid-cols-2 gap-4">
                           <div className={formData.tripType === 'Outstation' && formData.outstationSubType === 'OneWay' ? 'col-span-2' : ''}>
                               <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Pickup Location</label>
@@ -1101,59 +1060,77 @@ Book now with OK BOZ Transport! 🚕
                       {/* Dynamic inputs for Outstation and Local */}
                       {(formData.tripType === 'Local' || formData.tripType === 'Outstation') && (
                           <div className="grid grid-cols-3 gap-4">
-                              <div>
-                                  <label className="sr-only">Days</label>
-                                  <input 
-                                      type="number"
-                                      value={formData.days}
-                                      onChange={e => setFormData({...formData, days: e.target.value})}
-                                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg outline-none text-sm focus:ring-2 focus:ring-indigo-500"
-                                      placeholder="Days"
-                                      min="1"
-                                  />
-                              </div>
-                              <div>
-                                  <label className="sr-only">Est. Total Km</label>
-                                  <input 
-                                      type="number"
-                                      value={formData.tripType === 'Local' ? formData.estKm : formData.estTotalKm}
-                                      onChange={e => setFormData({...formData, [formData.tripType === 'Local' ? 'estKm' : 'estTotalKm']: e.target.value})}
-                                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg outline-none text-sm focus:ring-2 focus:ring-indigo-500 bg-gray-50"
-                                      placeholder={formData.tripType === 'Local' ? "Est Km" : "Est. Total Km"}
-                                      readOnly
-                                  />
-                              </div>
-                              {formData.tripType === 'Outstation' && formData.outstationSubType === 'RoundTrip' ? (
-                                  <div>
-                                      <label className="sr-only">Nights</label>
-                                      <input
-                                          type="number"
-                                          value={formData.nights}
-                                          onChange={e => setFormData({...formData, nights: e.target.value})}
-                                          className="w-full px-4 py-2.5 border border-gray-300 rounded-lg outline-none text-sm focus:ring-2 focus:ring-indigo-500"
-                                          placeholder="Nights"
-                                          min="0"
-                                      />
-                                  </div>
-                              ) : (formData.tripType === 'Local' ? (
-                                <div>
-                                    <label className="sr-only">Wait Mins</label>
-                                    <input 
-                                        type="number"
-                                        value={formData.waitMins}
-                                        onChange={e => setFormData({...formData, waitMins: e.target.value})}
-                                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg outline-none text-sm focus:ring-2 focus:ring-indigo-500"
-                                        placeholder="Wait Mins"
-                                    />
-                                </div>
+                              {/* Outstation: Consolidated Input Grid */}
+                              {formData.tripType === 'Outstation' ? (
+                                  <>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Days</label>
+                                        <input 
+                                            type="number"
+                                            value={formData.days}
+                                            onChange={e => setFormData({...formData, days: e.target.value})}
+                                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg outline-none text-sm focus:ring-2 focus:ring-indigo-500"
+                                            placeholder="Days"
+                                            min="1"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Est. Total Km</label>
+                                        <input 
+                                            type="number"
+                                            value={formData.estTotalKm}
+                                            onChange={e => setFormData({...formData, estTotalKm: e.target.value})}
+                                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg outline-none text-sm focus:ring-2 focus:ring-indigo-500 bg-gray-50"
+                                            placeholder="Total Km"
+                                            readOnly={isMapReady && !!destCoords} // Allow manual edit if maps fail
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Nights</label>
+                                        {formData.outstationSubType === 'RoundTrip' ? (
+                                            <input
+                                                type="number"
+                                                value={formData.nights}
+                                                onChange={e => setFormData({...formData, nights: e.target.value})}
+                                                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg outline-none text-sm focus:ring-2 focus:ring-indigo-500"
+                                                placeholder="Nights"
+                                                min="0"
+                                            />
+                                        ) : (
+                                            <div className="w-full px-4 py-2.5 border border-transparent rounded-lg text-sm text-gray-400 italic bg-gray-50 flex items-center justify-center">
+                                                No Nights
+                                            </div>
+                                        )}
+                                    </div>
+                                  </>
                               ) : (
-                                <div className="flex items-center justify-center text-gray-400 text-xs italic">
-                                    No Nights
-                                </div>
-                              ))}
+                                  // Local inputs
+                                  <>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Est Km</label>
+                                        <input 
+                                            type="number"
+                                            value={formData.estKm}
+                                            onChange={e => setFormData({...formData, estKm: e.target.value})}
+                                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg outline-none text-sm focus:ring-2 focus:ring-indigo-500 bg-gray-50"
+                                            placeholder="Est Km"
+                                            readOnly={isMapReady && !!dropCoords}
+                                        />
+                                    </div>
+                                    <div className="col-span-2">
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Waiting Mins</label>
+                                        <input 
+                                            type="number"
+                                            value={formData.waitMins}
+                                            onChange={e => setFormData({...formData, waitMins: e.target.value})}
+                                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg outline-none text-sm focus:ring-2 focus:ring-indigo-500"
+                                            placeholder="Wait Mins"
+                                        />
+                                    </div>
+                                  </>
+                              )}
                           </div>
                       )}
-
 
                       {/* Current Rules Display for the form */}
                       {currentRulesMessage && (
