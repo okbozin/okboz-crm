@@ -5,10 +5,11 @@ import {
   Plus, Search, DollarSign, 
   PieChart, FileText, 
   CheckCircle, X, Download,
-  Smartphone, Zap, Wifi, Users, ArrowUpCircle, ArrowDownCircle, Wallet, TrendingUp, TrendingDown, Building2, Upload, Loader2, Paperclip, Eye, Edit2, Trash2, Printer
+  Smartphone, Zap, Wifi, Users, ArrowUpCircle, ArrowDownCircle, Wallet, TrendingUp, TrendingDown, Building2, Upload, Loader2, Paperclip, Eye, Edit2, Trash2, Printer, Percent, AlertTriangle
 } from 'lucide-react';
 import { PieChart as RePieChart, Pie, Cell, ResponsiveContainer, Tooltip as ReTooltip, Legend } from 'recharts';
 import { uploadFileToCloud } from '../../services/cloudService';
+import { CorporateAccount } from '../../types';
 
 interface Expense {
   id: string;
@@ -23,6 +24,13 @@ interface Expense {
   description?: string;
   franchiseName?: string; 
   receiptUrl?: string; // Added for file storage
+}
+
+// Old Partner Interface (Deprecated in favor of CorporateAccount.partners, kept for legacy read if needed)
+interface Partner {
+  id: string;
+  name: string;
+  percentage: number;
 }
 
 const EXPENSE_CATEGORIES = [
@@ -61,7 +69,11 @@ const Expenses: React.FC = () => {
     return sessionId === 'admin' ? 'office_expenses' : `office_expenses_${sessionId}`;
   };
 
+  const sessionId = localStorage.getItem('app_session_id') || 'admin';
   const isSuperAdmin = (localStorage.getItem('app_session_id') || 'admin') === 'admin';
+
+  // --- TAB STATE ---
+  const [viewTab, setViewTab] = useState<'Transactions' | 'Partners'>('Transactions');
 
   // State
   const [expenses, setExpenses] = useState<Expense[]>(() => {
@@ -102,15 +114,27 @@ const Expenses: React.FC = () => {
     }
   });
 
+  // Data Lists
+  const [corporatesList, setCorporatesList] = useState<CorporateAccount[]>([]);
+
+  // Load Corporates List
+  useEffect(() => {
+      try {
+          const corps = JSON.parse(localStorage.getItem('corporate_accounts') || '[]').filter((item: any) => item && typeof item === 'object');
+          setCorporatesList(corps);
+      } catch (e) {}
+  }, []);
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [typeFilter, setTypeFilter] = useState('All'); 
   const [monthFilter, setMonthFilter] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
+  const [filterCorporate, setFilterCorporate] = useState('All'); // For Admin View Filtering
   
-  const [rawReceiptPreviewUrl, setRawReceiptPreviewUrl] = useState<string | null>(null); // Renamed for clarity
-  const [showInvoiceViewer, setShowInvoiceViewer] = useState(false); // New state for structured invoice modal
-  const [invoiceData, setInvoiceData] = useState<Expense | null>(null); // New state for structured invoice data
+  const [rawReceiptPreviewUrl, setRawReceiptPreviewUrl] = useState<string | null>(null); 
+  const [showInvoiceViewer, setShowInvoiceViewer] = useState(false); 
+  const [invoiceData, setInvoiceData] = useState<Expense | null>(null); 
 
   // Upload State
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -131,7 +155,7 @@ const Expenses: React.FC = () => {
     receiptUrl: ''
   };
   const [formData, setFormData] = useState<Partial<Expense>>(initialFormState);
-  const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null); // New state for editing
+  const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null); 
 
   // Persistence
   useEffect(() => {
@@ -167,7 +191,7 @@ const Expenses: React.FC = () => {
     setSelectedFile(null);
     setEditingExpenseId(null);
     setIsModalOpen(false);
-    if (fileInputRef.current) fileInputRef.current.value = ''; // Clear file input
+    if (fileInputRef.current) fileInputRef.current.value = ''; 
   };
 
   const handleOpenAddTransaction = () => {
@@ -187,9 +211,9 @@ const Expenses: React.FC = () => {
         paymentMethod: expense.paymentMethod,
         status: expense.status,
         description: expense.description,
-        receiptUrl: expense.receiptUrl, // Keep existing URL, but don't pre-fill file input
+        receiptUrl: expense.receiptUrl, 
     });
-    setSelectedFile(null); // Clear selected file when editing
+    setSelectedFile(null); 
     setIsModalOpen(true);
   };
 
@@ -224,10 +248,8 @@ const Expenses: React.FC = () => {
     }
 
     setIsUploading(true);
-    let receiptUrl = formData.receiptUrl || ''; // Use existing URL if editing and no new file
+    let receiptUrl = formData.receiptUrl || ''; 
 
-    // Only upload if a new file is selected or if editing and the existing receiptUrl is from an old local fallback that needs re-upload.
-    // For now, if editing and no new file, just retain receiptUrl.
     if (selectedFile) {
         const sessionId = localStorage.getItem('app_session_id') || 'admin';
         const safeName = selectedFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
@@ -273,7 +295,7 @@ const Expenses: React.FC = () => {
     }
     
     setIsUploading(false);
-    resetForm(); // Resets all form fields and editingExpenseId
+    resetForm(); 
   };
 
   // derived state
@@ -282,11 +304,23 @@ const Expenses: React.FC = () => {
     const matchesCategory = categoryFilter === 'All' || exp.category === categoryFilter;
     const matchesType = typeFilter === 'All' || exp.type === typeFilter;
     const matchesMonth = exp.date.startsWith(monthFilter);
-    return matchesSearch && matchesCategory && matchesType && matchesMonth;
+    
+    // Add Corporate filter for Admin
+    let matchesCorporate = true;
+    if (isSuperAdmin && !isAdminExpensesTab && filterCorporate !== 'All') {
+        if (filterCorporate === 'admin') matchesCorporate = exp.franchiseName === 'Head Office';
+        else {
+            const corp = corporatesList.find(c => c.email === filterCorporate);
+            matchesCorporate = exp.franchiseName === (corp ? corp.companyName : '');
+        }
+    }
+
+    return matchesSearch && matchesCategory && matchesType && matchesMonth && matchesCorporate;
   });
 
   const stats = useMemo(() => {
-    const monthRecords = expenses.filter(e => e.date.startsWith(monthFilter));
+    // Only calculate stats for currently filtered view (so corporate filter applies)
+    const monthRecords = filteredExpenses;
 
     const totalIncome = monthRecords
       .filter(e => e.type === 'Income')
@@ -312,7 +346,22 @@ const Expenses: React.FC = () => {
     }));
 
     return { totalIncome, totalExpense, balance, chartData };
-  }, [expenses, monthFilter]);
+  }, [filteredExpenses]); // Re-calculate when filtered list changes
+
+  // --- PARTNERSHIP CALCULATION ---
+  // Identify active corporate context for partnership display
+  const activeCorporate = useMemo(() => {
+      let corpId = '';
+      if (isSuperAdmin) {
+          if (filterCorporate !== 'All' && filterCorporate !== 'admin') {
+              corpId = filterCorporate;
+          }
+      } else {
+          // If logged in as corporate
+          corpId = sessionId;
+      }
+      return corporatesList.find(c => c.email === corpId);
+  }, [isSuperAdmin, filterCorporate, sessionId, corporatesList]);
 
   return (
     <div className="space-y-6">
@@ -321,574 +370,396 @@ const Expenses: React.FC = () => {
         <div>
           <h2 className="text-2xl font-bold text-gray-800">{isAdminExpensesTab ? 'Admin Expenses' : 'Finance & Expenses'}</h2>
           <p className="text-gray-500">
-             {isAdminExpensesTab ? "Manage admin-specific expenses" : (isSuperAdmin ? "Consolidated financial report across all franchises" : "Track income, expenses, and net balance")}
+             {isAdminExpensesTab ? "Manage admin-specific expenses" : (isSuperAdmin ? "Consolidated financial report across all franchises" : "Track income, expenses, and partner distribution")}
           </p>
         </div>
-        <button 
-          onClick={handleOpenAddTransaction}
-          className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 shadow-sm transition-colors"
-        >
-          <Plus className="w-5 h-5" />
-          Add Transaction
-        </button>
+        <div className="flex gap-3">
+            <button 
+                onClick={handleOpenAddTransaction}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 shadow-sm transition-colors"
+            >
+                <Plus className="w-5 h-5" /> New Transaction
+            </button>
+        </div>
       </div>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium text-gray-500 mb-1">Total Income</p>
-            <h3 className="text-2xl font-bold text-emerald-600">+₹{stats.totalIncome.toLocaleString()}</h3>
-          </div>
-          <div className="bg-emerald-50 p-3 rounded-lg text-emerald-600">
-            <TrendingUp className="w-6 h-6" />
-          </div>
+        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between relative overflow-hidden">
+           <div className="relative z-10">
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Total Income</p>
+              <h3 className="text-2xl font-bold text-gray-900">₹{stats.totalIncome.toLocaleString()}</h3>
+              <p className="text-xs text-green-600 font-medium flex items-center gap-1 mt-1">
+                 <ArrowUpCircle className="w-3 h-3" /> Income
+              </p>
+           </div>
+           <div className="p-4 bg-green-50 rounded-full text-green-600">
+              <TrendingUp className="w-6 h-6" />
+           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium text-gray-500 mb-1">Total Expenses</p>
-            <h3 className="text-2xl font-bold text-red-600">-₹{stats.totalExpense.toLocaleString()}</h3>
-          </div>
-          <div className="bg-red-50 p-3 rounded-lg text-red-600">
-            <TrendingDown className="w-6 h-6" />
-          </div>
+        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between relative overflow-hidden">
+           <div className="relative z-10">
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Total Expense</p>
+              <h3 className="text-2xl font-bold text-gray-900">₹{stats.totalExpense.toLocaleString()}</h3>
+              <p className="text-xs text-red-600 font-medium flex items-center gap-1 mt-1">
+                 <ArrowDownCircle className="w-3 h-3" /> Expenses
+              </p>
+           </div>
+           <div className="p-4 bg-red-50 rounded-full text-red-600">
+              <TrendingDown className="w-6 h-6" />
+           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium text-gray-500 mb-1">Net Balance</p>
-            <h3 className={`text-2xl font-bold ${stats.balance >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
-                ₹{stats.balance.toLocaleString()}
-            </h3>
-          </div>
-          <div className="bg-blue-50 p-3 rounded-lg text-blue-600">
-            <Wallet className="w-6 h-6" />
-          </div>
+        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between relative overflow-hidden">
+           <div className="relative z-10">
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Net Balance</p>
+              <h3 className={`text-2xl font-bold ${stats.balance >= 0 ? 'text-indigo-600' : 'text-red-600'}`}>
+                  ₹{stats.balance.toLocaleString()}
+              </h3>
+              <p className={`text-xs font-medium flex items-center gap-1 mt-1 ${stats.balance >= 0 ? 'text-indigo-600' : 'text-red-600'}`}>
+                 {stats.balance >= 0 ? 'Profit' : 'Loss'}
+              </p>
+           </div>
+           <div className={`p-4 rounded-full ${stats.balance >= 0 ? 'bg-indigo-50 text-indigo-600' : 'bg-red-50 text-red-600'}`}>
+              <Wallet className="w-6 h-6" />
+           </div>
         </div>
+      </div>
+
+      {/* PARTNERSHIP DISTRIBUTION SECTION */}
+      {/* Only show if a specific corporate is active/filtered AND has partners configured */}
+      {activeCorporate && activeCorporate.partners && activeCorporate.partners.length > 0 && (
+          <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-xl p-6 shadow-lg text-white border border-slate-700 animate-in fade-in slide-in-from-bottom-2">
+              <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-2">
+                  <h3 className="font-bold flex items-center gap-2 text-lg">
+                      <Users className="w-5 h-5 text-emerald-400" /> 
+                      Profit Distribution ({activeCorporate.companyName})
+                  </h3>
+                  <span className={`px-3 py-1 rounded-full text-xs font-bold ${stats.balance >= 0 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-red-500/20 text-red-300 border border-red-500/30'}`}>
+                      {stats.balance >= 0 ? 'Net Profit' : 'Net Loss'} Split
+                  </span>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {activeCorporate.partners.map((partner, index) => {
+                      const shareAmount = (stats.balance * partner.percentage) / 100;
+                      return (
+                          <div key={index} className="bg-white/5 rounded-lg p-4 border border-white/10 hover:bg-white/10 transition-colors">
+                              <div className="flex justify-between items-start mb-2">
+                                  <span className="font-bold text-slate-200">{partner.name}</span>
+                                  <span className="text-xs font-mono bg-slate-700 px-2 py-0.5 rounded text-slate-300">{partner.percentage}%</span>
+                              </div>
+                              <div className={`text-xl font-bold ${stats.balance >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                  {stats.balance >= 0 ? '₹' : '-₹'}{Math.abs(shareAmount).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                              </div>
+                              <div className="text-[10px] text-slate-500 mt-1 uppercase tracking-wider font-medium">
+                                  {stats.balance >= 0 ? 'Share of Profit' : 'Share of Loss'}
+                              </div>
+                          </div>
+                      );
+                  })}
+              </div>
+          </div>
+      )}
+
+      {/* Filters & Content */}
+      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col gap-4">
+          <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+              <div className="relative flex-1 w-full">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <input 
+                      type="text" 
+                      placeholder="Search transactions..." 
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+              </div>
+              
+              <div className="flex gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
+                  {isSuperAdmin && !isAdminExpensesTab && (
+                      <select 
+                          value={filterCorporate}
+                          onChange={(e) => setFilterCorporate(e.target.value)}
+                          className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 min-w-[150px]"
+                      >
+                          <option value="All">All Corporates</option>
+                          <option value="admin">Head Office</option>
+                          {corporatesList.map(c => (
+                              <option key={c.id} value={c.email}>{c.companyName}</option>
+                          ))}
+                      </select>
+                  )}
+
+                  <input 
+                      type="month" 
+                      value={monthFilter}
+                      onChange={(e) => setMonthFilter(e.target.value)}
+                      className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+
+                  <select 
+                      value={typeFilter} 
+                      onChange={(e) => setTypeFilter(e.target.value)}
+                      className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                      <option value="All">All Types</option>
+                      <option value="Income">Income</option>
+                      <option value="Expense">Expense</option>
+                  </select>
+
+                  <select 
+                      value={categoryFilter} 
+                      onChange={(e) => setCategoryFilter(e.target.value)}
+                      className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 max-w-[150px]"
+                  >
+                      <option value="All">All Categories</option>
+                      {[...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES].map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+              </div>
+          </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main List Section */}
-        <div className="lg:col-span-2 space-y-6">
-           {/* Filters */}
-           <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col md:flex-row gap-4 items-center">
-             <div className="relative flex-1 w-full">
-               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-               <input 
-                 type="text" 
-                 placeholder="Search transactions..." 
-                 value={searchTerm}
-                 onChange={(e) => setSearchTerm(e.target.value)}
-                 className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-               />
-             </div>
-             <div className="flex gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
-               <input 
-                 type="month" 
-                 value={monthFilter}
-                 onChange={(e) => setMonthFilter(e.target.value)}
-                 className="px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white text-sm"
-               />
-               <select 
-                 value={typeFilter}
-                 onChange={(e) => setTypeFilter(e.target.value)}
-                 className="px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white text-sm"
-               >
-                 <option value="All">All Types</option>
-                 <option value="Income">Income Only</option>
-                 <option value="Expense">Expense Only</option>
-               </select>
-               <select 
-                 value={categoryFilter}
-                 onChange={(e) => setCategoryFilter(e.target.value)}
-                 className="px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white text-sm max-w-[150px]"
-               >
-                 <option value="All">All Categories</option>
-                 {[...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES].sort().map(c => <option key={c} value={c}>{c}</option>)}
-               </select>
-             </div>
-           </div>
+          <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
+              <div className="p-4 border-b border-gray-100 bg-gray-50 font-bold text-gray-700">Transactions</div>
+              <div className="overflow-x-auto flex-1">
+                  <table className="w-full text-left text-sm">
+                      <thead className="bg-gray-50 text-gray-500 font-medium">
+                          <tr>
+                              <th className="px-6 py-3">Date</th>
+                              {isSuperAdmin && !isAdminExpensesTab && <th className="px-6 py-3">Franchise</th>}
+                              <th className="px-6 py-3">Title / ID</th>
+                              <th className="px-6 py-3">Category</th>
+                              <th className="px-6 py-3 text-right">Amount</th>
+                              <th className="px-6 py-3 text-center">Status</th>
+                              <th className="px-6 py-3 text-right">Actions</th>
+                          </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                          {filteredExpenses.map(item => (
+                              <tr key={item.id} className="hover:bg-gray-50 transition-colors">
+                                  <td className="px-6 py-3 text-gray-600 whitespace-nowrap">{new Date(item.date).toLocaleDateString()}</td>
+                                  {isSuperAdmin && !isAdminExpensesTab && (
+                                      <td className="px-6 py-3">
+                                          <span className="bg-indigo-50 text-indigo-700 px-2 py-1 rounded text-xs border border-indigo-100 font-medium">
+                                              {item.franchiseName || 'Head Office'}
+                                          </span>
+                                      </td>
+                                  )}
+                                  <td className="px-6 py-3">
+                                      <div className="font-bold text-gray-800">{item.title}</div>
+                                      <div className="text-xs text-gray-500 font-mono">{item.transactionNumber}</div>
+                                  </td>
+                                  <td className="px-6 py-3">
+                                      <span className={`px-2 py-1 rounded text-xs border ${item.type === 'Income' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                                          {item.category}
+                                      </span>
+                                  </td>
+                                  <td className={`px-6 py-3 text-right font-bold ${item.type === 'Income' ? 'text-green-600' : 'text-red-600'}`}>
+                                      {item.type === 'Income' ? '+' : '-'}₹{item.amount.toLocaleString()}
+                                  </td>
+                                  <td className="px-6 py-3 text-center">
+                                      <span className={`px-2 py-1 rounded-full text-xs font-bold ${item.status === 'Paid' ? 'bg-emerald-100 text-emerald-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                                          {item.status}
+                                      </span>
+                                  </td>
+                                  <td className="px-6 py-3 text-right">
+                                      <div className="flex justify-end gap-2">
+                                          <button onClick={() => handleViewInvoice(item)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"><Eye className="w-4 h-4"/></button>
+                                          <button onClick={() => handleEdit(item)} className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors"><Edit2 className="w-4 h-4"/></button>
+                                          <button onClick={() => handleDelete(item.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"><Trash2 className="w-4 h-4"/></button>
+                                      </div>
+                                  </td>
+                              </tr>
+                          ))}
+                          {filteredExpenses.length === 0 && (
+                              <tr><td colSpan={isSuperAdmin ? 7 : 6} className="py-8 text-center text-gray-400">No transactions found.</td></tr>
+                          )}
+                      </tbody>
+                  </table>
+              </div>
+          </div>
 
-           {/* Table */}
-           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-             <div className="overflow-x-auto">
-               <table className="w-full text-left text-sm whitespace-nowrap">
-                 <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-200">
-                   <tr>
-                     <th className="px-6 py-4">Ref #</th>
-                     <th className="px-6 py-4">Title / Category</th>
-                     {isSuperAdmin && !isAdminExpensesTab && <th className="px-6 py-4">Franchise</th>}
-                     <th className="px-6 py-4">Date</th>
-                     <th className="px-6 py-4">Amount</th>
-                     <th className="px-6 py-4 text-center">Status</th>
-                     <th className="px-6 py-4 text-right">Actions</th> {/* New Actions column */}
-                   </tr>
-                 </thead>
-                 <tbody className="divide-y divide-gray-100">
-                   {filteredExpenses.map((exp) => (
-                     <tr key={exp.id} className="hover:bg-gray-50 transition-colors">
-                       <td className="px-6 py-4 text-xs font-mono text-gray-500">{exp.transactionNumber || '-'}</td>
-                       <td className="px-6 py-4">
-                         <div className="flex items-start gap-3">
-                             <div className={`mt-1 p-1.5 rounded-full ${exp.type === 'Income' ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-600'}`}>
-                                 {exp.type === 'Income' ? <ArrowUpCircle className="w-4 h-4" /> : <ArrowDownCircle className="w-4 h-4" />}
-                             </div>
-                             <div>
-                                <div className="font-bold text-gray-900">{exp.title}</div>
-                                <div className="text-xs text-gray-500 flex items-center gap-1">
-                                    {exp.category === 'Office Rent' && <DollarSign className="w-3 h-3" />}
-                                    {exp.category.includes('Salary') && <Users className="w-3 h-3" />}
-                                    {exp.category.includes('EB') && <Zap className="w-3 h-3" />}
-                                    {exp.category.includes('Internet') && <Wifi className="w-3 h-3" />}
-                                    {exp.category.includes('Phone') && <Smartphone className="w-3 h-3" />}
-                                    {exp.category}
-                                </div>
-                             </div>
-                         </div>
-                       </td>
-                       {isSuperAdmin && !isAdminExpensesTab && (
-                           <td className="px-6 py-4">
-                               {exp.franchiseName && (
-                                   <div className="inline-flex items-center gap-1.5 bg-indigo-50 text-indigo-700 px-2 py-1 rounded text-xs font-semibold border border-indigo-100">
-                                       <Building2 className="w-3 h-3" />
-                                       {exp.franchiseName}
-                                   </div>
-                               )}
-                           </td>
-                       )}
-                       <td className="px-6 py-4 text-gray-600">{exp.date}</td>
-                       <td className={`px-6 py-4 font-mono font-bold ${exp.type === 'Income' ? 'text-emerald-600' : 'text-red-600'}`}>
-                           {exp.type === 'Income' ? '+' : '-'}₹{exp.amount.toLocaleString()}
-                       </td>
-                       <td className="px-6 py-4 text-center">
-                         <span className={`px-2 py-1 rounded-full text-xs font-bold border ${exp.status === 'Paid' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-yellow-50 text-yellow-700 border-yellow-200'}`}>
-                           {exp.status}
-                         </span>
-                       </td>
-                       {/* New Actions Column */}
-                       <td className="px-6 py-4 text-right">
-                           <div className="flex justify-end gap-2">
-                               <button 
-                                   onClick={() => handleViewInvoice(exp)}
-                                   className="text-gray-400 hover:text-blue-500 p-1.5 rounded-full hover:bg-blue-50 transition-colors"
-                                   title="View Details"
-                               >
-                                   <Eye className="w-4 h-4" />
-                               </button>
-                               <button 
-                                   onClick={() => handleEdit(exp)}
-                                   className="text-gray-400 hover:text-emerald-600 p-1.5 rounded-full hover:bg-emerald-50 transition-colors"
-                                   title="Edit Transaction"
-                               >
-                                   <Edit2 className="w-4 h-4" />
-                               </button>
-                               <button 
-                                   onClick={() => handleDelete(exp.id)}
-                                   className="text-gray-400 hover:text-red-600 p-1.5 rounded-full hover:bg-red-50 transition-colors"
-                                   title="Delete Transaction"
-                               >
-                                   <Trash2 className="w-4 h-4" />
-                               </button>
-                           </div>
-                       </td>
-                     </tr>
-                   ))}
-                 </tbody>
-               </table>
-             </div>
-             {filteredExpenses.length === 0 && (
-               <div className="p-10 text-center text-gray-500">
-                  No records found for this period.
-               </div>
-             )}
-           </div>
-        </div>
-
-        {/* Analytics Section */}
-        <div className="lg:col-span-1 space-y-6">
-           <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-              <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2">
-                 <PieChart className="w-5 h-5 text-emerald-500" /> Expense Distribution
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 flex flex-col">
+              <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                  <PieChart className="w-5 h-5 text-purple-600" /> Expense Breakdown
               </h3>
-              <div className="h-64 w-full">
-                 {stats.chartData.length > 0 ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                        <RePieChart>
-                        <Pie
-                            data={stats.chartData}
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={60}
-                            outerRadius={80}
-                            paddingAngle={5}
-                            dataKey="value"
-                        >
-                            {stats.chartData.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                            ))}
-                        </Pie>
-                        <ReTooltip formatter={(value: number) => `₹${value.toLocaleString()}`} />
-                        <Legend layout="horizontal" verticalAlign="bottom" align="center" wrapperStyle={{fontSize: '10px'}} />
-                        </RePieChart>
-                    </ResponsiveContainer>
-                 ) : (
-                    <div className="h-full flex items-center justify-center text-gray-400 text-sm">
-                        No expense data to display
-                    </div>
-                 )}
+              <div className="flex-1 min-h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                      <RePieChart>
+                          <Pie
+                              data={stats.chartData}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={60}
+                              outerRadius={80}
+                              paddingAngle={5}
+                              dataKey="value"
+                          >
+                              {stats.chartData.map((entry: any, index: number) => (
+                                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                              ))}
+                          </Pie>
+                          <ReTooltip formatter={(value: number) => `₹${value.toLocaleString()}`} />
+                          <Legend />
+                      </RePieChart>
+                  </ResponsiveContainer>
               </div>
-           </div>
-
-           <div className="bg-gradient-to-br from-indigo-500 to-purple-600 p-6 rounded-xl text-white shadow-lg">
-              <div className="flex justify-between items-start mb-4">
-                 <h3 className="font-bold text-lg">Download Report</h3>
-                 <FileText className="w-6 h-6 opacity-80" />
-              </div>
-              <p className="text-indigo-100 text-sm mb-6">
-                 Generate a detailed PDF report of all income and expenses for auditing purposes.
-              </p>
-              <button className="w-full bg-white text-indigo-600 py-2 rounded-lg font-bold text-sm hover:bg-indigo-50 transition-colors flex items-center justify-center gap-2">
-                 <Download className="w-4 h-4" /> Export PDF
-              </button>
-           </div>
-        </div>
+          </div>
       </div>
 
-      {/* Add/Edit Transaction Modal */}
+      {/* Add/Edit Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md flex flex-col max-h-[90vh] overflow-hidden animate-in fade-in zoom-in duration-200">
-            <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50 shrink-0">
-              <h3 className="font-bold text-gray-800">{editingExpenseId ? 'Edit Transaction' : 'Add Transaction'}</h3>
-              <button onClick={resetForm} className="text-gray-400 hover:text-gray-600">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-6"> {/* Scrollable content */}
-              <form onSubmit={handleSubmit} className="space-y-4"> {/* Removed direct padding */}
-                {/* Type Toggle */}
-                <div className="flex bg-gray-100 p-1 rounded-lg">
-                   <button 
-                      type="button"
-                      onClick={() => setFormData(prev => ({ ...prev, type: 'Income', category: INCOME_CATEGORIES[0] }))}
-                      className={`flex-1 py-2 text-sm font-medium rounded-md transition-all flex items-center justify-center gap-2 ${formData.type === 'Income' ? 'bg-white text-emerald-600 shadow-sm' : 'text-gray-500'}`}
-                   >
-                      <ArrowUpCircle className="w-4 h-4" /> Income
-                   </button>
-                   <button 
-                      type="button"
-                      onClick={() => setFormData(prev => ({ ...prev, type: 'Expense', category: EXPENSE_CATEGORIES[0] }))}
-                      className={`flex-1 py-2 text-sm font-medium rounded-md transition-all flex items-center justify-center gap-2 ${formData.type === 'Expense' ? 'bg-white text-red-600 shadow-sm' : 'text-gray-500'}`}
-                   >
-                      <ArrowDownCircle className="w-4 h-4" /> Expense
-                   </button>
-                </div>
+           <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200">
+              <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                 <h3 className="font-bold text-gray-800">{editingExpenseId ? 'Edit Transaction' : 'New Transaction'}</h3>
+                 <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5"/></button>
+              </div>
+              <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                 
+                 <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Type</label>
+                        <div className="flex bg-gray-100 p-1 rounded-lg">
+                            <button type="button" onClick={() => setFormData({...formData, type: 'Income', category: INCOME_CATEGORIES[0]})} className={`flex-1 py-1.5 text-xs font-bold rounded ${formData.type === 'Income' ? 'bg-white shadow text-green-600' : 'text-gray-500'}`}>Income</button>
+                            <button type="button" onClick={() => setFormData({...formData, type: 'Expense', category: EXPENSE_CATEGORIES[0]})} className={`flex-1 py-1.5 text-xs font-bold rounded ${formData.type === 'Expense' ? 'bg-white shadow text-red-600' : 'text-gray-500'}`}>Expense</button>
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Transaction No.</label>
+                        <input name="transactionNumber" value={formData.transactionNumber} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm font-mono" placeholder="Auto-generated" />
+                    </div>
+                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Transaction Number</label>
-                  <input 
-                    type="text" 
-                    name="transactionNumber"
-                    required
-                    placeholder="e.g. TXN-2025-001"
-                    value={formData.transactionNumber}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
-                  />
-                </div>
+                 <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Title / Description</label>
+                    <input name="title" value={formData.title} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" placeholder="e.g. Office Rent Payment" required />
+                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
-                  <input 
-                    type="text" 
-                    name="title"
-                    required
-                    placeholder={formData.type === 'Income' ? "e.g. Client Payment" : "e.g. Office Rent"}
-                    value={formData.title}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
-                  />
-                </div>
+                 <div className="grid grid-cols-2 gap-4">
+                    <div>
+                       <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Category</label>
+                       <select name="category" value={formData.category} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none bg-white">
+                          {(formData.type === 'Expense' ? EXPENSE_CATEGORIES : INCOME_CATEGORIES).map(c => <option key={c}>{c}</option>)}
+                       </select>
+                    </div>
+                    <div>
+                       <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Amount (₹)</label>
+                       <input type="number" name="amount" value={formData.amount} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 font-bold" placeholder="0.00" required />
+                    </div>
+                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                   <div>
-                     <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                     <select 
-                       name="category"
-                       value={formData.category}
-                       onChange={handleInputChange}
-                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
-                     >
-                       {(formData.type === 'Income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES).map(c => (
-                          <option key={c} value={c}>{c}</option>
-                       ))}
-                     </select>
-                   </div>
-                   <div>
-                     <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
-                     <input 
-                       type="date"
-                       name="date" 
-                       value={formData.date}
-                       onChange={handleInputChange}
-                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
-                     />
-                   </div>
-                </div>
+                 <div className="grid grid-cols-2 gap-4">
+                    <div>
+                       <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Date</label>
+                       <input type="date" name="date" value={formData.date} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none" required />
+                    </div>
+                    <div>
+                       <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Status</label>
+                       <select name="status" value={formData.status} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none bg-white">
+                          <option>Paid</option>
+                          <option>Pending</option>
+                       </select>
+                    </div>
+                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Amount (₹)</label>
-                  <input 
-                    type="number" 
-                    name="amount"
-                    required
-                    min="0"
-                    value={formData.amount || ''}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                   <div>
-                     <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
-                     <select 
-                       name="paymentMethod"
-                       value={formData.paymentMethod}
-                       onChange={handleInputChange}
-                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
-                     >
-                       <option>Cash</option>
-                       <option>Bank Transfer</option>
-                       <option>UPI</option>
-                       <option>Credit Card</option>
-                       <option>Cheque</option>
-                     </select>
-                   </div>
-                   <div>
-                     <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                     <select 
-                       name="status"
-                       value={formData.status}
-                       onChange={handleInputChange}
-                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
-                     >
-                       <option>Paid</option>
-                       <option>Pending</option>
-                     </select>
-                   </div>
-                </div>
-                
-                <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Upload Receipt / File</label>
-                    <div className="flex gap-2 items-center">
-                        <input 
-                            type="file" 
-                            className="hidden" 
-                            ref={fileInputRef}
-                            onChange={handleFileChange}
-                        />
-                        <button 
-                            type="button"
-                            onClick={() => fileInputRef.current?.click()}
-                            className="flex-1 border border-dashed border-gray-300 rounded-lg py-2 px-4 text-sm text-gray-500 hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
-                        >
-                            {selectedFile ? (
-                                <span className="text-emerald-600 font-medium truncate max-w-[200px]">{selectedFile.name}</span>
-                            ) : (
-                                <>
-                                    <Upload className="w-4 h-4" /> Select File
-                                </>
-                            )}
+                 <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Attach Receipt (Optional)</label>
+                    <div className="flex items-center gap-2">
+                        <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*,.pdf" />
+                        <button type="button" onClick={() => fileInputRef.current?.click()} className="flex-1 border border-dashed border-gray-300 rounded-lg p-2 text-xs text-gray-500 hover:bg-gray-50 flex items-center justify-center gap-2">
+                            {selectedFile ? <CheckCircle className="w-4 h-4 text-green-500"/> : <Paperclip className="w-4 h-4"/>}
+                            {selectedFile ? selectedFile.name : 'Choose File'}
                         </button>
-                        {selectedFile && (
-                            <button onClick={() => setSelectedFile(null)} type="button" className="text-red-500 hover:bg-red-50 p-2 rounded"><X className="w-4 h-4"/></button>
-                        )}
-                        {!selectedFile && formData.receiptUrl && (
-                            <a href={formData.receiptUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline text-xs flex items-center gap-1">
-                                <Paperclip className="w-3 h-3" /> View Existing
-                            </a>
+                        {formData.receiptUrl && !selectedFile && (
+                            <div className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded border border-blue-100">
+                                Existing File
+                            </div>
                         )}
                     </div>
-                </div>
+                 </div>
 
-                <div>
-                   <label className="block text-sm font-medium text-gray-700 mb-1">Description (Optional)</label>
-                   <textarea 
-                     name="description"
-                     rows={2}
-                     value={formData.description}
-                     onChange={handleInputChange}
-                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none resize-none"
-                   />
-                </div>
+                 <button type="submit" disabled={isUploading} className="w-full bg-indigo-600 text-white py-2.5 rounded-lg font-bold hover:bg-indigo-700 transition-colors shadow-sm flex justify-center items-center gap-2">
+                    {isUploading && <Loader2 className="w-4 h-4 animate-spin" />}
+                    {editingExpenseId ? 'Update Transaction' : 'Save Transaction'}
+                 </button>
               </form>
-            </div> {/* End of scrollable content div */}
-
-            <div className="p-5 border-t border-gray-100 bg-gray-50 flex justify-end gap-3 rounded-b-2xl shrink-0"> {/* Sticky footer */}
-               <button 
-                  type="button" 
-                  onClick={resetForm}
-                  className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-white transition-colors"
-               >
-                 Cancel
-               </button>
-               <button 
-                  type="submit"
-                  disabled={isUploading}
-                  onClick={handleSubmit} // Call handleSubmit from here as form is no longer parent
-                  className={`flex-1 text-white font-bold py-3 rounded-lg shadow-md transition-colors flex items-center justify-center gap-2 ${formData.type === 'Income' ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-red-500 hover:bg-red-600'}`}
-               >
-                  {isUploading && <Loader2 className="w-4 h-4 animate-spin" />}
-                  {editingExpenseId ? 'Update Transaction' : (formData.type === 'Income' ? 'Record Income' : 'Record Expense')}
-               </button>
-            </div>
-          </div>
+           </div>
         </div>
       )}
 
-      {/* Transaction Details (Invoice-like) Modal */}
+      {/* Invoice Viewer Modal */}
       {showInvoiceViewer && invoiceData && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-              <div className="printable-invoice bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200">
-                  {/* Header (Visible on screen and print) */}
-                  <div className="p-6 border-b border-gray-200 bg-gray-50">
-                      <div className="flex justify-between items-start mb-4">
-                          <div>
-                              <h2 className="text-2xl font-bold text-gray-900">Transaction Details</h2>
-                              <p className="text-sm text-gray-500">Invoice/Receipt Summary</p>
-                          </div>
-                          <div className="text-right">
-                              <p className="font-mono text-sm font-bold text-gray-800">#{invoiceData.transactionNumber}</p>
-                              <p className="text-xs text-gray-500">{invoiceData.date}</p>
-                          </div>
-                      </div>
-                      <div className="flex justify-between items-center bg-white p-3 rounded-lg border border-gray-200">
-                          <div>
-                              <p className="text-xs text-gray-400 uppercase font-bold">Transaction For</p>
-                              <p className="font-bold text-gray-800">{invoiceData.title}</p>
-                          </div>
-                          <div className="text-right">
-                              <p className="text-xs text-gray-400 uppercase font-bold">Category</p>
-                              <p className="font-medium text-gray-700">{invoiceData.category}</p>
-                          </div>
-                      </div>
-                  </div>
-
-                  {/* Body */}
-                  <div className="p-6 space-y-6">
-                      
-                      {/* Amount & Type */}
-                      <div className="flex justify-between items-center">
-                          <div>
-                              <p className="text-sm font-bold text-gray-800">Amount</p>
-                              <p className={`text-xl font-bold ${invoiceData.type === 'Income' ? 'text-emerald-600' : 'text-red-600'}`}>
-                                  {invoiceData.type === 'Income' ? '+' : '-'}₹{invoiceData.amount.toLocaleString()}
-                              </p>
-                          </div>
-                          <div className="text-right">
-                              <p className="text-sm font-bold text-gray-800">Type</p>
-                              <span className={`px-2 py-1 rounded-full text-xs font-bold ${invoiceData.type === 'Income' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
-                                  {invoiceData.type}
-                              </span>
-                          </div>
-                      </div>
-
-                      {/* Payment Method & Status */}
-                      <div>
-                          <h4 className="text-xs font-bold text-gray-500 uppercase mb-2 border-b border-gray-100 pb-1">Payment & Status</h4>
-                          <div className="space-y-2 text-sm">
-                              <div className="flex justify-between">
-                                  <span className="text-gray-600">Method</span>
-                                  <span className="font-medium text-gray-900">{invoiceData.paymentMethod}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                  <span className="text-gray-600">Transaction Status</span>
-                                  <span className={`font-medium ${invoiceData.status === 'Paid' ? 'text-green-600' : 'text-yellow-600'}`}>{invoiceData.status}</span>
-                              </div>
-                          </div>
-                      </div>
-
-                      {/* Description */}
-                      {invoiceData.description && (
-                          <div>
-                              <h4 className="text-xs font-bold text-gray-500 uppercase mb-2 border-b border-gray-100 pb-1">Description</h4>
-                              <p className="text-sm text-gray-600">{invoiceData.description}</p>
-                          </div>
-                      )}
-                      
-                      {/* Franchise Name for Super Admin */}
-                      {isSuperAdmin && invoiceData.franchiseName && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg flex flex-col animate-in fade-in zoom-in duration-200">
+              <div className="p-6 border-b border-gray-100 flex justify-between items-start bg-gray-50 rounded-t-xl">
+                 <div>
+                    <h3 className="font-bold text-xl text-gray-800">Transaction Details</h3>
+                    <p className="text-sm text-gray-500 font-mono mt-1">{invoiceData.transactionNumber}</p>
+                 </div>
+                 <button onClick={closeInvoiceViewer} className="text-gray-400 hover:text-gray-600"><X className="w-6 h-6"/></button>
+              </div>
+              <div className="p-8 space-y-6">
+                 <div className="flex justify-between items-end border-b border-gray-100 pb-4">
+                    <div>
+                        <p className="text-xs font-bold text-gray-400 uppercase mb-1">Subject</p>
+                        <h4 className="text-lg font-bold text-gray-800">{invoiceData.title}</h4>
+                        <span className={`inline-block px-2 py-0.5 rounded text-xs border mt-1 ${invoiceData.type === 'Income' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>{invoiceData.type} - {invoiceData.category}</span>
+                    </div>
+                    <div className="text-right">
+                        <p className="text-xs font-bold text-gray-400 uppercase mb-1">Amount</p>
+                        <h4 className={`text-3xl font-bold ${invoiceData.type === 'Income' ? 'text-green-600' : 'text-red-600'}`}>₹{invoiceData.amount.toLocaleString()}</h4>
+                    </div>
+                 </div>
+                 <div className="grid grid-cols-2 gap-6 text-sm">
+                    <div>
+                        <p className="text-gray-500 mb-1">Date</p>
+                        <p className="font-medium text-gray-800">{new Date(invoiceData.date).toLocaleDateString()}</p>
+                    </div>
+                    <div>
+                        <p className="text-gray-500 mb-1">Payment Method</p>
+                        <p className="font-medium text-gray-800">{invoiceData.paymentMethod}</p>
+                    </div>
+                    <div>
+                        <p className="text-gray-500 mb-1">Status</p>
+                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${invoiceData.status === 'Paid' ? 'bg-emerald-100 text-emerald-700' : 'bg-yellow-100 text-yellow-700'}`}>{invoiceData.status}</span>
+                    </div>
+                    {invoiceData.franchiseName && (
                         <div>
-                            <h4 className="text-xs font-bold text-gray-500 uppercase mb-2 border-b border-gray-100 pb-1">Franchise</h4>
-                            <p className="text-sm text-gray-600">{invoiceData.franchiseName}</p>
+                            <p className="text-gray-500 mb-1">Franchise</p>
+                            <p className="font-medium text-gray-800">{invoiceData.franchiseName}</p>
                         </div>
-                      )}
-                  </div>
-
-                  {/* Footer (Actions - Hidden on Print) */}
-                  <div className="no-print p-5 bg-gray-50 border-t border-gray-200 flex justify-end gap-3">
-                      {invoiceData.receiptUrl && (
-                          <button
-                              onClick={() => setRawReceiptPreviewUrl(invoiceData.receiptUrl!)}
-                              className="px-4 py-2 border border-blue-200 text-blue-600 rounded-lg text-sm font-medium hover:bg-blue-50 transition-colors flex items-center gap-2"
-                          >
-                              <Paperclip className="w-4 h-4" /> View Original Receipt
-                          </button>
-                      )}
-                      <button 
-                          onClick={() => window.print()} 
-                          className="px-4 py-2 bg-slate-800 text-white rounded-lg text-sm font-bold hover:bg-slate-900 transition-colors flex items-center gap-2"
-                      >
-                          <Printer className="w-4 h-4" /> Print Invoice
-                      </button>
-                      <button 
-                          onClick={closeInvoiceViewer} 
-                          className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium hover:bg-white transition-colors"
-                      >
-                          Close
-                      </button>
-                  </div>
-              </div>
-          </div>
-      )}
-
-      {/* Raw Receipt Preview Modal (Existing, now controlled by rawReceiptPreviewUrl) */}
-      {rawReceiptPreviewUrl && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-           <div className="bg-white rounded-xl w-full max-w-4xl h-[85vh] flex flex-col animate-in fade-in zoom-in duration-200">
-              <div className="flex justify-between items-center p-4 border-b border-gray-200 shrink-0">
-                 <h3 className="font-bold text-gray-800">Receipt Preview</h3>
-                 <button onClick={closeRawReceiptPreview} className="p-2 hover:bg-red-50 rounded-lg text-gray-500 hover:text-red-500 transition-colors">
-                    <X className="w-5 h-5" />
-                 </button>
-              </div>
-              <div className="flex-1 bg-gray-100 flex items-center justify-center p-4 overflow-hidden">
-                 {/* Basic detection for image vs other. If cloud URL, might need better detection, but often extensions or MIME are missing in simple string URLs. 
-                     We'll try to show as image first if data URI or common extension, else iframe. 
-                 */}
-                 {rawReceiptPreviewUrl.startsWith('data:image') || /\.(jpg|jpeg|png|gif|webp)$/i.test(rawReceiptPreviewUrl) ? (
-                    <img src={rawReceiptPreviewUrl} alt="Receipt" className="max-w-full max-h-full object-contain shadow-lg rounded-lg" />
-                 ) : (
-                    <iframe src={rawReceiptPreviewUrl} className="w-full h-full rounded-lg border border-gray-200 shadow-lg bg-white" title="Receipt Preview"></iframe>
+                    )}
+                 </div>
+                 
+                 {invoiceData.receiptUrl && (
+                     <div className="mt-4 pt-4 border-t border-gray-100">
+                         <p className="text-xs font-bold text-gray-400 uppercase mb-2">Attached Receipt</p>
+                         <div className="flex gap-2">
+                             <a 
+                                href={invoiceData.receiptUrl} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg text-sm font-medium hover:bg-blue-100 transition-colors border border-blue-200"
+                             >
+                                 <Download className="w-4 h-4" /> Download/View
+                             </a>
+                         </div>
+                     </div>
                  )}
               </div>
-              <div className="p-4 border-t border-gray-200 flex justify-end shrink-0">
-                 <a 
-                    href={rawReceiptPreviewUrl}
-                    download="receipt"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium flex items-center gap-2 transition-colors shadow-sm"
-                 >
-                    <Download className="w-4 h-4" /> Download Original
-                 </a>
+              <div className="p-5 border-t border-gray-100 bg-gray-50 rounded-b-xl flex justify-end">
+                 <button onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors text-sm font-medium">
+                    <Printer className="w-4 h-4" /> Print
+                 </button>
               </div>
            </div>
         </div>
       )}
+
     </div>
   );
 };

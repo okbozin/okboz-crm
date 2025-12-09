@@ -107,6 +107,11 @@ export interface CalendarStats {
   weekOff: number;
 }
 
+export interface PartnerConfig {
+  name: string;
+  percentage: number;
+}
+
 export interface CorporateAccount {
   id: string;
   companyName: string;
@@ -116,6 +121,7 @@ export interface CorporateAccount {
   city: string;
   status: 'Active' | 'Inactive';
   createdAt: string;
+  partners?: PartnerConfig[]; // NEW: Partnership configuration
 }
 
 export interface HistoryLog {

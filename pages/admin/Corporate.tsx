@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Search, Building2, Mail, Phone, Lock, Trash2, X, MapPin, Eye, EyeOff, Download, Upload, AlertTriangle, Edit2 } from 'lucide-react';
-import { CorporateAccount } from '../../types';
+import { Plus, Search, Building2, Mail, Phone, Lock, Trash2, X, MapPin, Eye, EyeOff, Download, Upload, AlertTriangle, Edit2, Users, Percent } from 'lucide-react';
+import { CorporateAccount, PartnerConfig } from '../../types';
 
 const Corporate: React.FC = () => {
   // 1. Safe Initialization
@@ -31,7 +30,8 @@ const Corporate: React.FC = () => {
     password: '',
     phone: '',
     city: '',
-    status: 'Active'
+    status: 'Active',
+    partners: [] as PartnerConfig[]
   };
   const [formData, setFormData] = useState(initialFormState);
 
@@ -97,6 +97,24 @@ const Corporate: React.FC = () => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  const handlePartnerChange = (index: number, field: keyof PartnerConfig, value: string) => {
+    const newPartners = [...(formData.partners || [])];
+    if (field === 'percentage') {
+        newPartners[index] = { ...newPartners[index], [field]: parseFloat(value) || 0 };
+    } else {
+        newPartners[index] = { ...newPartners[index], [field]: value };
+    }
+    setFormData(prev => ({ ...prev, partners: newPartners }));
+  };
+
+  const addPartner = () => {
+    setFormData(prev => ({ ...prev, partners: [...(prev.partners || []), { name: '', percentage: 0 }] }));
+  };
+
+  const removePartner = (index: number) => {
+    setFormData(prev => ({ ...prev, partners: (prev.partners || []).filter((_, i) => i !== index) }));
+  };
+
   const handleOpenAdd = () => {
     setEditingId(null);
     setFormData(initialFormState);
@@ -111,7 +129,8 @@ const Corporate: React.FC = () => {
         password: account.password,
         phone: account.phone,
         city: account.city,
-        status: account.status
+        status: account.status,
+        partners: account.partners || []
     });
     setIsModalOpen(true);
   };
@@ -119,6 +138,13 @@ const Corporate: React.FC = () => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.companyName || !formData.email || !formData.password || !formData.city) return;
+
+    // Validate partners percentage
+    const totalPercentage = (formData.partners || []).reduce((sum, p) => sum + (p.percentage || 0), 0);
+    if (formData.partners && formData.partners.length > 0 && Math.round(totalPercentage) !== 100) {
+        alert(`Total partner percentage must equal 100%. Current total: ${totalPercentage}%`);
+        return;
+    }
 
     if (editingId) {
         // Update Existing
@@ -131,7 +157,8 @@ const Corporate: React.FC = () => {
                     password: formData.password,
                     phone: formData.phone,
                     city: formData.city,
-                    status: formData.status as 'Active' | 'Inactive'
+                    status: formData.status as 'Active' | 'Inactive',
+                    partners: formData.partners
                 };
             }
             return acc;
@@ -152,7 +179,8 @@ const Corporate: React.FC = () => {
           phone: formData.phone,
           city: formData.city,
           status: formData.status as 'Active' | 'Inactive',
-          createdAt: new Date().toISOString().split('T')[0]
+          createdAt: new Date().toISOString().split('T')[0],
+          partners: formData.partners
         };
         setAccounts(prev => [newAccount, ...prev]);
     }
@@ -331,6 +359,13 @@ const Corporate: React.FC = () => {
                      {visiblePasswords[account.id] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                    </button>
                 </div>
+                {/* Partners Badge */}
+                {account.partners && account.partners.length > 0 && (
+                    <div className="flex items-center gap-2 text-xs text-gray-500 bg-gray-50 p-2 rounded">
+                        <Users className="w-3 h-3" />
+                        {account.partners.length} Partners Configured
+                    </div>
+                )}
               </div>
             </div>
             <div className="bg-gray-50 px-6 py-3 border-t border-gray-100 flex justify-between items-center">
@@ -376,7 +411,7 @@ const Corporate: React.FC = () => {
       {/* Add/Edit Account Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-           <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200">
+           <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200 max-h-[90vh] flex flex-col">
               <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50">
                  <h3 className="font-bold text-gray-800">{editingId ? 'Edit Corporate Account' : 'Create Corporate Account'}</h3>
                  <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600">
@@ -384,88 +419,150 @@ const Corporate: React.FC = () => {
                  </button>
               </div>
               
-              <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Company Name</label>
-                    <input 
-                      required 
-                      name="companyName" 
-                      value={formData.companyName} 
-                      onChange={handleInputChange} 
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" 
-                      placeholder="e.g. Acme Corp" 
-                    />
-                 </div>
-                 <div className="grid grid-cols-2 gap-4">
-                   <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Email (Username)</label>
-                      <input 
-                        required 
-                        type="email"
-                        name="email" 
-                        value={formData.email} 
-                        onChange={handleInputChange} 
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" 
-                        placeholder="franchise@company.com" 
-                      />
-                   </div>
-                   <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
-                      <input 
-                        required 
-                        name="city" 
-                        value={formData.city} 
-                        onChange={handleInputChange} 
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" 
-                        placeholder="e.g. Mumbai" 
-                      />
-                   </div>
-                 </div>
+              <div className="overflow-y-auto p-6 space-y-4">
+                 <form id="corporateForm" onSubmit={handleSubmit} className="space-y-4">
+                     <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Company Name</label>
+                        <input 
+                          required 
+                          name="companyName" 
+                          value={formData.companyName} 
+                          onChange={handleInputChange} 
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" 
+                          placeholder="e.g. Acme Corp" 
+                        />
+                     </div>
+                     <div className="grid grid-cols-2 gap-4">
+                       <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Email (Username)</label>
+                          <input 
+                            required 
+                            type="email"
+                            name="email" 
+                            value={formData.email} 
+                            onChange={handleInputChange} 
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" 
+                            placeholder="franchise@company.com" 
+                          />
+                       </div>
+                       <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
+                          <input 
+                            required 
+                            name="city" 
+                            value={formData.city} 
+                            onChange={handleInputChange} 
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" 
+                            placeholder="e.g. Mumbai" 
+                          />
+                       </div>
+                     </div>
+                     
+                     <div className="grid grid-cols-2 gap-4">
+                       <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                          <input 
+                            required={!editingId} // Only required for new accounts
+                            type="password"
+                            name="password" 
+                            value={formData.password} 
+                            onChange={handleInputChange} 
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" 
+                            placeholder={editingId ? "Leave blank to keep current" : "••••••••"} 
+                          />
+                       </div>
+                       <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                          <input 
+                            name="phone" 
+                            value={formData.phone} 
+                            onChange={handleInputChange} 
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" 
+                            placeholder="+91..." 
+                          />
+                       </div>
+                     </div>
+                     
+                     <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                        <select 
+                           name="status" 
+                           value={formData.status} 
+                           onChange={handleInputChange}
+                           className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none bg-white focus:ring-2 focus:ring-indigo-500"
+                        >
+                           <option>Active</option>
+                           <option>Inactive</option>
+                        </select>
+                     </div>
+
+                     {/* PARTNERS SECTION */}
+                     <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 mt-4">
+                        <div className="flex justify-between items-center mb-3">
+                            <h4 className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                                <Users className="w-4 h-4"/> Partnership Configuration
+                            </h4>
+                            <button 
+                                type="button" 
+                                onClick={addPartner}
+                                className="text-xs bg-white border border-gray-300 px-2 py-1 rounded-md text-gray-600 hover:text-indigo-600 hover:border-indigo-300 transition-colors"
+                            >
+                                + Add Partner
+                            </button>
+                        </div>
+                        
+                        <div className="space-y-2">
+                            {formData.partners && formData.partners.map((partner, idx) => (
+                                <div key={idx} className="flex gap-2 items-center">
+                                    <input 
+                                        placeholder="Partner Name" 
+                                        value={partner.name}
+                                        onChange={(e) => handlePartnerChange(idx, 'name', e.target.value)}
+                                        className="flex-1 p-2 border rounded-lg text-sm outline-none"
+                                    />
+                                    <div className="relative w-20">
+                                        <input 
+                                            type="number"
+                                            placeholder="%" 
+                                            value={partner.percentage}
+                                            onChange={(e) => handlePartnerChange(idx, 'percentage', e.target.value)}
+                                            className="w-full p-2 pr-6 border rounded-lg text-sm outline-none"
+                                        />
+                                        <Percent className="w-3 h-3 absolute right-2 top-1/2 -translate-y-1/2 text-gray-400" />
+                                    </div>
+                                    <button 
+                                        type="button" 
+                                        onClick={() => removePartner(idx)}
+                                        className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            ))}
+                            {(!formData.partners || formData.partners.length === 0) && (
+                                <p className="text-xs text-gray-400 italic text-center py-2">No partners added.</p>
+                            )}
+                        </div>
+                        
+                        <div className="mt-3 flex justify-between items-center text-xs text-gray-500">
+                            <span>Total Share:</span>
+                            <span className={`font-bold ${(formData.partners || []).reduce((sum, p) => sum + (p.percentage || 0), 0) === 100 ? 'text-green-600' : 'text-red-500'}`}>
+                                {(formData.partners || []).reduce((sum, p) => sum + (p.percentage || 0), 0)}%
+                            </span>
+                        </div>
+                     </div>
+                 </form>
+              </div>
                  
-                 <div className="grid grid-cols-2 gap-4">
-                   <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-                      <input 
-                        required={!editingId} // Only required for new accounts
-                        type="password"
-                        name="password" 
-                        value={formData.password} 
-                        onChange={handleInputChange} 
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" 
-                        placeholder={editingId ? "Leave blank to keep current" : "••••••••"} 
-                      />
-                   </div>
-                   <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-                      <input 
-                        name="phone" 
-                        value={formData.phone} 
-                        onChange={handleInputChange} 
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" 
-                        placeholder="+91..." 
-                      />
-                   </div>
-                 </div>
-                 
-                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                    <select 
-                       name="status" 
-                       value={formData.status} 
-                       onChange={handleInputChange}
-                       className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none bg-white focus:ring-2 focus:ring-indigo-500"
-                    >
-                       <option>Active</option>
-                       <option>Inactive</option>
-                    </select>
-                 </div>
-                 
-                 <div className="pt-4">
-                    <button type="submit" className="w-full bg-indigo-600 text-white py-2.5 rounded-lg font-medium hover:bg-indigo-700 transition-colors shadow-sm">
-                       {editingId ? 'Update Account' : 'Create Account'}
-                    </button>
-                 </div>
-              </form>
+              <div className="p-5 border-t border-gray-100 bg-gray-50">
+                <button 
+                    type="submit" 
+                    form="corporateForm"
+                    className="w-full bg-indigo-600 text-white py-2.5 rounded-lg font-medium hover:bg-indigo-700 transition-colors shadow-sm"
+                >
+                   {editingId ? 'Update Account' : 'Create Account'}
+                </button>
+              </div>
            </div>
         </div>
       )}
