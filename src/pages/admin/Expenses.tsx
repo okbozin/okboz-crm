@@ -1,10 +1,12 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { 
   Plus, Search, Filter, Download, Trash2, Edit2, 
   TrendingUp, TrendingDown, Wallet, ArrowUpCircle, ArrowDownCircle,
   Users, Clock, CheckCircle, RefreshCcw, X, Building2, PieChart as PieChartIcon,
-  Upload, FileText, Loader2, Link as LinkIcon
+  Upload, FileText, Loader2, Link as LinkIcon, Calendar, CreditCard, Tag,
+  History
 } from 'lucide-react';
 import { 
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend 
@@ -26,6 +28,23 @@ interface Expense {
   status?: 'Paid' | 'Pending' | 'Failed';
   receiptUrl?: string;
   ownerId?: string; 
+}
+
+// Interfaces for Partial Payments
+interface SettlementTransaction {
+    id: string;
+    amount: number;
+    date: string;
+    method: string;
+}
+
+interface SettlementRecord {
+    totalShare: number; 
+    paid: number;
+    status: 'Settled' | 'Partial' | 'Pending';
+    transactions: SettlementTransaction[];
+    // Legacy support fields
+    amount?: number; 
 }
 
 const CATEGORIES = [
@@ -53,7 +72,8 @@ const Expenses: React.FC = () => {
   const [filterCorporate, setFilterCorporate] = useState('All'); // For Admin view
 
   // Partnership Settlement State
-  const [settlementData, setSettlementData] = useState<Record<string, any>>({});
+  const [settlementData, setSettlementData] = useState<Record<string, SettlementRecord>>({});
+  const [paymentInputs, setPaymentInputs] = useState<Record<string, string>>({}); // Stores input amount per card
   const [selectedPaymentMethods, setSelectedPaymentMethods] = useState<Record<string, string>>({});
 
   // Modal State
@@ -67,6 +87,7 @@ const Expenses: React.FC = () => {
     amount: '',
     type: 'Expense',
     category: 'Other Expenses',
+    customCategory: '', // New field for manual entry
     date: new Date().toISOString().split('T')[0],
     paymentMethod: 'Bank Transfer',
     transactionNumber: '',
@@ -127,6 +148,7 @@ const Expenses: React.FC = () => {
         amount: '',
         type: 'Expense',
         category: 'Other Expenses',
+        customCategory: '',
         date: new Date().toISOString().split('T')[0],
         paymentMethod: 'Bank Transfer',
         transactionNumber: '',
@@ -169,6 +191,12 @@ const Expenses: React.FC = () => {
       const ownerId = isSuperAdmin ? 'admin' : sessionId; 
       const franchiseName = isSuperAdmin ? 'Head Office' : 'My Branch';
       
+      // Combine custom category into description if "Other Expenses" is selected
+      let finalDescription = formData.description;
+      if (formData.category === 'Other Expenses' && formData.customCategory.trim()) {
+          finalDescription = `[Type: ${formData.customCategory}] ${formData.description}`;
+      }
+
       const newExpense: Expense = {
           id: editingId || `TRX-${Date.now()}`,
           title: formData.title,
@@ -179,7 +207,7 @@ const Expenses: React.FC = () => {
           paymentMethod: formData.paymentMethod,
           transactionNumber: formData.transactionNumber,
           status: formData.status as 'Paid' | 'Pending' | 'Failed',
-          description: formData.description,
+          description: finalDescription,
           receiptUrl: receiptUrl,
           ownerId: ownerId,
           franchiseName: franchiseName 
@@ -230,28 +258,81 @@ const Expenses: React.FC = () => {
       } catch(e) {}
   };
 
-  // Partnership Handlers
+  // Partnership Handlers (New Partial Logic)
   const handlePaymentMethodSelect = (key: string, method: string) => {
       setSelectedPaymentMethods(prev => ({ ...prev, [key]: method }));
   };
 
-  const handleSettle = (key: string, amount: number) => {
-      const method = selectedPaymentMethods[key] || 'Bank Transfer';
-      const newSettlement = {
-          status: 'Settled',
-          paymentMethod: method,
-          date: new Date().toISOString(),
-          amount: amount
-      };
-      
-      const updatedSettlements = { ...settlementData, [key]: newSettlement };
-      setSettlementData(updatedSettlements);
-      localStorage.setItem('partnership_settlements', JSON.stringify(updatedSettlements));
+  const handleAmountInputChange = (key: string, value: string) => {
+      setPaymentInputs(prev => ({ ...prev, [key]: value }));
   };
 
-  const handleUnsettle = (key: string) => {
-      const updatedSettlements = { ...settlementData };
-      delete updatedSettlements[key];
+  const handleRecordPayment = (key: string, totalShareForPeriod: number) => {
+      const amountToPay = parseFloat(paymentInputs[key]);
+      if (!amountToPay || amountToPay <= 0) {
+          alert("Please enter a valid amount");
+          return;
+      }
+
+      const method = selectedPaymentMethods[key] || 'Bank Transfer';
+      const existingRecord = settlementData[key] || {
+          totalShare: totalShareForPeriod,
+          paid: 0,
+          status: 'Pending',
+          transactions: []
+      };
+
+      const newTransaction: SettlementTransaction = {
+          id: `TXN-${Date.now()}`,
+          amount: amountToPay,
+          date: new Date().toISOString(),
+          method: method
+      };
+
+      // Handle legacy data where 'paid' might be missing but 'amount' exists
+      const currentPaid = existingRecord.paid || (existingRecord.status === 'Settled' ? (existingRecord.amount || existingRecord.totalShare) : 0);
+
+      const updatedPaid = currentPaid + amountToPay;
+      // Using Math.ceil to avoid floating point issues when comparing
+      const newStatus = Math.ceil(updatedPaid) >= Math.ceil(totalShareForPeriod) ? 'Settled' : 'Partial';
+
+      const updatedRecord: SettlementRecord = {
+          ...existingRecord,
+          totalShare: totalShareForPeriod, 
+          paid: updatedPaid,
+          status: newStatus,
+          transactions: [newTransaction, ...(existingRecord.transactions || [])]
+      };
+
+      const updatedSettlements = { ...settlementData, [key]: updatedRecord };
+      setSettlementData(updatedSettlements);
+      localStorage.setItem('partnership_settlements', JSON.stringify(updatedSettlements));
+      
+      // Clear input
+      setPaymentInputs(prev => ({ ...prev, [key]: '' }));
+  };
+
+  const handleDeleteTransaction = (key: string, transactionId: string) => {
+      if(!window.confirm("Delete this payment record?")) return;
+
+      const record = settlementData[key];
+      if(!record) return;
+
+      const txToRemove = record.transactions.find(t => t.id === transactionId);
+      if(!txToRemove) return;
+
+      const updatedTransactions = record.transactions.filter(t => t.id !== transactionId);
+      const updatedPaid = record.paid - txToRemove.amount;
+      const newStatus = updatedPaid <= 0 ? 'Pending' : (updatedPaid >= record.totalShare ? 'Settled' : 'Partial');
+
+      const updatedRecord: SettlementRecord = {
+          ...record,
+          paid: updatedPaid,
+          status: newStatus as any,
+          transactions: updatedTransactions
+      };
+
+      const updatedSettlements = { ...settlementData, [key]: updatedRecord };
       setSettlementData(updatedSettlements);
       localStorage.setItem('partnership_settlements', JSON.stringify(updatedSettlements));
   };
@@ -325,6 +406,28 @@ const Expenses: React.FC = () => {
       }
       return corporatesList.find(c => c.email === corpId);
   }, [isSuperAdmin, filterCorporate, sessionId, corporatesList]);
+
+  // Helper to get previous month balance
+  const getPreviousMonthBalance = (corpId: string, partnerIndex: number) => {
+      try {
+          const date = new Date(monthFilter + "-01"); 
+          date.setMonth(date.getMonth() - 1);
+          const prevMonthStr = date.toISOString().slice(0, 7);
+          
+          const prevKey = `${corpId}_${prevMonthStr}_${partnerIndex}`;
+          const prevRecord = settlementData[prevKey];
+          
+          if (prevRecord) {
+              const total = prevRecord.totalShare || prevRecord.amount || 0;
+              const paid = prevRecord.paid !== undefined ? prevRecord.paid : (prevRecord.status === 'Settled' ? total : 0);
+              const balance = total - paid;
+              return balance > 0 ? balance : 0;
+          }
+      } catch (e) {
+          console.error("Date parsing error for prev balance", e);
+      }
+      return 0;
+  };
 
   return (
     <div className="space-y-6">
@@ -434,8 +537,8 @@ const Expenses: React.FC = () => {
                        data={stats.chartData}
                        cx="50%"
                        cy="50%"
-                       innerRadius={80}
-                       outerRadius={120}
+                       innerRadius={60}
+                       outerRadius={100}
                        paddingAngle={5}
                        dataKey="value"
                     >
@@ -444,7 +547,7 @@ const Expenses: React.FC = () => {
                        ))}
                     </Pie>
                     <Tooltip formatter={(value: number) => `₹${value.toLocaleString()}`} itemStyle={{ color: '#1f2937' }} />
-                    <Legend verticalAlign="middle" align="right" layout="vertical" iconType="circle" />
+                    <Legend verticalAlign="bottom" align="center" iconType="circle" wrapperStyle={{fontSize: '12px', paddingTop: '10px'}} />
                  </PieChart>
               </ResponsiveContainer>
            </div>
@@ -484,8 +587,28 @@ const Expenses: React.FC = () => {
                       
                       // Settlement Key: CorporateID + Month + PartnerIndex
                       const settlementKey = `${activeCorporate.id}_${monthFilter}_${index}`;
-                      const settlementInfo = settlementData[settlementKey]; // { status: 'Settled' | 'Pending', paymentMethod, date, amount }
-                      const isSettled = settlementInfo?.status === 'Settled';
+                      
+                      const settlementInfo = settlementData[settlementKey] || {
+                          totalShare: shareAmount,
+                          paid: 0,
+                          status: 'Pending',
+                          transactions: []
+                      };
+                      
+                      // Check for previous month dues
+                      const prevMonthBalance = getPreviousMonthBalance(activeCorporate.id, index);
+                      
+                      // Use snapshot if exists, else dynamic calc (fallback to legacy amount if present)
+                      const currentTotalShare = settlementInfo.transactions.length > 0 ? settlementInfo.totalShare : (settlementInfo.amount || shareAmount);
+                      
+                      const totalPayable = currentTotalShare + prevMonthBalance;
+                      
+                      // Handle legacy paid status vs new calculated paid
+                      const currentPaid = settlementInfo.paid || (settlementInfo.status === 'Settled' ? currentTotalShare : 0);
+                      const remainingBalance = totalPayable - currentPaid;
+                      
+                      // Status logic
+                      const status = remainingBalance <= 0 ? 'Settled' : (currentPaid > 0 ? 'Partial' : 'Pending');
 
                       return (
                           <div key={index} className={`rounded-xl p-5 border shadow-sm transition-all relative overflow-hidden group hover:shadow-md ${
@@ -505,61 +628,98 @@ const Expenses: React.FC = () => {
                               </div>
                               
                               {/* Amount Display */}
-                              <div className="mb-6">
-                                   <span className={`text-3xl font-black tracking-tight ${isLoss ? 'text-red-600' : 'text-emerald-600'}`}>
-                                      {isLoss ? '-₹' : '₹'}{Math.abs(shareAmount).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-                                   </span>
-                                   <p className={`text-xs font-medium mt-1 ${isLoss ? 'text-red-400' : 'text-emerald-500'}`}>
-                                      {isLoss ? 'Liability Amount' : 'Dividend Amount'}
-                                   </p>
+                              <div className="mb-4">
+                                   <div className="flex justify-between items-end mb-1">
+                                      <span className="text-xs text-gray-500">Current Share</span>
+                                      <span className={`font-bold ${isLoss ? 'text-red-600' : 'text-gray-800'}`}>
+                                         {isLoss ? '-₹' : '₹'}{Math.abs(currentTotalShare).toLocaleString()}
+                                      </span>
+                                   </div>
+                                   {prevMonthBalance > 0 && (
+                                       <div className="flex justify-between items-end mb-1 text-xs">
+                                          <span className="text-orange-600 font-medium">Prev. Outstanding</span>
+                                          <span className="text-orange-700 font-bold">+₹{prevMonthBalance.toLocaleString()}</span>
+                                       </div>
+                                   )}
+                                   <div className="border-t border-gray-200/50 my-2"></div>
+                                   <div className="flex justify-between items-end">
+                                      <span className="text-xs font-bold text-gray-600 uppercase">Total Payable</span>
+                                      <span className={`text-xl font-black tracking-tight ${isLoss ? 'text-red-600' : 'text-emerald-600'}`}>
+                                         {isLoss ? '-₹' : '₹'}{Math.abs(totalPayable).toLocaleString()}
+                                      </span>
+                                   </div>
                               </div>
 
+                              {/* Progress Bar */}
+                              {!isLoss && (
+                                  <div className="w-full bg-gray-200 rounded-full h-2 mb-4 overflow-hidden">
+                                      <div 
+                                          className={`h-2 rounded-full ${status === 'Settled' ? 'bg-emerald-500' : 'bg-blue-500'}`} 
+                                          style={{ width: `${totalPayable > 0 ? Math.min((currentPaid / totalPayable) * 100, 100) : 0}%` }}
+                                      ></div>
+                                  </div>
+                              )}
+
                               {/* Settlement Controls */}
-                              <div className="pt-4 border-t border-gray-200/50">
-                                  {isSettled ? (
-                                      <div className="flex flex-col gap-2">
-                                          <div className="flex items-center gap-2 text-xs font-bold text-emerald-700 bg-white px-3 py-2 rounded-lg border border-emerald-100 shadow-sm">
-                                              <CheckCircle className="w-4 h-4 text-emerald-500" /> 
-                                              Paid via {settlementInfo.paymentMethod}
-                                          </div>
-                                          <div className="flex justify-between items-center px-1">
-                                              <span className="text-[10px] text-gray-400">{new Date(settlementInfo.date).toLocaleDateString()}</span>
-                                              <button 
-                                                  onClick={() => handleUnsettle(settlementKey)}
-                                                  className="text-[10px] text-gray-400 hover:text-red-500 hover:underline flex items-center gap-1 transition-colors"
-                                              >
-                                                  <RefreshCcw className="w-3 h-3" /> Revert
-                                              </button>
-                                          </div>
+                              {!isLoss && (
+                                  <div className="bg-white/60 p-3 rounded-lg border border-gray-100 backdrop-blur-sm">
+                                      <div className="flex justify-between items-center mb-2">
+                                          <span className={`text-xs font-bold px-2 py-0.5 rounded ${status === 'Settled' ? 'bg-green-100 text-green-700' : status === 'Partial' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                                              {status}
+                                          </span>
+                                          <span className="text-xs font-bold text-gray-500">
+                                              Paid: ₹{currentPaid.toLocaleString()}
+                                          </span>
                                       </div>
-                                  ) : (
-                                      <div className="space-y-3">
-                                          <div className="flex justify-between items-center">
-                                              <span className="text-xs font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded border border-amber-100 flex items-center gap-1">
-                                                  <Clock className="w-3 h-3" /> Pending Settlement
-                                              </span>
-                                          </div>
-                                          <div className="flex gap-2">
+                                      
+                                      {remainingBalance > 0 && (
+                                          <div className="flex gap-2 mb-3">
+                                              <input 
+                                                  type="number"
+                                                  placeholder="Amount"
+                                                  className="w-20 px-2 py-1 text-xs border rounded outline-none"
+                                                  value={paymentInputs[settlementKey] ?? ''}
+                                                  onChange={(e) => handleAmountInputChange(settlementKey, e.target.value)}
+                                              />
                                               <select 
-                                                  className="bg-white border border-gray-200 text-gray-700 text-xs rounded-lg px-2 py-2 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 w-full shadow-sm"
+                                                  className="flex-1 text-xs border rounded px-1 outline-none bg-white"
                                                   value={selectedPaymentMethods[settlementKey] || 'Bank Transfer'}
                                                   onChange={(e) => handlePaymentMethodSelect(settlementKey, e.target.value)}
                                               >
                                                   <option>Bank Transfer</option>
                                                   <option>Cash</option>
-                                                  <option>Cheque</option>
                                                   <option>UPI</option>
                                               </select>
                                               <button 
-                                                  onClick={() => handleSettle(settlementKey, shareAmount)}
-                                                  className="bg-slate-800 hover:bg-slate-900 text-white text-xs px-4 py-2 rounded-lg font-bold shadow-sm transition-colors whitespace-nowrap"
+                                                  onClick={() => handleRecordPayment(settlementKey, shareAmount)}
+                                                  className="bg-slate-800 text-white text-xs px-3 py-1 rounded font-bold hover:bg-slate-900 transition-colors"
                                               >
-                                                  Settle
+                                                  Pay
                                               </button>
                                           </div>
-                                      </div>
-                                  )}
-                              </div>
+                                      )}
+
+                                      {/* History List */}
+                                      {settlementInfo.transactions && settlementInfo.transactions.length > 0 && (
+                                          <div className="mt-2 border-t border-gray-200 pt-2">
+                                              <p className="text-[10px] text-gray-400 font-bold uppercase mb-1 flex items-center gap-1">
+                                                  <History className="w-3 h-3" /> History
+                                              </p>
+                                              <div className="space-y-1 max-h-24 overflow-y-auto custom-scrollbar pr-1">
+                                                  {settlementInfo.transactions.map((tx, idx) => (
+                                                      <div key={idx} className="flex justify-between items-center text-[10px] text-gray-600 bg-white p-1 rounded border border-gray-100">
+                                                          <span>{new Date(tx.date).toLocaleDateString()} ({tx.method})</span>
+                                                          <div className="flex items-center gap-2">
+                                                              <span className="font-bold text-emerald-600">₹{tx.amount.toLocaleString()}</span>
+                                                              <button onClick={() => handleDeleteTransaction(settlementKey, tx.id)} className="text-red-400 hover:text-red-600"><X className="w-3 h-3"/></button>
+                                                          </div>
+                                                      </div>
+                                                  ))}
+                                              </div>
+                                          </div>
+                                      )}
+                                  </div>
+                              )}
                           </div>
                       );
                   })}
@@ -567,191 +727,331 @@ const Expenses: React.FC = () => {
           </div>
       )}
 
-      {/* Transactions Table */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm whitespace-nowrap">
-                  <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-200">
-                      <tr>
-                          <th className="px-6 py-4">Date</th>
-                          <th className="px-6 py-4">Transaction ID</th>
-                          <th className="px-6 py-4">Description</th>
-                          <th className="px-6 py-4">Category</th>
-                          <th className="px-6 py-4">Method</th>
-                          <th className="px-6 py-4">Status</th>
-                          <th className="px-6 py-4">Receipt</th>
-                          {isSuperAdmin && !isAdminExpensesTab && <th className="px-6 py-4">Franchise</th>}
-                          <th className="px-6 py-4 text-right">Amount</th>
-                          <th className="px-6 py-4 text-right">Actions</th>
-                      </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                      {filteredExpenses.map(item => (
-                          <tr key={item.id} className="hover:bg-gray-50 transition-colors">
-                              <td className="px-6 py-4 text-gray-600">{new Date(item.date).toLocaleDateString()}</td>
-                              <td className="px-6 py-4 text-xs font-mono text-gray-500">{item.transactionNumber || '-'}</td>
-                              <td className="px-6 py-4">
-                                  <div className="font-bold text-gray-800">{item.title}</div>
-                                  <div className="text-xs text-gray-500 truncate max-w-xs">{item.description}</div>
-                              </td>
-                              <td className="px-6 py-4">
-                                  <span className="px-2 py-1 rounded-full bg-gray-100 text-gray-600 text-xs font-medium border border-gray-200">
-                                      {item.category}
-                                  </span>
-                              </td>
-                              <td className="px-6 py-4 text-gray-600">{item.paymentMethod}</td>
-                              <td className="px-6 py-4">
-                                  <span className={`px-2 py-1 rounded-full text-xs font-bold border ${
-                                      item.status === 'Paid' ? 'bg-green-50 text-green-700 border-green-100' :
-                                      item.status === 'Pending' ? 'bg-yellow-50 text-yellow-700 border-yellow-100' :
-                                      'bg-red-50 text-red-700 border-red-100'
-                                  }`}>
-                                      {item.status || 'Paid'}
-                                  </span>
-                              </td>
-                              <td className="px-6 py-4">
-                                  {item.receiptUrl ? (
-                                      <a href={item.receiptUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline flex items-center gap-1">
-                                          <LinkIcon className="w-3 h-3" /> View
-                                      </a>
-                                  ) : (
-                                      <span className="text-gray-400 text-xs">-</span>
-                                  )}
-                              </td>
-                              {isSuperAdmin && !isAdminExpensesTab && (
-                                  <td className="px-6 py-4">
-                                      <span className="bg-indigo-50 text-indigo-700 px-2 py-1 rounded text-xs border border-indigo-100 font-medium">
-                                          {item.franchiseName || 'Head Office'}
-                                      </span>
-                                  </td>
+      {/* Main Grid: Transactions & Chart */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left Column: Transactions Table */}
+          <div className="lg:col-span-2">
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                  <div className="p-4 border-b border-gray-100 flex justify-between items-center">
+                      <h3 className="font-bold text-gray-800">Recent Transactions</h3>
+                      <span className="text-xs text-gray-500">{filteredExpenses.length} records</span>
+                  </div>
+                  <div className="overflow-x-auto">
+                      <table className="w-full text-left text-sm whitespace-nowrap">
+                          <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-200">
+                              <tr>
+                                  <th className="px-6 py-4">Date</th>
+                                  <th className="px-6 py-4">Transaction ID</th>
+                                  <th className="px-6 py-4">Description</th>
+                                  <th className="px-6 py-4">Category</th>
+                                  <th className="px-6 py-4">Method</th>
+                                  <th className="px-6 py-4">Status</th>
+                                  <th className="px-6 py-4">Receipt</th>
+                                  {isSuperAdmin && !isAdminExpensesTab && <th className="px-6 py-4">Franchise</th>}
+                                  <th className="px-6 py-4 text-right">Amount</th>
+                                  <th className="px-6 py-4 text-right">Actions</th>
+                              </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                              {filteredExpenses.map(item => (
+                                  <tr key={item.id} className="hover:bg-gray-50 transition-colors">
+                                      <td className="px-6 py-4 text-gray-600">{new Date(item.date).toLocaleDateString()}</td>
+                                      <td className="px-6 py-4 text-xs font-mono text-gray-500">{item.transactionNumber || '-'}</td>
+                                      <td className="px-6 py-4">
+                                          <div className="font-bold text-gray-800">{item.title}</div>
+                                          <div className="text-xs text-gray-500 truncate max-w-xs">{item.description}</div>
+                                      </td>
+                                      <td className="px-6 py-4">
+                                          <span className="px-2 py-1 rounded-full bg-gray-100 text-gray-600 text-xs font-medium border border-gray-200">
+                                              {item.category}
+                                          </span>
+                                      </td>
+                                      <td className="px-6 py-4 text-gray-600">{item.paymentMethod}</td>
+                                      <td className="px-6 py-4">
+                                          <span className={`px-2 py-1 rounded-full text-xs font-bold border ${
+                                              item.status === 'Paid' ? 'bg-green-50 text-green-700 border-green-100' :
+                                              item.status === 'Pending' ? 'bg-yellow-50 text-yellow-700 border-yellow-100' :
+                                              'bg-red-50 text-red-700 border-red-100'
+                                          }`}>
+                                              {item.status || 'Paid'}
+                                          </span>
+                                      </td>
+                                      <td className="px-6 py-4">
+                                          {item.receiptUrl ? (
+                                              <a href={item.receiptUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline flex items-center gap-1">
+                                                  <LinkIcon className="w-3 h-3" /> View
+                                              </a>
+                                          ) : (
+                                              <span className="text-gray-400 text-xs">-</span>
+                                          )}
+                                      </td>
+                                      {isSuperAdmin && !isAdminExpensesTab && (
+                                          <td className="px-6 py-4">
+                                              <span className="bg-indigo-50 text-indigo-700 px-2 py-1 rounded text-xs border border-indigo-100 font-medium">
+                                                  {item.franchiseName || 'Head Office'}
+                                              </span>
+                                          </td>
+                                      )}
+                                      <td className={`px-6 py-4 text-right font-bold ${item.type === 'Income' ? 'text-green-600' : 'text-red-600'}`}>
+                                          {item.type === 'Income' ? '+' : '-'}₹{item.amount.toLocaleString()}
+                                      </td>
+                                      <td className="px-6 py-4 text-right">
+                                          <div className="flex justify-end gap-2">
+                                              <button 
+                                                  onClick={() => {
+                                                      setEditingId(item.id);
+                                                      setFormData({
+                                                          title: item.title,
+                                                          amount: item.amount.toString(),
+                                                          type: item.type,
+                                                          category: item.category,
+                                                          customCategory: '', // Clear this on edit init, assuming category holds main value
+                                                          date: item.date,
+                                                          paymentMethod: item.paymentMethod,
+                                                          transactionNumber: item.transactionNumber || '',
+                                                          status: item.status || 'Paid',
+                                                          description: item.description,
+                                                          receiptUrl: item.receiptUrl || ''
+                                                      });
+                                                      setIsModalOpen(true);
+                                                  }}
+                                                  className="text-gray-400 hover:text-blue-600 p-1.5 rounded hover:bg-blue-50 transition-colors"
+                                              >
+                                                  <Edit2 className="w-4 h-4" />
+                                              </button>
+                                              <button 
+                                                  onClick={() => handleDelete(item.id, item.ownerId)}
+                                                  className="text-gray-400 hover:text-red-600 p-1.5 rounded hover:bg-red-50 transition-colors"
+                                              >
+                                                  <Trash2 className="w-4 h-4" />
+                                              </button>
+                                          </div>
+                                      </td>
+                                  </tr>
+                              ))}
+                              {filteredExpenses.length === 0 && (
+                                  <tr><td colSpan={isSuperAdmin && !isAdminExpensesTab ? 10 : 9} className="py-12 text-center text-gray-400">No transactions found.</td></tr>
                               )}
-                              <td className={`px-6 py-4 text-right font-bold ${item.type === 'Income' ? 'text-green-600' : 'text-red-600'}`}>
-                                  {item.type === 'Income' ? '+' : '-'}₹{item.amount.toLocaleString()}
-                              </td>
-                              <td className="px-6 py-4 text-right">
-                                  <div className="flex justify-end gap-2">
-                                      <button 
-                                          onClick={() => {
-                                              setEditingId(item.id);
-                                              setFormData({
-                                                  title: item.title,
-                                                  amount: item.amount.toString(),
-                                                  type: item.type,
-                                                  category: item.category,
-                                                  date: item.date,
-                                                  paymentMethod: item.paymentMethod,
-                                                  transactionNumber: item.transactionNumber || '',
-                                                  status: item.status || 'Paid',
-                                                  description: item.description,
-                                                  receiptUrl: item.receiptUrl || ''
-                                              });
-                                              setIsModalOpen(true);
-                                          }}
-                                          className="text-gray-400 hover:text-blue-600 p-1.5 rounded hover:bg-blue-50 transition-colors"
-                                      >
-                                          <Edit2 className="w-4 h-4" />
-                                      </button>
-                                      <button 
-                                          onClick={() => handleDelete(item.id, item.ownerId)}
-                                          className="text-gray-400 hover:text-red-600 p-1.5 rounded hover:bg-red-50 transition-colors"
-                                      >
-                                          <Trash2 className="w-4 h-4" />
-                                      </button>
-                                  </div>
-                              </td>
-                          </tr>
-                      ))}
-                      {filteredExpenses.length === 0 && (
-                          <tr><td colSpan={isSuperAdmin && !isAdminExpensesTab ? 10 : 9} className="py-12 text-center text-gray-400">No transactions found.</td></tr>
-                      )}
-                  </tbody>
-              </table>
+                          </tbody>
+                      </table>
+                  </div>
+              </div>
+          </div>
+
+          {/* Right Column: Chart */}
+          <div className="lg:col-span-1">
+              {stats.chartData.length > 0 ? (
+                <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm sticky top-6">
+                   <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2">
+                      <PieChartIcon className="w-5 h-5 text-emerald-600" /> Expense Breakdown
+                   </h3>
+                   <div className="h-80 w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                         <PieChart>
+                            <Pie
+                               data={stats.chartData}
+                               cx="50%"
+                               cy="50%"
+                               innerRadius={60}
+                               outerRadius={100}
+                               paddingAngle={5}
+                               dataKey="value"
+                            >
+                               {stats.chartData.map((entry, index) => (
+                                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                               ))}
+                            </Pie>
+                            <Tooltip formatter={(value: number) => `₹${value.toLocaleString()}`} itemStyle={{ color: '#1f2937' }} />
+                            <Legend verticalAlign="bottom" align="center" iconType="circle" wrapperStyle={{fontSize: '12px', paddingTop: '10px'}} />
+                         </PieChart>
+                      </ResponsiveContainer>
+                   </div>
+                </div>
+              ) : (
+                  <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm text-center text-gray-500 h-full flex flex-col items-center justify-center min-h-[300px]">
+                      <PieChartIcon className="w-12 h-12 text-gray-300 mb-2" />
+                      <p>No expense data to display chart.</p>
+                  </div>
+              )}
           </div>
       </div>
 
-      {/* Add/Edit Modal */}
+      {/* Add/Edit Modal - Restructured */}
       {isModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-              <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200">
-                  <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                      <h3 className="font-bold text-gray-800 text-lg">{editingId ? 'Edit Transaction' : 'New Transaction'}</h3>
+              <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+                  <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                      <h3 className="font-bold text-gray-800 text-lg">{editingId ? 'Edit Transaction' : 'Add Transaction'}</h3>
                       <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5"/></button>
                   </div>
-                  <form onSubmit={handleSaveTransaction} className="p-6 space-y-4">
-                      <div className="flex bg-gray-100 p-1 rounded-lg">
-                          <button type="button" onClick={() => setFormData({...formData, type: 'Income'})} className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${formData.type === 'Income' ? 'bg-white text-emerald-600 shadow-sm' : 'text-gray-500'}`}>Income</button>
-                          <button type="button" onClick={() => setFormData({...formData, type: 'Expense'})} className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${formData.type === 'Expense' ? 'bg-white text-red-600 shadow-sm' : 'text-gray-500'}`}>Expense</button>
+                  
+                  <form onSubmit={handleSaveTransaction} className="p-6">
+                      
+                      {/* 1. Transaction Type Toggle */}
+                      <div className="flex bg-gray-100 p-1.5 rounded-xl mb-6">
+                          <button 
+                            type="button" 
+                            onClick={() => setFormData({...formData, type: 'Income'})} 
+                            className={`flex-1 py-3 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${formData.type === 'Income' ? 'bg-white text-emerald-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                          >
+                            <ArrowUpCircle className="w-4 h-4" /> Income
+                          </button>
+                          <button 
+                            type="button" 
+                            onClick={() => setFormData({...formData, type: 'Expense'})} 
+                            className={`flex-1 py-3 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${formData.type === 'Expense' ? 'bg-white text-red-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                          >
+                            <ArrowDownCircle className="w-4 h-4" /> Expense
+                          </button>
                       </div>
 
-                      <div>
-                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Title</label>
-                          <input required value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="e.g. Office Rent" />
-                      </div>
+                      <div className="space-y-6">
+                          {/* 2. Core Financials */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                              <div>
+                                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Amount (₹)</label>
+                                  <div className="relative">
+                                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">₹</span>
+                                      <input 
+                                        required 
+                                        type="number" 
+                                        value={formData.amount} 
+                                        onChange={e => setFormData({...formData, amount: e.target.value})} 
+                                        className="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-lg font-bold text-gray-800" 
+                                        placeholder="0.00" 
+                                      />
+                                  </div>
+                              </div>
+                              <div>
+                                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Date</label>
+                                  <div className="relative">
+                                      <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                                      <input 
+                                        type="date" 
+                                        required 
+                                        value={formData.date} 
+                                        onChange={e => setFormData({...formData, date: e.target.value})} 
+                                        className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none" 
+                                      />
+                                  </div>
+                              </div>
+                          </div>
 
-                      <div className="grid grid-cols-2 gap-4">
-                          <div>
-                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Amount (₹)</label>
-                              <input required type="number" value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})} className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="0.00" />
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                              <div>
+                                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Status</label>
+                                  <select 
+                                    value={formData.status} 
+                                    onChange={e => setFormData({...formData, status: e.target.value})} 
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-emerald-500 outline-none"
+                                  >
+                                      <option>Paid</option>
+                                      <option>Pending</option>
+                                      <option>Failed</option>
+                                  </select>
+                              </div>
+                              <div>
+                                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Payment Method</label>
+                                  <div className="relative">
+                                      <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                                      <select 
+                                        value={formData.paymentMethod} 
+                                        onChange={e => setFormData({...formData, paymentMethod: e.target.value})} 
+                                        className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-emerald-500 outline-none appearance-none"
+                                      >
+                                          <option>Bank Transfer</option>
+                                          <option>Cash</option>
+                                          <option>UPI</option>
+                                          <option>Cheque</option>
+                                          <option>Card</option>
+                                      </select>
+                                  </div>
+                              </div>
                           </div>
-                          <div>
-                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Category</label>
-                              <select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} className="w-full px-4 py-2 border rounded-lg bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
-                                  {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                              </select>
-                          </div>
-                      </div>
 
-                      <div className="grid grid-cols-2 gap-4">
-                          <div>
-                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Date</label>
-                              <input type="date" required value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none" />
+                          {/* 3. Classification */}
+                          <div className="p-5 bg-gray-50 rounded-xl border border-gray-100 space-y-4">
+                              <h4 className="text-xs font-bold text-gray-400 uppercase flex items-center gap-2">
+                                  <Tag className="w-3 h-3" /> Classification
+                              </h4>
+                              
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                  <div>
+                                      <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                                      <select 
+                                        value={formData.category} 
+                                        onChange={e => setFormData({...formData, category: e.target.value})} 
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-emerald-500 outline-none"
+                                      >
+                                          {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                                      </select>
+                                      
+                                      {/* CONDITIONAL INPUT FOR OTHER EXPENSES */}
+                                      {formData.category === 'Other Expenses' && (
+                                          <div className="mt-2 animate-in fade-in slide-in-from-top-1">
+                                              <input 
+                                                  type="text"
+                                                  value={formData.customCategory}
+                                                  onChange={e => setFormData({...formData, customCategory: e.target.value})}
+                                                  placeholder="Specify Expense Details..."
+                                                  className="w-full px-4 py-2 border border-orange-300 bg-orange-50 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none text-sm text-orange-900 placeholder-orange-400"
+                                                  autoFocus
+                                              />
+                                          </div>
+                                      )}
+                                  </div>
+                                  <div>
+                                      <label className="block text-sm font-medium text-gray-700 mb-1">Title / Reference</label>
+                                      <input 
+                                        required 
+                                        value={formData.title} 
+                                        onChange={e => setFormData({...formData, title: e.target.value})} 
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none" 
+                                        placeholder="e.g. Office Rent" 
+                                      />
+                                  </div>
+                              </div>
+                              
+                              <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">Transaction ID (Optional)</label>
+                                  <input 
+                                    value={formData.transactionNumber} 
+                                    onChange={e => setFormData({...formData, transactionNumber: e.target.value})} 
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none font-mono text-sm" 
+                                    placeholder="e.g. UPI-1234567890" 
+                                  />
+                              </div>
                           </div>
-                          <div>
-                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Payment Method</label>
-                              <select value={formData.paymentMethod} onChange={e => setFormData({...formData, paymentMethod: e.target.value})} className="w-full px-4 py-2 border rounded-lg bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
-                                  <option>Bank Transfer</option>
-                                  <option>Cash</option>
-                                  <option>UPI</option>
-                                  <option>Cheque</option>
-                                  <option>Card</option>
-                              </select>
-                          </div>
-                      </div>
 
-                      <div className="grid grid-cols-2 gap-4">
+                          {/* 4. Evidence & Details */}
                           <div>
-                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Transaction No. (Optional)</label>
-                              <input value={formData.transactionNumber} onChange={e => setFormData({...formData, transactionNumber: e.target.value})} className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="e.g. UPI-12345" />
+                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Description</label>
+                              <textarea 
+                                rows={2} 
+                                value={formData.description} 
+                                onChange={e => setFormData({...formData, description: e.target.value})} 
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none resize-none" 
+                                placeholder="Additional details..." 
+                              />
                           </div>
-                          <div>
-                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Status</label>
-                              <select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})} className="w-full px-4 py-2 border rounded-lg bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
-                                  <option>Paid</option>
-                                  <option>Pending</option>
-                                  <option>Failed</option>
-                              </select>
-                          </div>
-                      </div>
 
-                      <div>
-                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Upload Receipt / File</label>
-                          <div className="flex gap-2">
+                          <div>
+                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Upload Receipt</label>
                               <input 
                                 ref={fileInputRef}
                                 type="file" 
-                                className="w-full px-4 py-2 border rounded-lg text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100" 
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer" 
                                 accept="image/*,.pdf"
                               />
                           </div>
                       </div>
 
-                      <div>
-                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Description (Optional)</label>
-                          <textarea rows={3} value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none resize-none" placeholder="Additional details..." />
-                      </div>
-
-                      <button type="submit" disabled={isUploading} className="w-full bg-emerald-600 text-white py-3 rounded-lg font-bold hover:bg-emerald-700 transition-colors shadow-lg mt-2 disabled:opacity-70 flex justify-center items-center gap-2">
-                          {isUploading && <Loader2 className="w-4 h-4 animate-spin" />}
+                      <button 
+                        type="submit" 
+                        disabled={isUploading} 
+                        className="w-full bg-emerald-600 text-white py-3.5 rounded-xl font-bold hover:bg-emerald-700 transition-colors shadow-lg mt-6 disabled:opacity-70 flex justify-center items-center gap-2"
+                      >
+                          {isUploading && <Loader2 className="w-5 h-5 animate-spin" />}
                           {editingId ? 'Update Transaction' : 'Save Transaction'}
                       </button>
                   </form>
