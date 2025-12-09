@@ -3,7 +3,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Users, Search, Plus, Edit2, Trash2, 
   MapPin, Phone, Mail, Building2,
-  X, Save, Briefcase, Shield, User, CreditCard, Lock, Eye, EyeOff, AlertCircle
+  X, Save, Briefcase, Shield, User, CreditCard, Lock, Eye, EyeOff, AlertCircle,
+  Calendar // Added Calendar import
 } from 'lucide-react';
 import { Employee, CorporateAccount } from '../../types';
 import { MOCK_EMPLOYEES } from '../../constants';
@@ -419,6 +420,13 @@ const StaffList: React.FC = () => {
                        <Phone className="w-4 h-4 text-gray-400 shrink-0" />
                        <span>{emp.phone}</span>
                     </div>
+                    
+                    {/* Joining Date Display */}
+                    <div className="flex items-center gap-2">
+                       <Calendar className="w-4 h-4 text-gray-400 shrink-0" />
+                       <span>Joined: {new Date(emp.joiningDate).toLocaleDateString()}</span>
+                    </div>
+
                     {emp.branch && (
                         <div className="flex items-center gap-2">
                            <MapPin className="w-4 h-4 text-gray-400 shrink-0" />
@@ -587,6 +595,11 @@ const StaffList: React.FC = () => {
                            <div className="space-y-1">
                                <label className="text-xs font-bold text-gray-500">Monthly Salary (₹)</label>
                                <input type="number" name="salary" value={formData.salary} onChange={handleInputChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500" placeholder="0" />
+                           </div>
+
+                           <div className="space-y-1">
+                               <label className="text-xs font-bold text-gray-500">Joining Date</label>
+                               <input type="date" name="joiningDate" value={formData.joiningDate} onChange={handleInputChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500" />
                            </div>
 
                            <div className="space-y-1 md:col-span-2">
