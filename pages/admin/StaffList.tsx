@@ -27,15 +27,11 @@ const getRandomColor = (name: string) => {
   return colors[Math.abs(hash) % colors.length];
 };
 
+// IDs must match exactly with what is checked in Layout.tsx
 const MODULE_PERMISSIONS = [
-  { id: 'customer_care', label: 'Customer Care' },
-  { id: 'live_tracking', label: 'Live Tracking' },
   { id: 'attendance', label: 'Attendance (Admin View)' },
   { id: 'staff_management', label: 'Staff Management' },
   { id: 'vendor_attachment', label: 'Vendor Attachment' },
-  { id: 'expenses', label: 'Finance & Expenses' },
-  { id: 'trip_booking', label: 'Trip Booking' },
-  { id: 'tasks', label: 'Tasks' },
   { id: 'branches', label: 'Branches' },
   { id: 'documents', label: 'Documents' },
   { id: 'payroll', label: 'Payroll' },
@@ -92,7 +88,8 @@ const StaffList: React.FC = () => {
     attendanceConfig: {
       gpsGeofencing: false,
       qrScan: false,
-      manualPunch: true
+      manualPunch: true,
+      manualPunchMode: 'Anywhere' // Default to Anywhere
     },
     workingHours: '' // Shift ID
   };
@@ -222,6 +219,16 @@ const StaffList: React.FC = () => {
       }));
   };
 
+  const handleManualPunchModeChange = (mode: 'Anywhere' | 'BranchRadius') => {
+      setFormData(prev => ({
+          ...prev,
+          attendanceConfig: {
+              ...prev.attendanceConfig!,
+              manualPunchMode: mode
+          }
+      }));
+  };
+
   const handleOpenAdd = () => {
       setEditingId(null);
       setFormData(initialFormState);
@@ -234,8 +241,14 @@ const StaffList: React.FC = () => {
       setFormData({
           ...initialFormState, // Ensure structure
           ...emp,
-          // Ensure nested objects exist
-          attendanceConfig: emp.attendanceConfig || { gpsGeofencing: false, qrScan: false, manualPunch: true },
+          // Ensure nested objects exist and have default values if legacy data missing
+          attendanceConfig: { 
+              gpsGeofencing: false, 
+              qrScan: false, 
+              manualPunch: true,
+              manualPunchMode: 'Anywhere', // Default if missing
+              ...emp.attendanceConfig
+          },
           allowedModules: emp.allowedModules || []
       });
       setConfirmPassword(emp.password || '');
@@ -632,14 +645,51 @@ const StaffList: React.FC = () => {
                                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.attendanceConfig?.qrScan ? 'translate-x-6' : 'translate-x-1'}`} />
                                        </div>
                                    </div>
-                                   <div className="flex items-center justify-between bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
-                                       <span className="text-sm text-gray-700 font-medium">Manual Punch (Web)</span>
-                                       <div 
-                                         className={`relative inline-flex h-6 w-11 items-center rounded-full cursor-pointer transition-colors ${formData.attendanceConfig?.manualPunch ? 'bg-emerald-500' : 'bg-gray-300'}`}
-                                         onClick={() => handleAttendanceConfigChange('manualPunch')}
-                                       >
-                                           <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.attendanceConfig?.manualPunch ? 'translate-x-6' : 'translate-x-1'}`} />
+                                   {/* Manual Punch with Location Option */}
+                                   <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm space-y-3">
+                                       <div className="flex items-center justify-between">
+                                           <span className="text-sm text-gray-700 font-medium">Manual Punch (Web)</span>
+                                           <div 
+                                             className={`relative inline-flex h-6 w-11 items-center rounded-full cursor-pointer transition-colors ${formData.attendanceConfig?.manualPunch ? 'bg-emerald-500' : 'bg-gray-300'}`}
+                                             onClick={() => handleAttendanceConfigChange('manualPunch')}
+                                           >
+                                               <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.attendanceConfig?.manualPunch ? 'translate-x-6' : 'translate-x-1'}`} />
+                                           </div>
                                        </div>
+                                       
+                                       {/* Sub-option: Location Restriction for Manual Punch */}
+                                       {formData.attendanceConfig?.manualPunch && (
+                                           <div className="pl-2 pt-2 border-t border-gray-100 flex flex-col gap-2 animate-in fade-in slide-in-from-top-1">
+                                               <label className="text-xs font-bold text-gray-500">Allowed Location</label>
+                                               <div className="flex gap-4">
+                                                   <label className="flex items-center gap-2 cursor-pointer">
+                                                       <input 
+                                                           type="radio" 
+                                                           name="manualPunchMode" 
+                                                           checked={formData.attendanceConfig?.manualPunchMode === 'Anywhere'} 
+                                                           onChange={() => handleManualPunchModeChange('Anywhere')}
+                                                           className="text-emerald-600 focus:ring-emerald-500"
+                                                       />
+                                                       <span className="text-sm text-gray-600">Anywhere</span>
+                                                   </label>
+                                                   <label className="flex items-center gap-2 cursor-pointer">
+                                                       <input 
+                                                           type="radio" 
+                                                           name="manualPunchMode" 
+                                                           checked={formData.attendanceConfig?.manualPunchMode === 'BranchRadius'} 
+                                                           onChange={() => handleManualPunchModeChange('BranchRadius')}
+                                                           className="text-emerald-600 focus:ring-emerald-500"
+                                                       />
+                                                       <span className="text-sm text-gray-600">Branch Radius</span>
+                                                   </label>
+                                               </div>
+                                               {formData.attendanceConfig?.manualPunchMode === 'BranchRadius' && (
+                                                   <p className="text-[10px] text-orange-600 bg-orange-50 p-1.5 rounded flex items-center gap-1">
+                                                       <AlertCircle className="w-3 h-3" /> Must be within branch range to punch.
+                                                   </p>
+                                               )}
+                                           </div>
+                                       )}
                                    </div>
                                </div>
                            </div>

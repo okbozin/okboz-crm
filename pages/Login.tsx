@@ -1,4 +1,5 @@
 
+
 import React, { useState } from 'react';
 import { UserRole } from '../types';
 import { Shield, User, Lock, Mail, ArrowRight, Building2, Eye, EyeOff, AlertTriangle, Cloud, BadgeCheck } from 'lucide-react';
@@ -53,6 +54,11 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             const foundCorp = corps.find((c: any) => c.email.toLowerCase() === email.toLowerCase() && c.password === password);
             
             if (foundCorp) {
+                if (foundCorp.status === 'Inactive') {
+                    setError('Account is inactive. Please contact administrator.');
+                    setIsLoading(false);
+                    return;
+                }
                 success = true;
                 role = UserRole.CORPORATE;
                 sessionId = foundCorp.email;
@@ -83,6 +89,13 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             }
 
             if (foundEmp) {
+                // CHECK FOR INACTIVE STATUS
+                if (foundEmp.status === 'Inactive') {
+                    setError('Account is inactive. Please contact your manager.');
+                    setIsLoading(false);
+                    return;
+                }
+
                 success = true;
                 role = UserRole.EMPLOYEE;
                 sessionId = foundEmp.id;

@@ -3,11 +3,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Calendar as CalendarIcon, Clock, MapPin, User, Download, ChevronLeft, ChevronRight, 
   Search, Filter, X, CheckCircle, AlertTriangle, LogIn, LogOut, RefreshCw, Fingerprint,
-  CheckSquare, XSquare
+  CheckSquare, XSquare, Building, Globe, ExternalLink, Navigation, List, LayoutGrid
 } from 'lucide-react';
 import AttendanceCalendar from '../../components/AttendanceCalendar';
 import { 
-  Employee, AttendanceStatus, DailyAttendance, Branch, UserRole 
+  Employee, AttendanceStatus, DailyAttendance, Branch, UserRole, LocationRecord 
 } from '../../types';
 import { MOCK_EMPLOYEES, getEmployeeAttendance } from '../../constants';
 
@@ -43,6 +43,22 @@ const findEmployeeById = (id: string): Employee | undefined => {
     return MOCK_EMPLOYEES.find(e => e.id === id);
 };
 
+// Helper: Calculate Haversine Distance
+const calculateDistanceInMeters = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371e3; // metres
+    const φ1 = lat1 * Math.PI/180;
+    const φ2 = lat2 * Math.PI/180;
+    const Δφ = (lat2-lat1) * Math.PI/180;
+    const Δλ = (lon2-lon1) * Math.PI/180;
+
+    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+            Math.cos(φ1) * Math.cos(φ2) *
+            Math.sin(Δλ/2) * Math.sin(Δλ/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+    return R * c;
+};
+
 export default function UserAttendance({ isAdmin = false }: UserAttendanceProps) {
   const sessionId = localStorage.getItem('app_session_id') || 'admin';
   const isSuperAdmin = sessionId === 'admin';
@@ -62,48 +78,70 @@ export default function UserAttendance({ isAdmin = false }: UserAttendanceProps)
   const [todayStatus, setTodayStatus] = useState<'In' | 'Out'>('Out');
   const [lastPunchTime, setLastPunchTime] = useState<string | null>(null);
   
+  // --- New Modal & Mode States ---
+  const [showPunchModal, setShowPunchModal] = useState(false);
+  const [punchMode, setPunchMode] = useState<'Remote' | 'Office' | null>(null);
+  const [selectedBranchId, setSelectedBranchId] = useState('');
+  
   // State for forcing refresh
   const [refreshKey, setRefreshKey] = useState(0);
 
-  useEffect(() => {
-    const loadData = () => {
-        try {
-            const corps = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
-            setCorporates(corps);
+  // View States
+  const [viewMode, setViewMode] = useState<'Monthly' | 'Daily'>('Monthly');
+  const [currentDate, setCurrentDate] = useState(new Date()); // For Monthly View (Stores Month)
+  const [dailyDate, setDailyDate] = useState(new Date().toISOString().split('T')[0]); // For Daily View
 
-            let staff: Employee[] = [];
-            let branches: any[] = [];
+  // Function to load data - moved outside to be reusable
+  const loadData = () => {
+    try {
+        const corps = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
+        setCorporates(corps);
 
-            if (isSuperAdmin) {
-                const adminStaff = JSON.parse(localStorage.getItem('staff_data') || '[]');
-                const adminBranches = JSON.parse(localStorage.getItem('branches_data') || '[]');
-                staff = [...adminStaff];
-                branches = [...adminBranches.map((b: any) => ({...b, owner: 'admin'}))];
+        let staff: Employee[] = [];
+        let branches: any[] = [];
 
-                corps.forEach((c: any) => {
-                    const cStaff = JSON.parse(localStorage.getItem(`staff_data_${c.email}`) || '[]');
-                    const cBranches = JSON.parse(localStorage.getItem(`branches_data_${c.email}`) || '[]');
-                    
-                    staff = [...staff, ...cStaff.map((s: any) => ({...s, corporateId: c.email}))];
-                    branches = [...branches, ...cBranches.map((b: any) => ({...b, owner: c.email}))];
-                });
-            } else {
-                // Corporate or Employee viewing (though Employee usually won't see admin view)
-                if (sessionId !== 'admin') {
-                     const cStaff = JSON.parse(localStorage.getItem(`staff_data_${sessionId}`) || '[]');
-                     const cBranches = JSON.parse(localStorage.getItem(`branches_data_${sessionId}`) || '[]');
-                     staff = cStaff.map((s: any) => ({...s, corporateId: sessionId}));
-                     branches = cBranches.map((b: any) => ({...b, owner: sessionId}));
-                }
-            }
-            setEmployees(staff);
-            setAllBranchesList(branches);
-        } catch (e) {
-            console.error("Error loading data", e);
+        if (isSuperAdmin) {
+            const adminStaff = JSON.parse(localStorage.getItem('staff_data') || '[]');
+            const adminBranches = JSON.parse(localStorage.getItem('branches_data') || '[]');
+            staff = [...adminStaff];
+            branches = [...adminBranches.map((b: any) => ({...b, owner: 'admin'}))];
+
+            corps.forEach((c: any) => {
+                const cStaff = JSON.parse(localStorage.getItem(`staff_data_${c.email}`) || '[]');
+                const cBranches = JSON.parse(localStorage.getItem(`branches_data_${c.email}`) || '[]');
+                
+                staff = [...staff, ...cStaff.map((s: any) => ({...s, corporateId: c.email}))];
+                branches = [...branches, ...cBranches.map((b: any) => ({...b, owner: c.email}))];
+            });
+        } else {
+            // Corporate or Employee viewing
+            const keySuffix = (isAdmin || sessionId === 'admin') ? sessionId : localStorage.getItem('logged_in_employee_corporate_id') || sessionId;
+            
+            const cStaff = JSON.parse(localStorage.getItem(`staff_data_${keySuffix}`) || '[]');
+            const cBranches = JSON.parse(localStorage.getItem(`branches_data_${keySuffix}`) || '[]');
+            staff = cStaff.map((s: any) => ({...s, corporateId: keySuffix}));
+            branches = cBranches.map((b: any) => ({...b, owner: keySuffix}));
         }
-    };
+        setEmployees(staff);
+        setAllBranchesList(branches);
+    } catch (e) {
+        console.error("Error loading data", e);
+    }
+  };
+
+  // Initial Load
+  useEffect(() => {
     loadData();
-  }, [isSuperAdmin, sessionId]);
+  }, [isSuperAdmin, sessionId, isAdmin]);
+
+  // Storage Listener for Real-time Updates (Permissions/Config)
+  useEffect(() => {
+    const handleStorageChange = () => {
+       loadData();
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [isSuperAdmin, sessionId, isAdmin]);
 
   const [loggedInUser, setLoggedInUser] = useState<Employee | null>(null);
 
@@ -111,7 +149,12 @@ export default function UserAttendance({ isAdmin = false }: UserAttendanceProps)
     if (!isAdmin) {
       const storedSessionId = localStorage.getItem('app_session_id');
       if (storedSessionId) {
-        const found = findEmployeeById(storedSessionId);
+        // Find latest data from the loaded 'employees' state if available, else fetch fresh
+        // This ensures config updates are reflected in 'loggedInUser'
+        const found = employees.length > 0 
+           ? employees.find(e => e.id === storedSessionId) 
+           : findEmployeeById(storedSessionId);
+           
         setLoggedInUser(found || null);
         
         // Determine Initial Punch Status based on LocalStorage Data
@@ -133,10 +176,16 @@ export default function UserAttendance({ isAdmin = false }: UserAttendanceProps)
             } else {
                 setTodayStatus('Out');
             }
+            
+            // Pre-select employee's branch for convenience
+            if (found.branch) {
+                const b = allBranchesList.find(br => br.name === found.branch);
+                if (b) setSelectedBranchId(b.id);
+            }
         }
       }
     }
-  }, [isAdmin]);
+  }, [isAdmin, allBranchesList, employees]); // Added employees dependency
 
   const filteredEmployeesForDisplay = useMemo(() => {
     let list = employees.filter(emp => emp);
@@ -151,11 +200,6 @@ export default function UserAttendance({ isAdmin = false }: UserAttendanceProps)
   }, [employees, filterCorporate, filterBranch, isSuperAdmin]);
 
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null); 
-  
-  // Date State
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState<'Individual' | 'MusterRoll'>('Individual');
-  const [periodType, setPeriodType] = useState<'Monthly'>('Monthly'); 
 
   useEffect(() => {
     if (isAdmin) {
@@ -175,11 +219,29 @@ export default function UserAttendance({ isAdmin = false }: UserAttendanceProps)
     }
   }, [isAdmin, filteredEmployeesForDisplay, loggedInUser]); 
 
-  // Attendance Data
+  // Attendance Data (Monthly View)
   const attendanceData = useMemo(() => {
       if (!selectedEmployee) return [];
       return getEmployeeAttendance(selectedEmployee, currentDate.getFullYear(), currentDate.getMonth());
-  }, [selectedEmployee, currentDate, todayStatus, refreshKey]); // Add refreshKey dependency
+  }, [selectedEmployee, currentDate, todayStatus, refreshKey]);
+
+  // Attendance Data (Daily View - All Employees)
+  const dailyReportData = useMemo(() => {
+      if (viewMode !== 'Daily') return [];
+      
+      const [year, month, day] = dailyDate.split('-').map(Number);
+      
+      return filteredEmployeesForDisplay.map(emp => {
+          const monthlyRecords = getEmployeeAttendance(emp, year, month - 1);
+          const dayRecord = monthlyRecords.find(r => r.date === dailyDate);
+          
+          return {
+              employee: emp,
+              record: dayRecord || { date: dailyDate, status: AttendanceStatus.NOT_MARKED }
+          };
+      });
+  }, [viewMode, dailyDate, filteredEmployeesForDisplay, refreshKey]);
+
 
   const stats = useMemo(() => {
       const present = attendanceData.filter(d => d.status === AttendanceStatus.PRESENT).length;
@@ -193,10 +255,9 @@ export default function UserAttendance({ isAdmin = false }: UserAttendanceProps)
 
   const currentMonthYearLabel = currentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
 
-  // --- Editing State ---
+  // --- Editing State (Admin) ---
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editModalData, setEditModalData] = useState<EditAttendanceData | null>(null);
-  const editEmployeeName = selectedEmployee?.name || '';
 
   const handleDateClickForAdminEdit = (day: DailyAttendance) => {
       if (!isAdmin) return;
@@ -210,107 +271,72 @@ export default function UserAttendance({ isAdmin = false }: UserAttendanceProps)
       setIsEditModalOpen(true);
   };
 
+  const handleEditDailyRecord = (emp: Employee, record: DailyAttendance) => {
+      if (!isAdmin) return;
+      // Temporarily switch selected employee context for the edit modal logic to work
+      setSelectedEmployee(emp);
+      setEditModalData({
+          date: record.date,
+          status: record.status,
+          checkIn: record.checkIn,
+          checkOut: record.checkOut,
+          isLate: record.isLate
+      });
+      setIsEditModalOpen(true);
+  };
+
   const handleSaveAdminAttendanceEdit = () => {
       if (!selectedEmployee || !editModalData) return;
-      
-      const year = currentDate.getFullYear();
-      const month = currentDate.getMonth();
+      // Determine year/month from the record being edited, not the view state
+      const [y, m] = editModalData.date.split('-').map(Number);
+      const year = y;
+      const month = m - 1;
+
       const key = `attendance_data_${selectedEmployee.id}_${year}_${month}`;
       
-      // Get existing
-      let currentMonthData = attendanceData;
-      
-      // Update specific day
+      // We need to re-fetch the specific employee's month data because 'attendanceData' might be stale 
+      // if we are in Daily view and switched contexts
+      let currentMonthData = getEmployeeAttendance(selectedEmployee, year, month);
+
       const updatedData = currentMonthData.map(d => {
           if (d.date === editModalData.date) {
-              return {
-                  ...d,
-                  status: editModalData.status,
-                  checkIn: editModalData.checkIn,
-                  checkOut: editModalData.checkOut,
-                  isLate: editModalData.isLate
-              };
+              return { ...d, status: editModalData.status, checkIn: editModalData.checkIn, checkOut: editModalData.checkOut, isLate: editModalData.isLate };
           }
           return d;
       });
-
-      // If day didn't exist (unlikely with mock gen), add it
+      
       if (!updatedData.find(d => d.date === editModalData.date)) {
+          // If record didn't exist (e.g. future date or missing), add it
           updatedData.push(editModalData as DailyAttendance);
       }
 
       localStorage.setItem(key, JSON.stringify(updatedData));
-      setRefreshKey(prev => prev + 1); // Force Refresh
+      setRefreshKey(prev => prev + 1);
       setIsEditModalOpen(false);
   };
 
-  // --- BULK ACTION HANDLER ---
-  const handleBulkAction = (status: AttendanceStatus) => {
+  // --- CORE PUNCH LOGIC ---
+
+  const initiatePunch = () => {
       if (!selectedEmployee) return;
-      
-      const actionName = status === AttendanceStatus.PRESENT ? 'PRESENT' : 'ABSENT';
-      if (!window.confirm(`Mark ${selectedEmployee.name} as ${actionName} for all applicable days in ${currentMonthYearLabel} (up to today)?`)) return;
-
-      const year = currentDate.getFullYear();
-      const month = currentDate.getMonth();
-      const key = `attendance_data_${selectedEmployee.id}_${year}_${month}`;
-
-      // Get "Today" for comparison to prevent future marking
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      // Use the current attendanceData as the base to ensure we respect existing Week Offs and Joining Dates
-      const updatedData = attendanceData.map(day => {
-          const currentDayDate = new Date(day.date);
-          currentDayDate.setHours(0, 0, 0, 0);
-
-          // 1. Future Check: Skip if date is after today
-          if (currentDayDate > today) return day;
-
-          // 2. Skip Week Offs (Don't overwrite weekends)
-          if (day.status === AttendanceStatus.WEEK_OFF) return day;
-
-          // 3. Skip Pre-Joining Dates (Don't mark absent/present before they joined)
-          const joiningDate = new Date(selectedEmployee.joiningDate);
-          joiningDate.setHours(0,0,0,0);
+      if (todayStatus === 'Out') {
+          // OPEN MODAL for Punch In
+          // Refresh employee data to check for latest config restrictions
+          const freshEmployee = employees.find(e => e.id === selectedEmployee.id);
+          if (freshEmployee) setSelectedEmployee(freshEmployee);
           
-          if (currentDayDate < joiningDate) return day;
-
-          // 4. Apply New Status
-          if (status === AttendanceStatus.PRESENT) {
-              return {
-                  ...day,
-                  status: AttendanceStatus.PRESENT,
-                  checkIn: '09:30 AM',
-                  checkOut: '06:30 PM',
-                  isLate: false
-              };
-          } else {
-              return {
-                  ...day,
-                  status: AttendanceStatus.ABSENT,
-                  checkIn: undefined,
-                  checkOut: undefined,
-                  isLate: false
-              };
-          }
-      });
-
-      // Save to storage
-      localStorage.setItem(key, JSON.stringify(updatedData));
-      
-      // Force refresh with a small timeout to ensure storage write completes
-      setTimeout(() => {
-          setRefreshKey(prev => prev + 1);
-      }, 50);
+          setShowPunchModal(true);
+          setPunchMode(null); // Reset mode
+      } else {
+          // Punch OUT directly (auto-capture location)
+          handlePunchOut();
+      }
   };
 
-  // --- PUNCH HANDLER ---
-  const handlePunchAction = () => {
+  const performPunch = (type: 'In' | 'Out', locationData?: LocationRecord) => {
       if (!selectedEmployee) return;
       setIsPunching(true);
 
-      // Simulate API Call delay
       setTimeout(() => {
           const now = new Date();
           const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
@@ -318,7 +344,6 @@ export default function UserAttendance({ isAdmin = false }: UserAttendanceProps)
           const year = now.getFullYear();
           const month = now.getMonth();
 
-          // Get existing data
           const key = `attendance_data_${selectedEmployee.id}_${year}_${month}`;
           let currentMonthData: DailyAttendance[] = [];
           try {
@@ -331,52 +356,135 @@ export default function UserAttendance({ isAdmin = false }: UserAttendanceProps)
           let updatedData = [...currentMonthData];
           let todayRecordIndex = updatedData.findIndex(d => d.date === dateStr);
 
-          if (todayStatus === 'Out') {
-              // PUNCH IN (Green -> Red)
+          if (type === 'In') {
               setTodayStatus('In');
               setLastPunchTime(timeStr);
               
+              const newRecord: DailyAttendance = {
+                  date: dateStr,
+                  status: AttendanceStatus.PRESENT,
+                  checkIn: timeStr,
+                  isLate: now.getHours() > 9 || (now.getHours() === 9 && now.getMinutes() > 45),
+                  punchInLocation: locationData
+              };
+
               if (todayRecordIndex >= 0) {
-                  updatedData[todayRecordIndex] = {
-                      ...updatedData[todayRecordIndex],
-                      status: AttendanceStatus.PRESENT,
-                      checkIn: timeStr,
-                      isLate: now.getHours() > 9 || (now.getHours() === 9 && now.getMinutes() > 45) // Late after 9:45 AM
-                  };
+                  updatedData[todayRecordIndex] = { ...updatedData[todayRecordIndex], ...newRecord };
               } else {
-                  // Should essentially typically exist from mock generation, but safe fallback
-                  updatedData.push({
-                      date: dateStr,
-                      status: AttendanceStatus.PRESENT,
-                      checkIn: timeStr,
-                      isLate: false
-                  });
+                  updatedData.push(newRecord);
               }
           } else {
-              // PUNCH OUT (Red -> Green)
               setTodayStatus('Out');
               setLastPunchTime(timeStr);
-              
               if (todayRecordIndex >= 0) {
                   updatedData[todayRecordIndex] = {
                       ...updatedData[todayRecordIndex],
-                      checkOut: timeStr
+                      checkOut: timeStr,
+                      punchOutLocation: locationData
                   };
               }
           }
 
-          // Save to storage
           localStorage.setItem(key, JSON.stringify(updatedData));
           setIsPunching(false);
-          // Force refresh of stats/calendar will happen via useMemo dependency on todayStatus
-      }, 1500);
+          setShowPunchModal(false);
+          setPunchMode(null);
+      }, 1000);
   };
+
+  const handlePunchOut = () => {
+      setIsPunching(true);
+      if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+              (position) => {
+                  const loc: LocationRecord = {
+                      lat: position.coords.latitude,
+                      lng: position.coords.longitude,
+                      address: 'Logged Out Location',
+                      timestamp: new Date().toISOString()
+                  };
+                  performPunch('Out', loc);
+              },
+              () => {
+                  // Fallback if denied
+                  performPunch('Out', { lat: 0, lng: 0, address: 'Unknown (GPS Denied)', timestamp: new Date().toISOString() });
+              }
+          );
+      } else {
+          performPunch('Out', { lat: 0, lng: 0, address: 'Unknown (No GPS)', timestamp: new Date().toISOString() });
+      }
+  };
+
+  const handleModeSelection = (mode: 'Remote' | 'Office') => {
+      setPunchMode(mode);
+  };
+
+  const handleConfirmPunchIn = () => {
+      setIsPunching(true);
+      if (!navigator.geolocation) {
+          alert("Geolocation is not supported by this browser.");
+          setIsPunching(false);
+          return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+          (position) => {
+              const userLat = position.coords.latitude;
+              const userLng = position.coords.longitude;
+
+              if (punchMode === 'Office') {
+                  if (!selectedBranchId) {
+                      alert("Please select a branch.");
+                      setIsPunching(false);
+                      return;
+                  }
+                  const branch = allBranchesList.find(b => b.id === selectedBranchId);
+                  if (!branch || !branch.lat || !branch.lng) {
+                      alert("Invalid branch configuration.");
+                      setIsPunching(false);
+                      return;
+                  }
+
+                  const dist = calculateDistanceInMeters(userLat, userLng, branch.lat, branch.lng);
+                  const radius = branch.radius || 100;
+
+                  if (dist <= radius) {
+                      performPunch('In', {
+                          lat: userLat,
+                          lng: userLng,
+                          address: `Office: ${branch.name}`,
+                          timestamp: new Date().toISOString()
+                      });
+                  } else {
+                      alert(`You are too far from ${branch.name}. Distance: ${Math.round(dist)}m (Max: ${radius}m).`);
+                      setIsPunching(false);
+                  }
+              } else {
+                  // Remote Mode
+                  performPunch('In', {
+                      lat: userLat,
+                      lng: userLng,
+                      address: 'Remote: Work from Anywhere',
+                      timestamp: new Date().toISOString()
+                  });
+              }
+          },
+          (error) => {
+              console.error(error);
+              alert("Location access is required to punch in.");
+              setIsPunching(false);
+          }
+      );
+  };
+
+  // Check restrictions - Logic corrected: if mode is 'BranchRadius', Remote is restricted.
+  const isBranchRestricted = selectedEmployee?.attendanceConfig?.manualPunchMode === 'BranchRadius';
+
+  // --- RENDER ---
 
   const employeePunchCardUI = (
       <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-xl flex flex-col items-center justify-center text-center h-full relative overflow-hidden">
-          {/* Decorative Background */}
           <div className={`absolute top-0 left-0 w-full h-2 bg-gradient-to-r ${todayStatus === 'In' ? 'from-red-400 to-orange-500' : 'from-emerald-400 to-teal-500'}`}></div>
-          
           <div className="mb-6">
               <h3 className="text-4xl font-black text-gray-800 tracking-tight">
                   {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -386,18 +494,15 @@ export default function UserAttendance({ isAdmin = false }: UserAttendanceProps)
               </p>
           </div>
           
-          {/* Fingerprint Button */}
           <div className="relative group">
-              {/* Ripple Effect Container */}
               {isPunching && (
                   <>
                     <span className={`absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping ${todayStatus === 'In' ? 'bg-red-400' : 'bg-emerald-400'}`}></span>
-                    <span className={`absolute inline-flex h-full w-full rounded-full opacity-50 animate-ping delay-150 ${todayStatus === 'In' ? 'bg-red-400' : 'bg-emerald-400'}`}></span>
                   </>
               )}
               
               <button 
-                  onClick={handlePunchAction}
+                  onClick={initiatePunch}
                   disabled={isPunching}
                   className={`relative z-10 w-40 h-40 rounded-full flex items-center justify-center border-[6px] transition-all duration-500 transform hover:scale-105 active:scale-95 shadow-2xl
                       ${todayStatus === 'In' 
@@ -406,11 +511,6 @@ export default function UserAttendance({ isAdmin = false }: UserAttendanceProps)
                       }`}
               >
                   <Fingerprint className={`w-20 h-20 transition-all duration-500 ${isPunching ? 'opacity-50 blur-[1px]' : 'opacity-100'}`} strokeWidth={1.5} />
-                  
-                  {/* Scanner Light Animation */}
-                  <div className={`absolute inset-0 rounded-full overflow-hidden pointer-events-none`}>
-                      <div className={`absolute top-0 left-0 w-full h-1.5 shadow-[0_0_15px_2px_rgba(255,255,255,0.8)] animate-[scan_2.5s_ease-in-out_infinite] ${todayStatus === 'In' ? 'bg-red-500' : 'bg-emerald-500'}`}></div>
-                  </div>
               </button>
           </div>
 
@@ -419,26 +519,16 @@ export default function UserAttendance({ isAdmin = false }: UserAttendanceProps)
                   {isPunching ? 'Processing...' : (todayStatus === 'In' ? 'Duty Active' : 'Ready to Start')}
               </p>
               <h4 className={`text-xl font-bold ${todayStatus === 'In' ? 'text-red-500' : 'text-emerald-600'}`}>
-                  {isPunching ? 'Scanning...' : (todayStatus === 'In' ? 'Punch Out' : 'Punch In')}
+                  {isPunching ? 'Please Wait...' : (todayStatus === 'In' ? 'Punch Out' : 'Punch In')}
               </h4>
           </div>
 
           {lastPunchTime && (
-              <div className="mt-6 py-2 px-4 bg-gray-50 rounded-lg border border-gray-100 flex items-center gap-2 text-xs font-medium text-gray-500">
+              <div className="mt-4 py-2 px-4 bg-gray-50 rounded-lg border border-gray-100 flex items-center gap-2 text-xs font-medium text-gray-500">
                   <Clock className="w-3.5 h-3.5" />
                   Last Action: {lastPunchTime}
               </div>
           )}
-
-          {/* CSS for Scan Animation */}
-          <style>{`
-            @keyframes scan {
-                0%, 100% { top: 0%; opacity: 0; }
-                10% { opacity: 1; }
-                90% { opacity: 1; }
-                50% { top: 100%; }
-            }
-          `}</style>
       </div>
   );
 
@@ -456,207 +546,224 @@ export default function UserAttendance({ isAdmin = false }: UserAttendanceProps)
         </div>
       </div>
 
-      {isAdmin ? (
-        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col md:flex-row gap-4 items-center flex-wrap">
-            {isSuperAdmin && (
+      {isAdmin && (
+        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col gap-4">
+            {/* Context Filters */}
+            <div className="flex flex-wrap gap-4 items-center">
+                {isSuperAdmin && (
+                    <select
+                        value={filterCorporate}
+                        onChange={(e) => { setFilterCorporate(e.target.value); setFilterBranch('All'); setFilterStaffId('All'); setSelectedEmployee(null); }}
+                        className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-emerald-500"
+                    >
+                        <option value="All">All Corporates</option>
+                        {corporates.map((c: any) => <option key={c.email} value={c.email}>{c.companyName}</option>)}
+                    </select>
+                )}
                 <select
-                    value={filterCorporate}
-                    onChange={(e) => { setFilterCorporate(e.target.value); setFilterBranch('All'); setFilterStaffId('All'); setSelectedEmployee(null); }}
-                    className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 min-w-[140px]"
+                    value={filterBranch}
+                    onChange={(e) => { setFilterBranch(e.target.value); setFilterStaffId('All'); setSelectedEmployee(null); }}
+                    className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-emerald-500"
                 >
-                    <option value="All">All Corporates</option>
-                    {corporates.map((c: any) => <option key={c.email} value={c.email}>{c.companyName}</option>)}
+                    <option value="All">All Branches</option>
+                    {allBranchesList.filter(b => b && (filterCorporate === 'All' || b.owner === filterCorporate)).map((b, i) => (
+                        <option key={i} value={b.name}>{b.name}</option>
+                    ))}
                 </select>
-            )}
-
-            <select
-                value={filterBranch}
-                onChange={(e) => { setFilterBranch(e.target.value); setFilterStaffId('All'); setSelectedEmployee(null); }}
-                className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 min-w-[140px]"
-            >
-                <option value="All">All Branches</option>
-                {allBranchesList
-                    .filter(b => b && (filterCorporate === 'All' || (b.owner === filterCorporate)))
-                    .map((b, i) => (
-                    <option key={i} value={b.name}>{b.name}</option>
-                ))}
-            </select>
-
-            <select
-                value={filterStaffId}
-                onChange={(e) => { 
-                    setFilterStaffId(e.target.value); 
-                    const emp = employees.find(ep => ep.id === e.target.value);
-                    setSelectedEmployee(emp || null);
-                }}
-                className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 min-w-[160px]"
-            >
-                {filteredEmployeesForDisplay.map(emp => (
-                    <option key={emp.id} value={emp.id}>{emp.name}</option>
-                ))}
-                {filteredEmployeesForDisplay.length === 0 && <option value="All">No Staff Found</option>}
-            </select>
-
-            <div className="flex bg-gray-100 p-1 rounded-lg ml-auto">
-                <button 
-                    onClick={() => setViewMode('Individual')}
-                    className={`px-3 py-1.5 text-xs font-bold rounded-md transition-colors ${viewMode === 'Individual' ? 'bg-white shadow text-emerald-600' : 'text-gray-500'}`}
-                >
-                    Individual
-                </button>
-                <button 
-                    onClick={() => setViewMode('MusterRoll')}
-                    className={`px-3 py-1.5 text-xs font-bold rounded-md transition-colors ${viewMode === 'MusterRoll' ? 'bg-white shadow text-emerald-600' : 'text-gray-500'}`}
-                >
-                    Muster Roll
-                </button>
+                
+                {/* View Mode Toggle */}
+                <div className="flex bg-gray-100 p-1 rounded-lg">
+                    <button 
+                        onClick={() => setViewMode('Monthly')}
+                        className={`px-3 py-1.5 text-xs font-bold rounded flex items-center gap-2 transition-all ${viewMode === 'Monthly' ? 'bg-white text-emerald-600 shadow-sm' : 'text-gray-500'}`}
+                    >
+                        <LayoutGrid className="w-4 h-4"/> Monthly Calendar
+                    </button>
+                    <button 
+                        onClick={() => setViewMode('Daily')}
+                        className={`px-3 py-1.5 text-xs font-bold rounded flex items-center gap-2 transition-all ${viewMode === 'Daily' ? 'bg-white text-emerald-600 shadow-sm' : 'text-gray-500'}`}
+                    >
+                        <List className="w-4 h-4"/> Daily Report
+                    </button>
+                </div>
+            </div>
+            
+            {/* View Specific Filters */}
+            <div className="flex items-center gap-4 animate-in fade-in slide-in-from-top-1">
+                {viewMode === 'Monthly' ? (
+                    <>
+                        <select
+                            value={filterStaffId}
+                            onChange={(e) => { 
+                                setFilterStaffId(e.target.value); 
+                                const emp = employees.find(ep => ep.id === e.target.value);
+                                setSelectedEmployee(emp || null);
+                            }}
+                            className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-emerald-500 min-w-[200px]"
+                        >
+                            <option value="All">Select Employee to View Calendar</option>
+                            {filteredEmployeesForDisplay.map(emp => (
+                                <option key={emp.id} value={emp.id}>{emp.name}</option>
+                            ))}
+                        </select>
+                        <input 
+                            type="month"
+                            value={currentDate.toISOString().slice(0, 7)}
+                            onChange={(e) => setCurrentDate(new Date(e.target.value))}
+                            className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-emerald-500"
+                        />
+                    </>
+                ) : (
+                    <>
+                        <label className="text-sm font-medium text-gray-600 flex items-center gap-2">
+                             Select Date:
+                             <input 
+                                type="date"
+                                value={dailyDate}
+                                onChange={(e) => setDailyDate(e.target.value)}
+                                className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-emerald-500"
+                            />
+                        </label>
+                    </>
+                )}
             </div>
         </div>
-      ) : (
-        // Employee Profile Header (Non-Admin View)
-        selectedEmployee && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex items-center gap-4">
-              <img src={selectedEmployee.avatar} alt={selectedEmployee.name} className="w-12 h-12 rounded-full border border-gray-100 object-cover" />
-              <div>
-                  <h3 className="text-lg font-bold text-gray-900">{selectedEmployee.name}</h3>
-                  <p className="text-sm text-gray-500">{selectedEmployee.role} • {selectedEmployee.branch}</p>
-              </div>
-              <div className="ml-auto text-center hidden sm:block">
-                  <p className="text-xs text-gray-500">Live Tracking</p>
-                  <span className={`w-2.5 h-2.5 rounded-full inline-block ${selectedEmployee.isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-gray-400'}`}></span>
-              </div>
-          </div>
-        )
       )}
 
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* Left Column (Punch Card for user, or Summary for Admin) */}
-        <div className="lg:col-span-1 space-y-6 flex flex-col">
-            {/* Date Navigator */}
-            <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
-                <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))} className="p-2 hover:bg-gray-100 rounded-full"><ChevronLeft className="w-5 h-5 text-gray-600" /></button>
-                <span className="font-bold text-gray-800">{currentMonthYearLabel}</span>
-                <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))} className="p-2 hover:bg-gray-100 rounded-full"><ChevronRight className="w-5 h-5 text-gray-600" /></button>
+        {/* Left Column - User Profile / Stats (Only for Employee View or Admin Monthly when selected) */}
+        {(!isAdmin || (isAdmin && viewMode === 'Monthly')) && (
+            <div className="lg:col-span-1 space-y-6 flex flex-col">
+                {viewMode === 'Monthly' && (
+                    <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
+                        <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))} className="p-2 hover:bg-gray-100 rounded-full"><ChevronLeft className="w-5 h-5 text-gray-600" /></button>
+                        <span className="font-bold text-gray-800">{currentMonthYearLabel}</span>
+                        <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))} className="p-2 hover:bg-gray-100 rounded-full"><ChevronRight className="w-5 h-5 text-gray-600" /></button>
+                    </div>
+                )}
+
+                {!isAdmin && selectedEmployee ? employeePunchCardUI : (
+                    isAdmin && selectedEmployee ? (
+                        // Admin view of employee card
+                         <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm text-center">
+                            <div className="w-20 h-20 bg-gray-100 rounded-full mx-auto flex items-center justify-center text-2xl font-bold text-gray-500 mb-3">
+                                {selectedEmployee.name.charAt(0)}
+                            </div>
+                            <h3 className="text-lg font-bold text-gray-800">{selectedEmployee.name}</h3>
+                            <p className="text-sm text-gray-500">{selectedEmployee.role}</p>
+                            <div className="mt-4 flex gap-2 justify-center">
+                                <span className="px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-lg font-bold">{selectedEmployee.branch || 'No Branch'}</span>
+                                <span className={`px-2 py-1 text-xs rounded-lg font-bold ${selectedEmployee.status === 'Active' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                                    {selectedEmployee.status}
+                                </span>
+                            </div>
+                         </div>
+                    ) : (
+                        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm text-center text-gray-500 flex-1 flex flex-col items-center justify-center min-h-[200px]">
+                            <User className="w-16 h-16 opacity-30 mb-4" />
+                            <p>{isAdmin ? 'Select an employee to view calendar' : 'Loading your profile...'}</p>
+                        </div>
+                    )
+                )}
             </div>
+        )}
 
-            {/* Punch Card UI */}
-            {!isAdmin && selectedEmployee ? employeePunchCardUI : (
-                <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm text-center text-gray-500 flex-1 flex flex-col items-center justify-center min-h-[200px]">
-                    <User className="w-16 h-16 opacity-30 mb-4" />
-                    <p>{isAdmin ? 'Select an employee to view details' : 'Loading your profile...'}</p>
-                </div>
-            )}
-        </div>
-
-        {/* Right Column: Calendar / Muster Roll */}
-        <div className="lg:col-span-2 space-y-6">
+        {/* Right Column: Calendar or Daily Report */}
+        <div className={`space-y-6 ${viewMode === 'Daily' ? 'lg:col-span-3' : 'lg:col-span-2'}`}>
             
-            {/* Bulk Actions Toolbar (Admin Only) */}
-            {isAdmin && viewMode === 'Individual' && selectedEmployee && (
-                <div className="flex gap-2 justify-end">
-                    <button 
-                        onClick={() => handleBulkAction(AttendanceStatus.PRESENT)}
-                        className="flex items-center gap-1.5 px-4 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg text-sm font-bold border border-emerald-200 transition-colors"
-                    >
-                        <CheckSquare className="w-4 h-4" /> Mark All Present
-                    </button>
-                    <button 
-                        onClick={() => handleBulkAction(AttendanceStatus.ABSENT)}
-                        className="flex items-center gap-1.5 px-4 py-2 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg text-sm font-bold border border-red-200 transition-colors"
-                    >
-                        <XSquare className="w-4 h-4" /> Mark All Absent
-                    </button>
-                </div>
+            {/* MONTHLY CALENDAR VIEW */}
+            {viewMode === 'Monthly' && selectedEmployee && (
+                <>
+                    {isAdmin && (
+                        <div className="flex gap-2 justify-end">
+                            {/* Potential Bulk Actions */}
+                        </div>
+                    )}
+                    <AttendanceCalendar
+                        data={attendanceData}
+                        stats={stats}
+                        onDateClick={handleDateClickForAdminEdit}
+                        currentMonthLabel={currentMonthYearLabel}
+                        showStats={true}
+                    />
+                </>
             )}
 
-            {isAdmin && viewMode === 'Individual' && selectedEmployee && (
-                <AttendanceCalendar
-                    data={attendanceData}
-                    stats={stats}
-                    onDateClick={handleDateClickForAdminEdit}
-                    currentMonthLabel={currentMonthYearLabel}
-                    showStats={periodType === 'Monthly'}
-                />
-            )}
-
-            {isAdmin && viewMode === 'MusterRoll' && (
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+            {/* DAILY REPORT VIEW */}
+            {viewMode === 'Daily' && isAdmin && (
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden animate-in fade-in slide-in-from-bottom-2">
                     <div className="p-4 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
-                        <h3 className="font-bold text-gray-800">Muster Roll - {currentMonthYearLabel}</h3>
-                        <button className="text-sm text-emerald-600 font-medium hover:underline flex items-center gap-1">
-                            <Download className="w-4 h-4" /> Export Muster
-                        </button>
+                        <h3 className="font-bold text-gray-800 text-sm flex items-center gap-2">
+                            <List className="w-4 h-4 text-emerald-600" /> Daily Attendance Report - {new Date(dailyDate).toLocaleDateString()}
+                        </h3>
+                        <div className="text-xs text-gray-500">
+                             Total: {dailyReportData.length} | 
+                             Present: {dailyReportData.filter(d => d.record.status === AttendanceStatus.PRESENT || d.record.status === AttendanceStatus.HALF_DAY).length}
+                        </div>
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm text-left">
-                            <thead className="bg-white text-gray-500 font-medium border-b border-gray-200">
+                            <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-200">
                                 <tr>
-                                    <th className="px-4 py-3 sticky left-0 bg-white z-10 w-40">Employee</th>
-                                    {[...Array(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate())].map((_, i) => (
-                                        <th key={i} className="px-2 py-3 text-center w-10">
-                                            {i + 1}
-                                        </th>
-                                    ))}
-                                    <th className="px-4 py-3 text-center">P</th>
-                                    <th className="px-4 py-3 text-center">A</th>
-                                    <th className="px-4 py-3 text-center">L</th>
+                                    <th className="px-6 py-3">Employee</th>
+                                    <th className="px-6 py-3">Branch</th>
+                                    <th className="px-6 py-3">Status</th>
+                                    <th className="px-6 py-3">Punch In</th>
+                                    <th className="px-6 py-3">In Location</th>
+                                    <th className="px-6 py-3">Punch Out</th>
+                                    <th className="px-6 py-3 text-right">Action</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
-                                {filteredEmployeesForDisplay.map(emp => {
-                                    const empAttendance = getEmployeeAttendance(emp, currentDate.getFullYear(), currentDate.getMonth());
-                                    const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
-                                    
-                                    const dailyRecords = empAttendance.filter(d => parseInt(d.date.split('-')[2]) <= daysInMonth);
-
-                                    const summary = dailyRecords.reduce((acc, rec) => {
-                                        if (rec.status === AttendanceStatus.PRESENT || rec.status === AttendanceStatus.HALF_DAY) acc.P++;
-                                        if (rec.status === AttendanceStatus.ABSENT) acc.A++;
-                                        if (rec.isLate) acc.L++;
-                                        return acc;
-                                    }, { P: 0, A: 0, L: 0 });
-
-                                    return (
-                                        <tr key={emp.id} className="hover:bg-gray-50 transition-colors">
-                                            <td className="px-4 py-3 sticky left-0 bg-white z-10 w-40">
-                                                <div className="font-medium text-gray-900">{emp.name}</div>
-                                                <div className="text-xs text-gray-500">{emp.role}</div>
-                                            </td>
-                                            {/* We need to map through all days of month, finding record or putting empty */}
-                                            {[...Array(daysInMonth)].map((_, idx) => {
-                                                const dayNum = idx + 1;
-                                                const record = dailyRecords.find(r => parseInt(r.date.split('-')[2]) === dayNum);
-                                                
-                                                return (
-                                                    <td key={idx} className="px-2 py-3 text-center">
-                                                        <span className={`inline-block w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                                                            record?.status === AttendanceStatus.PRESENT ? 'bg-emerald-100 text-emerald-700' :
-                                                            record?.status === AttendanceStatus.ABSENT ? 'bg-red-100 text-red-700' :
-                                                            record?.status === AttendanceStatus.HALF_DAY ? 'bg-amber-100 text-amber-700' :
-                                                            record?.status === AttendanceStatus.PAID_LEAVE ? 'bg-blue-100 text-blue-700' :
-                                                            record?.status === AttendanceStatus.WEEK_OFF ? 'bg-slate-100 text-slate-500' :
-                                                            'bg-gray-100 text-gray-400'
-                                                        }`}>
-                                                            {record?.status === AttendanceStatus.PRESENT ? (record.isLate ? 'L' : 'P') :
-                                                             record?.status === AttendanceStatus.ABSENT ? 'A' :
-                                                             record?.status === AttendanceStatus.HALF_DAY ? 'H' :
-                                                             record?.status === AttendanceStatus.PAID_LEAVE ? 'V' :
-                                                             record?.status === AttendanceStatus.WEEK_OFF ? 'W' :
-                                                             '-'}
-                                                        </span>
-                                                    </td>
-                                                );
-                                            })}
-                                            <td className="px-4 py-3 text-center font-bold text-emerald-600">{summary.P}</td>
-                                            <td className="px-4 py-3 text-center font-bold text-red-600">{summary.A}</td>
-                                            <td className="px-4 py-3 text-center font-bold text-orange-600">{summary.L}</td>
-                                        </tr>
-                                    );
-                                })}
-                                {filteredEmployeesForDisplay.length === 0 && (
-                                    <tr><td colSpan={35} className="py-8 text-center text-gray-500">No employees selected or found.</td></tr>
+                                {dailyReportData.map(({employee, record}) => (
+                                    <tr key={employee.id} className="hover:bg-gray-50 transition-colors">
+                                        <td className="px-6 py-3 font-medium text-gray-900">
+                                            {employee.name}
+                                            <div className="text-xs text-gray-400 font-normal">{employee.role}</div>
+                                        </td>
+                                        <td className="px-6 py-3 text-gray-600">{employee.branch || '-'}</td>
+                                        <td className="px-6 py-3">
+                                             <span className={`px-2 py-1 rounded text-xs font-bold ${
+                                                 record.status === AttendanceStatus.PRESENT ? 'bg-emerald-100 text-emerald-700' :
+                                                 record.status === AttendanceStatus.ABSENT ? 'bg-red-100 text-red-700' :
+                                                 record.status === AttendanceStatus.HALF_DAY ? 'bg-amber-100 text-amber-700' :
+                                                 record.status === AttendanceStatus.WEEK_OFF ? 'bg-gray-100 text-gray-600' :
+                                                 'bg-gray-50 text-gray-400 border border-gray-200'
+                                             }`}>
+                                                 {String(record.status).replace('_', ' ')}
+                                                 {record.isLate && ' (Late)'}
+                                             </span>
+                                        </td>
+                                        <td className="px-6 py-3 font-mono text-xs">{record.checkIn || '-'}</td>
+                                        <td className="px-6 py-3">
+                                            {record.punchInLocation ? (
+                                                <a 
+                                                    href={`https://www.google.com/maps/search/?api=1&query=${record.punchInLocation.lat},${record.punchInLocation.lng}`} 
+                                                    target="_blank" 
+                                                    rel="noopener noreferrer"
+                                                    className="flex items-center gap-1 text-xs text-blue-600 hover:underline max-w-[150px] truncate"
+                                                    title={record.punchInLocation.address}
+                                                >
+                                                    <MapPin className="w-3 h-3 flex-shrink-0" /> 
+                                                    {record.punchInLocation.address.includes('Remote') ? 'Remote' : 'Office'}
+                                                </a>
+                                            ) : '-'}
+                                        </td>
+                                        <td className="px-6 py-3 font-mono text-xs">{record.checkOut || '-'}</td>
+                                        <td className="px-6 py-3 text-right">
+                                            <button 
+                                                onClick={() => handleEditDailyRecord(employee, record)}
+                                                className="text-gray-400 hover:text-emerald-600 p-1 rounded hover:bg-emerald-50"
+                                            >
+                                                Edit
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                                {dailyReportData.length === 0 && (
+                                    <tr><td colSpan={7} className="py-8 text-center text-gray-400">No employees found for this filter.</td></tr>
                                 )}
                             </tbody>
                         </table>
@@ -664,19 +771,153 @@ export default function UserAttendance({ isAdmin = false }: UserAttendanceProps)
                 </div>
             )}
 
-            {!isAdmin && selectedEmployee && (
-                <AttendanceCalendar
-                    data={attendanceData}
-                    stats={stats}
-                    currentMonthLabel={currentMonthYearLabel}
-                    showStats={true}
-                />
+            {/* Existing Log Table for Monthly View (kept for consistency if desired, or can be hidden) */}
+            {viewMode === 'Monthly' && isAdmin && selectedEmployee && (
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mt-6">
+                    <div className="p-4 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
+                        <h3 className="font-bold text-gray-800 text-sm flex items-center gap-2">
+                            <Navigation className="w-4 h-4 text-blue-500" /> Monthly Location Log
+                        </h3>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-gray-50 text-gray-500 font-medium">
+                                <tr>
+                                    <th className="px-4 py-3">Date</th>
+                                    <th className="px-4 py-3">Punch In</th>
+                                    <th className="px-4 py-3">In Location</th>
+                                    <th className="px-4 py-3">Punch Out</th>
+                                    <th className="px-4 py-3">Out Location</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {attendanceData
+                                    .filter(d => d.checkIn || d.checkOut)
+                                    .sort((a,b) => b.date.localeCompare(a.date))
+                                    .map((row, idx) => (
+                                    <tr key={idx} className="hover:bg-gray-50">
+                                        <td className="px-4 py-3 font-medium text-gray-800">{row.date}</td>
+                                        <td className="px-4 py-3 text-emerald-600 font-mono text-xs">{row.checkIn || '-'}</td>
+                                        <td className="px-4 py-3">
+                                            {row.punchInLocation ? (
+                                                <a 
+                                                    href={`https://www.google.com/maps/search/?api=1&query=${row.punchInLocation.lat},${row.punchInLocation.lng}`} 
+                                                    target="_blank" 
+                                                    rel="noopener noreferrer"
+                                                    className="flex items-center gap-1 text-xs text-blue-600 hover:underline"
+                                                >
+                                                    <MapPin className="w-3 h-3" /> 
+                                                    {row.punchInLocation.address.includes('Remote') ? 'Remote' : 'Office'}
+                                                </a>
+                                            ) : '-'}
+                                        </td>
+                                        <td className="px-4 py-3 text-red-500 font-mono text-xs">{row.checkOut || '-'}</td>
+                                        <td className="px-4 py-3">
+                                            {row.punchOutLocation ? (
+                                                <a 
+                                                    href={`https://www.google.com/maps/search/?api=1&query=${row.punchOutLocation.lat},${row.punchOutLocation.lng}`} 
+                                                    target="_blank" 
+                                                    rel="noopener noreferrer"
+                                                    className="flex items-center gap-1 text-xs text-gray-500 hover:text-blue-600"
+                                                >
+                                                    <MapPin className="w-3 h-3" /> View
+                                                </a>
+                                            ) : '-'}
+                                        </td>
+                                    </tr>
+                                ))}
+                                {attendanceData.filter(d => d.checkIn || d.checkOut).length === 0 && (
+                                    <tr><td colSpan={5} className="py-6 text-center text-gray-400 italic">No punch records found for this month.</td></tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             )}
         </div>
       </div>
+
+      {/* PUNCH MODE MODAL */}
+      {showPunchModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
+                  <div className="p-6 bg-gradient-to-r from-slate-900 to-slate-800 text-white flex justify-between items-center">
+                      <h3 className="font-bold text-lg">Select Work Mode</h3>
+                      <button onClick={() => { setShowPunchModal(false); setIsPunching(false); }} className="text-white/70 hover:text-white"><X className="w-5 h-5"/></button>
+                  </div>
+                  
+                  <div className="p-6 space-y-4">
+                      {/* Grid column logic adjusted: If Restricted, use 1 col (hide Remote). If not restricted, use 2 cols (show both). */}
+                      <div className={`grid gap-4 ${isBranchRestricted ? 'grid-cols-1' : 'grid-cols-2'}`}>
+                          
+                          {/* REMOTE CARD - Only shown if NOT restricted */}
+                          {!isBranchRestricted && (
+                              <div 
+                                  onClick={() => handleModeSelection('Remote')}
+                                  className={`border-2 rounded-xl p-4 cursor-pointer transition-all flex flex-col items-center gap-3 text-center ${
+                                      punchMode === 'Remote' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-blue-300'
+                                  }`}
+                              >
+                                  <div className={`p-3 rounded-full ${punchMode === 'Remote' ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'}`}>
+                                      <Globe className="w-6 h-6" />
+                                  </div>
+                                  <div>
+                                      <h4 className="font-bold text-sm text-gray-800">Remote</h4>
+                                      <p className="text-xs text-gray-500">Work from Anywhere</p>
+                                  </div>
+                              </div>
+                          )}
+
+                          {/* OFFICE CARD - Always shown, possibly centered if it's the only one */}
+                          <div 
+                              onClick={() => handleModeSelection('Office')}
+                              className={`border-2 rounded-xl p-4 cursor-pointer transition-all flex flex-col items-center gap-3 text-center ${
+                                  punchMode === 'Office' ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 hover:border-emerald-300'
+                              }`}
+                          >
+                              <div className={`p-3 rounded-full ${punchMode === 'Office' ? 'bg-emerald-100 text-emerald-600' : 'bg-gray-100 text-gray-500'}`}>
+                                  <Building className="w-6 h-6" />
+                              </div>
+                              <div>
+                                  <h4 className="font-bold text-sm text-gray-800">Office</h4>
+                                  <p className="text-xs text-gray-500">Work from Branch</p>
+                              </div>
+                          </div>
+                      </div>
+
+                      {punchMode === 'Office' && (
+                          <div className="animate-in fade-in slide-in-from-top-2">
+                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Select Branch</label>
+                              <select 
+                                  value={selectedBranchId} 
+                                  onChange={(e) => setSelectedBranchId(e.target.value)}
+                                  className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
+                              >
+                                  <option value="">-- Choose Branch --</option>
+                                  {allBranchesList.map(b => (
+                                      <option key={b.id} value={b.id}>{b.name}</option>
+                                  ))}
+                              </select>
+                              <p className="text-xs text-orange-600 mt-2 flex items-center gap-1">
+                                  <AlertTriangle className="w-3 h-3" /> GPS verification required.
+                              </p>
+                          </div>
+                      )}
+
+                      <button 
+                          onClick={handleConfirmPunchIn}
+                          disabled={!punchMode || isPunching || (punchMode === 'Office' && !selectedBranchId)}
+                          className="w-full py-3 rounded-xl font-bold text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg mt-2"
+                      >
+                          {isPunching ? 'Verifying Location...' : 'Confirm Punch In'}
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
       
-      {/* Admin Edit Modal */}
-       {isEditModalOpen && editModalData && selectedEmployee && (
+      {/* Admin Edit Modal (Existing code reused) */}
+       {isEditModalOpen && editModalData && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
             <div className="bg-white rounded-2xl shadow-xl w-full max-w-md animate-in fade-in zoom-in duration-200">
                 <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-2xl">
@@ -685,14 +926,7 @@ export default function UserAttendance({ isAdmin = false }: UserAttendanceProps)
                 </div>
                 
                 <div className="p-6 space-y-4">
-                    <div className="flex items-center gap-3 bg-gray-50 p-3 rounded-lg border border-gray-100">
-                        <img src={selectedEmployee.avatar} alt="" className="w-10 h-10 rounded-full" />
-                        <div>
-                            <p className="font-bold text-gray-900">{editEmployeeName}</p>
-                            <p className="text-xs text-gray-500">{selectedEmployee.role}</p>
-                        </div>
-                    </div>
-
+                    {/* ... (Existing Edit Form) ... */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
                         <select
@@ -705,40 +939,29 @@ export default function UserAttendance({ isAdmin = false }: UserAttendanceProps)
                             ))}
                         </select>
                     </div>
-
-                    {(editModalData.status === AttendanceStatus.PRESENT || editModalData.status === AttendanceStatus.HALF_DAY) && (
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Check-in</label>
-                                <input
-                                    type="time"
-                                    value={editModalData.checkIn ? new Date(`2000-01-01 ${editModalData.checkIn}`).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : ''}
-                                    onChange={(e) => setEditModalData(prev => prev ? { ...prev, checkIn: new Date(`2000-01-01 ${e.target.value}`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) } : null)}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Check-out</label>
-                                <input
-                                    type="time"
-                                    value={editModalData.checkOut ? new Date(`2000-01-01 ${editModalData.checkOut}`).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : ''}
-                                    onChange={(e) => setEditModalData(prev => prev ? { ...prev, checkOut: new Date(`2000-01-01 ${e.target.value}`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) } : null)}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
-                                />
-                            </div>
-                            <div className="col-span-2">
-                                <label className="flex items-center text-sm font-medium text-gray-700">
-                                    <input
-                                        type="checkbox"
-                                        checked={editModalData.isLate || false}
-                                        onChange={(e) => setEditModalData(prev => prev ? { ...prev, isLate: e.target.checked } : null)}
-                                        className="mr-2 h-4 w-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
-                                    />
-                                    Mark as Late
-                                </label>
-                            </div>
+                    {/* Time Inputs */}
+                     <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Check In</label>
+                            <input 
+                                type="text" 
+                                placeholder="09:30 AM"
+                                value={editModalData.checkIn || ''}
+                                onChange={(e) => setEditModalData(prev => prev ? { ...prev, checkIn: e.target.value } : null)}
+                                className="w-full p-2 border border-gray-300 rounded-lg text-sm"
+                            />
                         </div>
-                    )}
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Check Out</label>
+                            <input 
+                                type="text" 
+                                placeholder="06:30 PM"
+                                value={editModalData.checkOut || ''}
+                                onChange={(e) => setEditModalData(prev => prev ? { ...prev, checkOut: e.target.value } : null)}
+                                className="w-full p-2 border border-gray-300 rounded-lg text-sm"
+                            />
+                        </div>
+                    </div>
 
                     <div className="pt-4 flex justify-end gap-3">
                         <button onClick={() => setIsEditModalOpen(false)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors">Cancel</button>

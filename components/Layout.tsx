@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, MapPin, Calendar, DollarSign, Briefcase, Menu, X, LogOut, UserCircle, Building, Settings, Target, CreditCard, ClipboardList, ReceiptIndianRupee, Navigation, Car, Building2, PhoneIncoming, GripVertical, Edit2, Check, FileText, Layers, PhoneCall, Bus, Bell, Sun, Moon, Monitor, Mail, UserCog, CarFront, BellRing, BarChart3, Map, Headset, BellDot, Pencil, Lock, Wallet } from 'lucide-react';
+import { LayoutDashboard, Users, MapPin, Calendar, DollarSign, Briefcase, Menu, X, LogOut, UserCircle, Building, Settings, Target, CreditCard, ClipboardList, ReceiptIndianRupee, Navigation, Car, Building2, PhoneIncoming, GripVertical, Edit2, Check, FileText, Layers, PhoneCall, Bus, Bell, Sun, Moon, Monitor, Mail, UserCog, CarFront, BellRing, BarChart3, Map, Headset, BellDot, Pencil, Lock } from 'lucide-react';
 import { UserRole, Enquiry, CorporateAccount, Employee } from '../types';
 import { useBranding } from '../context/BrandingContext';
 import { useTheme } from '../context/ThemeContext';
@@ -32,7 +32,6 @@ const MASTER_ADMIN_LINKS = [
   { id: 'vendors', path: '/admin/vendors', label: 'Vendor Attachment', icon: CarFront },
   { id: 'payroll', path: '/admin/payroll', label: 'Payroll', icon: DollarSign },
   { id: 'finance-and-expenses', path: '/admin/finance-and-expenses', label: 'Finance & Expenses', icon: CreditCard }, 
-  { id: 'admin-expenses', path: '/admin/admin-expenses', label: 'Admin Expenses', icon: Wallet },
   { id: 'email-marketing', path: '/admin/email-marketing', label: 'Email Marketing', icon: Mail },
   { id: 'corporate', path: '/admin/corporate', label: 'Corporate', icon: Building2 },
   { id: 'settings', path: '/admin/settings', label: 'Settings', icon: Settings },
@@ -104,62 +103,74 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
 
   // Load user details based on role and session
   useEffect(() => {
-    const sessionId = localStorage.getItem('app_session_id');
-    
-    if (role === UserRole.ADMIN) {
-      setUserName('Senthil Kumar');
-      setUserSubtitle('CEO & Founder');
-    } 
-    else if (role === UserRole.CORPORATE) {
-      try {
-        const accounts: CorporateAccount[] = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
-        const account = accounts.find((acc: CorporateAccount) => acc.email === sessionId);
-        if (account) {
-            setUserName(account.companyName);
-            setUserSubtitle(account.city ? `${account.city} Branch` : 'Corporate Partner');
-        } else {
+    const fetchUserData = () => {
+        const sessionId = localStorage.getItem('app_session_id');
+        
+        if (role === UserRole.ADMIN) {
+          setUserName('Senthil Kumar');
+          setUserSubtitle('CEO & Founder');
+        } 
+        else if (role === UserRole.CORPORATE) {
+          try {
+            const accounts: CorporateAccount[] = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
+            const account = accounts.find((acc: CorporateAccount) => acc.email === sessionId);
+            if (account) {
+                setUserName(account.companyName);
+                setUserSubtitle(account.city ? `${account.city} Branch` : 'Corporate Partner');
+            } else {
+                setUserName('Franchise Partner');
+                setUserSubtitle('Corporate');
+            }
+          } catch (e) {
             setUserName('Franchise Partner');
             setUserSubtitle('Corporate');
+          }
+        } 
+        else if (role === UserRole.EMPLOYEE) {
+           // Lookup Employee details using session ID (Employee ID)
+           let foundName = 'Team Member';
+           let foundRole = 'Employee';
+           let emp: Employee | undefined;
+           
+           try {
+             // 1. Check Admin Staff
+             const adminStaff: Employee[] = JSON.parse(localStorage.getItem('staff_data') || '[]');
+             emp = adminStaff.find((e: Employee) => e.id === sessionId);
+             
+             if (!emp) {
+                // 2. Check All Corporate Staff Lists
+                const accounts: CorporateAccount[] = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
+                for (const acc of accounts) {
+                    const corpStaffKey = `staff_data_${acc.email}`;
+                    const corpStaff: Employee[] = JSON.parse(localStorage.getItem(corpStaffKey) || '[]');
+                    emp = corpStaff.find((e: Employee) => e.id === sessionId);
+                    if (emp) break;
+                }
+             }
+             
+             if (emp) {
+                 foundName = emp.name;
+                 foundRole = emp.role;
+                 setCurrentEmployee(emp);
+             }
+           } catch(e) {
+             console.error("Error fetching employee details", e);
+           }
+           
+           setUserName(foundName);
+           setUserSubtitle(foundRole);
         }
-      } catch (e) {
-        setUserName('Franchise Partner');
-        setUserSubtitle('Corporate');
-      }
-    } 
-    else if (role === UserRole.EMPLOYEE) {
-       // Lookup Employee details using session ID (Employee ID)
-       let foundName = 'Team Member';
-       let foundRole = 'Employee';
-       let emp: Employee | undefined;
-       
-       try {
-         // 1. Check Admin Staff
-         const adminStaff: Employee[] = JSON.parse(localStorage.getItem('staff_data') || '[]');
-         emp = adminStaff.find((e: Employee) => e.id === sessionId);
-         
-         if (!emp) {
-            // 2. Check All Corporate Staff Lists
-            const accounts: CorporateAccount[] = JSON.parse(localStorage.getItem('corporate_accounts') || '[]');
-            for (const acc of accounts) {
-                const corpStaffKey = `staff_data_${acc.email}`;
-                const corpStaff: Employee[] = JSON.parse(localStorage.getItem(corpStaffKey) || '[]');
-                emp = corpStaff.find((e: Employee) => e.id === sessionId);
-                if (emp) break;
-            }
-         }
-         
-         if (emp) {
-             foundName = emp.name;
-             foundRole = emp.role;
-             setCurrentEmployee(emp);
-         }
-       } catch(e) {
-         console.error("Error fetching employee details", e);
-       }
-       
-       setUserName(foundName);
-       setUserSubtitle(foundRole);
-    }
+    };
+
+    fetchUserData();
+
+    // Add storage listener to update currentEmployee permissions in real-time
+    const handleStorageChange = () => {
+        fetchUserData();
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+
   }, [role]);
 
   // Load order from local storage on mount
@@ -247,7 +258,7 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
     if (link.id === 'corporate' && role !== UserRole.ADMIN) return false;
     if (link.id === 'leads' && role === UserRole.CORPORATE) return false;
     if (link.id === 'employee-settings' && role === UserRole.CORPORATE) return false;
-    if (link.id === 'settings' && role === UserRole.CORPORATE) return true; // Fix: Allow settings for corporate
+    if (link.id === 'settings' && role === UserRole.CORPORATE) return true;
     if (link.id === 'finance-and-expenses' && role === UserRole.EMPLOYEE) return false;
     if (link.id === 'admin-expenses' && role !== UserRole.ADMIN) return false;
     if (link.id === 'cms' && role !== UserRole.ADMIN) return false;
@@ -257,58 +268,46 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
 
   // Dynamic Employee Links based on Allowed Modules
   const employeeLinks = useMemo(() => {
+      // Default links for all employees
+      // Order updated as per request: Attendance, Customer Care, Trip Earning, Tasks, Salary, Leave, Profile, Security
       const baseLinks = [
         { id: 'attendance', path: '/user', label: 'My Attendance', icon: Calendar },
+        { id: 'customer_care', path: '/user/customer-care', label: 'Customer Care', icon: Headset },
+        { id: 'trip_earning', path: '/user/trip-earning', label: 'Trip Earning', icon: ReceiptIndianRupee },
+        { id: 'tasks', path: '/user/tasks', label: 'Task Management', icon: ClipboardList },
         { id: 'salary', path: '/user/salary', label: 'My Salary', icon: DollarSign },
-        { id: 'leave', path: '/user/apply-leave', label: 'Apply Leave', icon: Briefcase },
+        { id: 'leave', path: '/user/apply-leave', label: 'Leave Management', icon: Briefcase },
         { id: 'profile', path: '/user/profile', label: 'My Profile', icon: UserCircle }, 
         { id: 'security', path: '/user/security-account', label: 'Security & Account', icon: Lock }, 
       ];
 
       if (currentEmployee?.allowedModules) {
-          // Task Management
-          if (currentEmployee.allowedModules.includes('tasks')) {
-              baseLinks.splice(1, 0, { id: 'tasks', path: '/user/tasks', label: 'My Tasks', icon: ClipboardList });
-          }
-          // Customer Care
-          if (currentEmployee.allowedModules.includes('customer_care')) {
-              baseLinks.splice(1, 0, { id: 'customer_care', path: '/user/customer-care', label: 'Customer Care', icon: Headset });
-          }
-          // Trip Booking
-          if (currentEmployee.allowedModules.includes('trip_booking')) {
-              baseLinks.splice(1, 0, { id: 'trip_booking', path: '/admin/trips', label: 'Trip Booking', icon: Map });
-          }
-          // Live Tracking
-          if (currentEmployee.allowedModules.includes('live_tracking')) {
-              baseLinks.splice(1, 0, { id: 'live_tracking', path: '/admin/tracking', label: 'Live Tracking', icon: Navigation });
-          }
+          // Additional Admin-level Modules (only add if not already in baseLinks)
+          // Note: Finance & Expenses and Live Tracking are explicitly removed for employees
+
           // Attendance (Admin View)
           if (currentEmployee.allowedModules.includes('attendance')) {
-              baseLinks.splice(1, 0, { id: 'attendance_admin', path: '/admin/attendance', label: 'Attendance (Admin)', icon: Calendar });
+              baseLinks.splice(4, 0, { id: 'attendance_admin', path: '/admin/attendance', label: 'Attendance (Admin)', icon: Calendar });
           }
           // Branches
           if (currentEmployee.allowedModules.includes('branches')) {
-              baseLinks.splice(1, 0, { id: 'branches', path: '/admin/branches', label: 'Branches', icon: Building });
+              baseLinks.splice(4, 0, { id: 'branches', path: '/admin/branches', label: 'Branches', icon: Building });
           }
           // Staff Management
           if (currentEmployee.allowedModules.includes('staff_management')) {
-              baseLinks.splice(1, 0, { id: 'staff_management', path: '/admin/staff', label: 'Staff Management', icon: Users });
+              baseLinks.splice(4, 0, { id: 'staff_management', path: '/admin/staff', label: 'Staff Management', icon: Users });
           }
           // Documents
           if (currentEmployee.allowedModules.includes('documents')) {
-              baseLinks.splice(1, 0, { id: 'documents', path: '/user/documents', label: 'Documents', icon: FileText });
+              baseLinks.splice(4, 0, { id: 'documents', path: '/user/documents', label: 'Documents', icon: FileText });
           }
           // Vendor Attachment
           if (currentEmployee.allowedModules.includes('vendor_attachment')) {
-              baseLinks.splice(1, 0, { id: 'vendor_attachment', path: '/user/vendors', label: 'Vendor Attachment', icon: CarFront });
+              baseLinks.splice(4, 0, { id: 'vendor_attachment', path: '/user/vendors', label: 'Vendor Attachment', icon: CarFront });
           }
-          // Payroll
+          // Payroll (Admin View)
           if (currentEmployee.allowedModules.includes('payroll')) {
-              baseLinks.splice(1, 0, { id: 'payroll', path: '/admin/payroll', label: 'Payroll', icon: DollarSign });
-          }
-          // Finance & Expenses
-          if (currentEmployee.allowedModules.includes('expenses') || currentEmployee.allowedModules.includes('finance_expenses')) {
-              baseLinks.splice(1, 0, { id: 'expenses', path: '/user/expenses', label: 'Finance & Expenses', icon: CreditCard });
+              baseLinks.splice(4, 0, { id: 'payroll', path: '/admin/payroll', label: 'Payroll (Admin)', icon: DollarSign });
           }
       }
 

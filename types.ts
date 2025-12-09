@@ -16,6 +16,14 @@ export enum AttendanceStatus {
   NOT_MARKED = 'NOT_MARKED'
 }
 
+// NEW: Location Record for Attendance
+export interface LocationRecord {
+  lat: number;
+  lng: number;
+  address: string; // e.g., "Office: Main Branch" or "Remote"
+  timestamp: string;
+}
+
 export interface Employee {
   id: string;
   name: string;
@@ -44,6 +52,7 @@ export interface Employee {
     gpsGeofencing: boolean;
     qrScan: boolean;
     manualPunch: boolean;
+    manualPunchMode?: 'Anywhere' | 'BranchRadius'; // NEW: Configuration for manual punch restriction
   };
   allowedModules?: string[]; // NEW: List of extra modules accessible to this employee (e.g., 'expenses', 'documents')
   corporateId?: string; 
@@ -74,6 +83,9 @@ export interface DailyAttendance {
   isLate?: boolean;
   checkIn?: string;
   checkOut?: string;
+  // NEW: Location Data
+  punchInLocation?: LocationRecord;
+  punchOutLocation?: LocationRecord;
 }
 
 export interface Branch {
@@ -339,6 +351,21 @@ export interface LandingPageContent {
   };
 }
 
+export interface PricingRules {
+  localBaseFare: number;
+  localBaseKm: number;
+  localPerKmRate: number;
+  localWaitingRate: number;
+  rentalExtraKmRate: number;
+  rentalExtraHrRate: number;
+  outstationMinKmPerDay: number;
+  outstationBaseRate: number; // This one is probably for RoundTrip or deprecated, keeping for now
+  outstationBaseRateOneWay: number; // NEW: Explicit field for OneWay base rate
+  outstationExtraKmRate: number;
+  outstationDriverAllowance: number;
+  outstationNightAllowance: number;
+}
+
 
 declare global {
   namespace google {
@@ -352,7 +379,9 @@ declare global {
       class Marker {}
       enum Animation {}
       class InfoWindow {}
-      class LatLng {} 
+      class LatLng {
+        constructor(lat: number, lng: number);
+      } 
       namespace geometry {
         namespace spherical {
           function computeDistanceBetween(latLng1: LatLng, latLng2: LatLng): number;
