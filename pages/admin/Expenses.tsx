@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { 
@@ -428,15 +427,15 @@ const Expenses: React.FC = () => {
       </div>
 
       {/* PARTNERSHIP DISTRIBUTION SECTION */}
-      {/* Only show if a specific corporate is active/filtered AND has partners configured */}
+      {/* Changed background from black to gradient blue/indigo for a better look */}
       {activeCorporate && activeCorporate.partners && activeCorporate.partners.length > 0 && (
-          <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-xl p-6 shadow-lg text-white border border-slate-700 animate-in fade-in slide-in-from-bottom-2">
-              <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-2">
+          <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-xl p-6 shadow-lg text-white border border-blue-500 animate-in fade-in slide-in-from-bottom-2">
+              <div className="flex justify-between items-center mb-4 border-b border-blue-400 pb-2">
                   <h3 className="font-bold flex items-center gap-2 text-lg">
-                      <Users className="w-5 h-5 text-emerald-400" /> 
+                      <Users className="w-5 h-5 text-white" /> 
                       Profit Distribution ({activeCorporate.companyName})
                   </h3>
-                  <span className={`px-3 py-1 rounded-full text-xs font-bold ${stats.balance >= 0 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-red-500/20 text-red-300 border border-red-500/30'}`}>
+                  <span className={`px-3 py-1 rounded-full text-xs font-bold bg-white/20 text-white border border-white/30`}>
                       {stats.balance >= 0 ? 'Net Profit' : 'Net Loss'} Split
                   </span>
               </div>
@@ -445,15 +444,15 @@ const Expenses: React.FC = () => {
                   {activeCorporate.partners.map((partner, index) => {
                       const shareAmount = (stats.balance * partner.percentage) / 100;
                       return (
-                          <div key={index} className="bg-white/5 rounded-lg p-4 border border-white/10 hover:bg-white/10 transition-colors">
+                          <div key={index} className="bg-white/10 rounded-lg p-4 border border-white/20 hover:bg-white/20 transition-colors backdrop-blur-sm">
                               <div className="flex justify-between items-start mb-2">
-                                  <span className="font-bold text-slate-200">{partner.name}</span>
-                                  <span className="text-xs font-mono bg-slate-700 px-2 py-0.5 rounded text-slate-300">{partner.percentage}%</span>
+                                  <span className="font-bold text-white">{partner.name}</span>
+                                  <span className="text-xs font-mono bg-white/20 px-2 py-0.5 rounded text-white">{partner.percentage}%</span>
                               </div>
-                              <div className={`text-xl font-bold ${stats.balance >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                              <div className="text-xl font-bold text-white">
                                   {stats.balance >= 0 ? '₹' : '-₹'}{Math.abs(shareAmount).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                               </div>
-                              <div className="text-[10px] text-slate-500 mt-1 uppercase tracking-wider font-medium">
+                              <div className="text-[10px] text-blue-100 mt-1 uppercase tracking-wider font-medium opacity-80">
                                   {stats.balance >= 0 ? 'Share of Profit' : 'Share of Loss'}
                               </div>
                           </div>
@@ -582,11 +581,12 @@ const Expenses: React.FC = () => {
               </div>
           </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 flex flex-col">
+          {/* Adjusted Chart Size */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 flex flex-col h-[400px]">
               <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
                   <PieChart className="w-5 h-5 text-purple-600" /> Expense Breakdown
               </h3>
-              <div className="flex-1 min-h-[300px]">
+              <div className="flex-1">
                   <ResponsiveContainer width="100%" height="100%">
                       <RePieChart>
                           <Pie
