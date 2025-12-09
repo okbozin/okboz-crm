@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback, useRef } from 'react';
 import { Notification, UserRole } from '../types';
 import { fetchSystemNotifications, markNotificationAsRead as apiMarkNotificationAsRead } from '../services/cloudService';
@@ -15,8 +14,8 @@ const NotificationContext = createContext<NotificationContextType | undefined>(u
 
 const NOTIFICATION_STORAGE_KEY = 'app_notifications_cache';
 const LAST_PLAYED_COUNT_KEY = 'app_last_played_notification_count';
-// Louder, distinct alarm sound (Classic Alarm Clock style)
-const NOTIFICATION_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2190/2190-preview.mp3';
+// Changed to a pleasant notification bell chime
+const NOTIFICATION_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3';
 
 export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [notifications, setNotifications] = useState<Notification[]>(() => {
