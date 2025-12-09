@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import Login from './pages/Login';
@@ -35,6 +35,7 @@ import { autoLoadFromCloud, syncToCloud, HARDCODED_FIREBASE_CONFIG } from './ser
 import { sendSystemNotification } from './services/cloudService'; 
 import Reports from './pages/admin/Reports';
 import CMS from './pages/admin/CMS'; 
+import AppVersionHistory from './pages/admin/AppVersionHistory'; // Import the new component
 
 /**
  * Main application component.
@@ -161,6 +162,7 @@ const App: React.FC = () => {
                         <Route path="/admin/email-marketing" element={<EmailMarketing />} />
                         {/* Settings Route - Accessible to Admin and Corporate */}
                         <Route path="/admin/settings" element={<Settings />} />
+                        <Route path="/admin/version-history" element={<AppVersionHistory />} /> {/* NEW: App Version History Route */}
                         
                         {/* Corporate Management & CMS - Only Super Admin */}
                         {userRole === UserRole.ADMIN && (

@@ -1,7 +1,38 @@
 
 import { AttendanceStatus, DailyAttendance, Employee } from './types';
 
-export const MOCK_EMPLOYEES: Employee[] = [];
+export const MOCK_EMPLOYEES: Employee[] = [
+  {
+    id: 'E001',
+    name: 'Jane Doe',
+    role: 'Executive',
+    department: 'Sales',
+    avatar: 'https://picsum.photos/id/64/40/40',
+    joiningDate: '2023-01-15',
+    email: 'jane.doe@example.com',
+    phone: '123-456-7890',
+    branch: 'Main Branch',
+    status: 'Active',
+    liveTracking: true,
+    allowRemotePunch: true,
+    attendanceConfig: {
+      gpsGeofencing: true,
+      qrScan: false,
+      manualPunch: true,
+      manualPunchMode: 'Anywhere',
+    },
+    allowedModules: ['my_attendance', 'my_salary', 'apply_leave', 'my_profile', 'security_account', 'tasks', 'customer_care', 'trip_earning', 'documents_employee_view', 'vendor_attachment_employee_view', 'finance_expenses_employee_view'], // Example permissions
+    corporateId: 'admin',
+    corporateName: 'Head Office',
+    currentLocation: { lat: 11.0168, lng: 76.9558, accuracy: 10 },
+    isOnline: true,
+    // Add other optional fields with default values to prevent undefined issues
+    dob: '1990-01-01', gender: 'Female', bloodGroup: 'A+', maritalStatus: 'Single', children: 0,
+    emergencyContactName: 'John Doe', emergencyContactPhone: '987-654-3210', emergencyContactRelationship: 'Brother',
+    homeAddress: '123 Main St, Anytown', aadhar: '111122223333', pan: 'ABCDE1234F',
+    accountNumber: '1234567890', ifsc: 'ABCD000123', upiId: 'janedoe@upi'
+  },
+];
 
 // Define a common COLORS array for consistent chart/status colors
 export const COLORS = [

@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
-  Plus, Search, Filter, Download, MoreVertical, 
+  Plus, Search, Filter, Download, 
   MapPin, IndianRupee, Calendar, Clock, Sparkles,
   X, Briefcase, Mail, Phone, Calculator, Target, User,
   Pencil, Trash2, MessageCircle, Send, Loader2, FileText, Upload
@@ -29,7 +28,71 @@ interface Lead {
   createdAt: string;
 }
 
-const MOCK_LEADS: Lead[] = [];
+const MOCK_LEADS: Lead[] = [
+  {
+    id: 'L001',
+    name: 'Tech Solutions Inc.',
+    role: 'CEO',
+    location: 'Mumbai',
+    totalValue: 150000,
+    billValue: 100000,
+    franchiseValue: 50000,
+    adFee: 0,
+    status: 'New',
+    source: 'Google Ads',
+    priority: 'Hot',
+    nextCallDate: '2024-07-20',
+    nextCallTime: '10:00',
+    notes: 'Interested in enterprise plan, needs demo next week.',
+    email: 'ceo@techsolutions.com',
+    phone: '9876543210',
+    tags: ['Tech', 'Enterprise'],
+    // Fix: Added missing 'createdAt' property
+    createdAt: '2024-07-15'
+  },
+  {
+    id: 'L002',
+    name: 'Global Logistics',
+    role: 'Operations Head',
+    location: 'Delhi',
+    totalValue: 200000,
+    billValue: 180000,
+    franchiseValue: 0,
+    adFee: 20000,
+    status: 'Contacted',
+    source: 'LinkedIn',
+    priority: 'Warm',
+    nextCallDate: '2024-07-22',
+    nextCallTime: '14:30',
+    notes: 'Looking for robust field staff tracking, concerned about integration with existing ERP.',
+    email: 'ops@globallogistics.com',
+    phone: '9123456789',
+    tags: ['Logistics', 'Field'],
+    // Fix: Added missing 'createdAt' property
+    createdAt: '2024-07-10'
+  },
+  {
+    id: 'L003',
+    name: 'City Taxi Services',
+    role: 'Owner',
+    location: 'Chennai',
+    totalValue: 80000,
+    billValue: 80000,
+    franchiseValue: 0,
+    adFee: 0,
+    status: 'Qualified',
+    source: 'Referral',
+    priority: 'Hot',
+    nextCallDate: '2024-07-25',
+    nextCallTime: '11:00',
+    notes: 'Needs driver attendance and payroll. Ready to move forward with a trial.',
+    email: 'owner@citytaxi.com',
+    phone: '8765432109',
+    tags: ['Transport', 'SMB'],
+    // Fix: Added missing 'createdAt' property
+    createdAt: '2024-07-05'
+  }
+];
 
 const Leads = () => {
   const [leads, setLeads] = useState<Lead[]>(() => {
@@ -327,11 +390,7 @@ const Leads = () => {
                     className="pl-10 pr-4 py-2 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm w-64"
                 />
             </div>
-            <button className="relative p-2 text-gray-500 hover:bg-gray-100 rounded-full">
-               <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
-               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
-            </button>
-            <div className="w-8 h-8 bg-blue-500 rounded-full text-white flex items-center justify-center font-bold">A</div>
+            {/* Notification bell and avatar removed from here, they are in Layout */}
         </div>
       </div>
 
@@ -614,7 +673,7 @@ const Leads = () => {
                               <Calculator className="w-4 h-4" /> Total Value
                            </div>
                            <div className="font-bold text-indigo-700 text-lg">
-                              ${totalValue.toLocaleString()}
+                              ₹{totalValue.toLocaleString()}
                            </div>
                         </div>
                      </div>

@@ -1,0 +1,47 @@
+
+[
+  {
+    "version": "1.2.0",
+    "date": "2024-07-28",
+    "changes": [
+      "Implemented App Version History page.",
+      "Fixed `Uncaught ReferenceError: UserCircle is not defined` error in StaffList.",
+      "Ensured default employee data is present in `constants.ts` to prevent data missing errors in `Layout.tsx`.",
+      "Refined bulk attendance logic in `UserAttendance.tsx` to apply to current day if NOT_MARKED, and added consistent default locations for bulk present marks.",
+      "Refactored employee sidebar link generation in `Layout.tsx` to dynamically include modules based on `allowedModules` configured in `StaffList.tsx`."
+    ]
+  },
+  {
+    "version": "1.1.0",
+    "date": "2024-07-22",
+    "changes": [
+      "Added 'Mark All Present' and 'Mark All Absent' buttons for bulk attendance updates in Admin monthly view.",
+      "Introduced API Key configuration for Google Maps in Settings, with auto-loading and error handling.",
+      "Implemented persistent branding (Company Name, Primary Color) configurable via Admin Settings.",
+      "Integrated `AiAssistant` component for Lead Management with dynamic message generation.",
+      "Overhauled `Payroll.tsx` to include detailed payroll history and advance request approvals.",
+      "Enhanced `UserSalary.tsx` with dynamic salary calculation based on attendance and advance deductions, and improved advance request flow with notifications.",
+      "Added `SecurityAccount.tsx` for employee password changes and associated admin notifications.",
+      "Introduced comprehensive `EmployeeSettings.tsx` for managing company-wide settings like departments, roles, shifts, attendance rules, holidays, and live tracking.",
+      "Refactored navigation links and permissions in `Layout.tsx` for better role-based access control."
+    ]
+  },
+  {
+    "version": "1.0.0",
+    "date": "2024-07-15",
+    "changes": [
+      "Initial release of OK BOZ CRM.",
+      "Admin Dashboard with key metrics and quick access links.",
+      "Staff Management with employee profiles, roles, and basic details.",
+      "Attendance Tracking with punch-in/out and daily/monthly views.",
+      "Basic Payroll Management.",
+      "Branch Management with Google Maps integration and geofencing.",
+      "Customer & Vendor Management (Leads, Enquiries, Vendor Attachment).",
+      "Task Management for assigning and tracking employee tasks.",
+      "Documents Management with file uploads.",
+      "Cloud Sync (Firebase) for data persistence.",
+      "Login functionality for Admin, Corporate, and Employee roles.",
+      "Responsive UI with dark mode support."
+    ]
+  }
+]

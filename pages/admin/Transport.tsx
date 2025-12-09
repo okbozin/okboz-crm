@@ -103,10 +103,13 @@ const Transport: React.FC = () => {
       setMapError("API Key missing. Add in Settings > Integrations.");
       return;
     }
-    if (window.google && window.google.maps && window.google.maps.places) {
-      setIsMapReady(true);
-      return;
-    }
+    const originalAuthFailure = window.gm_authFailure;
+    window.gm_authFailure = () => {
+      window.gm_authFailure_detected = true;
+      setMapError("Map Error: Billing not enabled.");
+      if (originalAuthFailure) originalAuthFailure();
+    };
+
     const scriptId = 'google-maps-script';
     let script = document.getElementById(scriptId) as HTMLScriptElement;
     if (!script) {
@@ -261,7 +264,7 @@ const Transport: React.FC = () => {
         
         waitingCost = waitMins * currentRules.localWaitingRate;
         total = base + extraKmCost + waitingCost;
-        details = `Base (${currentRules.localBaseKm}km): ₹${base} + Extra: ₹${extraKmCost} + Wait: ₹${waitingCost}`;
+        details = `Base (${currentRules.localBaseKm}km): ₹${base.toFixed(2)} + Extra: ₹${extraKmCost.toFixed(2)} + Wait: ₹${waitingCost.toFixed(2)}`;
 
     } else if (tripType === 'Rental') {
         const pkg = rentalPackages.find(p => p.id === rentalDetails.packageId) || rentalPackages[0];
@@ -297,11 +300,21 @@ const Transport: React.FC = () => {
                 extraKmCost = (totalKm - minCommittedKm) * currentRules.outstationExtraKmRate;
             }
             total = base + extraKmCost + driverCost; 
-            details = `Base: ₹${base} + Extra Km: ₹${extraKmCost}`;
+            details = `Base: ₹${base.toFixed(2)} + Extra Km: ₹${extraKmCost.toFixed(2)}`;
         }
     }
 
-    setEstimate({ base, extraKmCost, waitingCost, driverCost, nightAllowanceCost, total, chargeableKm, details });
+    // Keep 2 decimal precision
+    setEstimate({ 
+        base: parseFloat(base.toFixed(2)), 
+        extraKmCost: parseFloat(extraKmCost.toFixed(2)), 
+        waitingCost: parseFloat(waitingCost.toFixed(2)), 
+        driverCost: parseFloat(driverCost.toFixed(2)), 
+        nightAllowanceCost: parseFloat(nightAllowanceCost.toFixed(2)), 
+        total: parseFloat(total.toFixed(2)), 
+        chargeableKm, 
+        details 
+    });
   };
 
   const generateMessage = () => {
@@ -318,7 +331,7 @@ const Transport: React.FC = () => {
 🛣 Distance: ~${localDetails.estKm} km
 ⏳ Waiting Time: ${localDetails.waitingMins} mins
 
-💰 *Total Estimate: ₹${estimate.total.toLocaleString()}*
+💰 *Total Estimate: ₹${estimate.total.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}*
 (Includes Base Fare ₹${currentRules.localBaseFare}, Extra Km Charges & Waiting Fees)`;
     } else if (tripType === 'Rental') {
         const pkg = rentalPackages.find(p => p.id === rentalDetails.packageId);
@@ -328,7 +341,7 @@ const Transport: React.FC = () => {
 📦 Package: ${pkg?.name}
 📍 Pickup: ${customer.pickup}
 
-💰 *Package Price: ₹${estimate.total.toLocaleString()}*
+💰 *Package Price: ₹${estimate.total.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}*
 (Extra charges apply for additional Km/Hrs)`;
     } else if (tripType === 'Outstation') {
         body = `
@@ -339,17 +352,17 @@ const Transport: React.FC = () => {
 ${outstationSubType === 'RoundTrip' ? `🌙 Night Stays: ${outstationDetails.nights}` : ''}
 🛣 Est. Total Distance: ${outstationDetails.estTotalKm} km
 
-💰 *Total Estimate: ₹${estimate.total.toLocaleString()}*
+💰 *Total Estimate: ₹${estimate.total.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}*
 📝 Breakdown:
 ${outstationSubType === 'RoundTrip' 
   ? `- Rate: ₹${currentRules.outstationExtraKmRate}/km
-- Base Fare (Covers ${estimate.chargeableKm} km): ₹${estimate.base}` 
+- Base Fare (Covers ${estimate.chargeableKm} km): ₹${estimate.base.toFixed(2)}` 
   : `- Min Km / Day: ${currentRules.outstationMinKmPerDay} km
-- Base Fare: ₹${estimate.base}
-- Extra Km Charge: ₹${estimate.extraKmCost}`
+- Base Fare: ₹${estimate.base.toFixed(2)}
+- Extra Km Charge: ₹${estimate.extraKmCost.toFixed(2)}`
 }
-- Driver Allowance: ₹${estimate.driverCost}
-${outstationSubType === 'RoundTrip' ? `- Night Allowance: ₹${estimate.nightAllowanceCost}` : ''}
+- Driver Allowance: ₹${estimate.driverCost.toFixed(2)}
+${outstationSubType === 'RoundTrip' ? `- Night Allowance: ₹${estimate.nightAllowanceCost.toFixed(2)}` : ''}
 
 *Toll and state permit will be extra.*`;
     }
@@ -657,8 +670,8 @@ ${outstationSubType === 'RoundTrip' ? `- Night Allowance: ₹${estimate.nightAll
                                             <input placeholder="Km" type="number" className="p-1.5 text-xs border rounded w-1/2" value={newPackage.km} onChange={e => setNewPackage({...newPackage, km: e.target.value})} />
                                         </div>
                                         <div className="flex gap-2">
-                                            <input placeholder="₹ Sedan" type="number" className="p-1.5 text-xs border rounded w-1/2" value={newPackage.priceSedan} onChange={e => setNewPackage({...newPackage, priceSedan: e.target.value})} />
-                                            <input placeholder="₹ SUV" type="number" className="p-1.5 text-xs border rounded w-1/2" value={newPackage.priceSuv} onChange={e => setNewPackage({...newPackage, priceSuv: e.target.value})} />
+                                            <input placeholder="Sedan ₹" type="number" className="p-1.5 text-xs border rounded w-1/2" value={newPackage.priceSedan} onChange={e => setNewPackage({...newPackage, priceSedan: e.target.value})} />
+                                            <input placeholder="SUV ₹" type="number" className="p-1.5 text-xs border rounded w-1/2" value={newPackage.priceSuv} onChange={e => setNewPackage({...newPackage, priceSuv: e.target.value})} />
                                         </div>
                                      </div>
                                      <div className="flex justify-end gap-2">
@@ -790,49 +803,49 @@ ${outstationSubType === 'RoundTrip' ? `- Night Allowance: ₹${estimate.nightAll
                 <div className="relative z-10">
                     <p className="text-slate-300 text-xs uppercase font-bold tracking-wider mb-1">Estimated Cost</p>
                     <h3 className="text-4xl font-bold mb-4 flex items-start">
-                        <span className="text-xl mt-1 mr-1">₹</span> {estimate.total.toLocaleString()}
+                        <span className="text-xl mt-1 mr-1">₹</span> {estimate.total.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                     </h3>
                     
                     <div className="space-y-2 border-t border-slate-700 pt-4 text-sm text-slate-300">
                         {outstationSubType === 'RoundTrip' && tripType === 'Outstation' ? (
                             <div className="flex justify-between">
                                 <span>Km Charges ({estimate.chargeableKm} km @ ₹{pricing[vehicleType].outstationExtraKmRate})</span>
-                                <span>₹{estimate.base}</span>
+                                <span>₹{estimate.base.toFixed(2)}</span>
                             </div>
                         ) : (
                             <div className="flex justify-between">
                                 <span>Base Fare</span>
-                                <span>₹{estimate.base}</span>
+                                <span>₹{estimate.base.toFixed(2)}</span>
                             </div>
                         )}
                         
                         {estimate.extraKmCost > 0 && (
                             <div className="flex justify-between">
                                 <span>Extra Km Charges</span>
-                                <span>₹{estimate.extraKmCost}</span>
+                                <span>₹{estimate.extraKmCost.toFixed(2)}</span>
                             </div>
                         )}
                         {estimate.waitingCost > 0 && (
                             <div className="flex justify-between">
                                 <span>Waiting Charges</span>
-                                <span>₹{estimate.waitingCost}</span>
+                                <span>₹{estimate.waitingCost.toFixed(2)}</span>
                             </div>
                         )}
                         {estimate.driverCost > 0 && (
                             <div className="flex justify-between">
                                 <span>Driver Allowance</span>
-                                <span>₹{estimate.driverCost}</span>
+                                <span>₹{estimate.driverCost.toFixed(2)}</span>
                             </div>
                         )}
                         {estimate.nightAllowanceCost > 0 && (
                             <div className="flex justify-between">
                                 <span>Night Allowance</span>
-                                <span>₹{estimate.nightAllowanceCost}</span>
+                                <span>₹{estimate.nightAllowanceCost.toFixed(2)}</span>
                             </div>
                         )}
                         <div className="flex justify-between font-bold text-white pt-2 border-t border-slate-700 mt-2">
                             <span>Total</span>
-                            <span>₹{estimate.total}</span>
+                            <span>₹{estimate.total.toFixed(2)}</span>
                         </div>
                     </div>
                 </div>

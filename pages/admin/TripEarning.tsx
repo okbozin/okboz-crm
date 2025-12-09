@@ -26,6 +26,14 @@ const formatDateForDisplay = (isoDateString: string): string => {
   }
 };
 
+// Helper for Currency Formatting
+const formatCurrency = (amount: number) => {
+  return amount.toLocaleString('en-IN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+};
+
 const TripEarning: React.FC = () => {
   const sessionId = localStorage.getItem('app_session_id') || 'admin';
   const isSuperAdmin = sessionId === 'admin';
@@ -435,7 +443,7 @@ const TripEarning: React.FC = () => {
         
         return [
             t.tripId, formatDateForDisplay(t.date), t.ownerName || '-', t.branch, t.bookingType, 
-            `${t.tripCategory} - ${t.transportType}`, `${percent.toFixed(1)}%`, t.adminCommission, t.totalPrice, t.bookingStatus
+            `${t.tripCategory} - ${t.transportType}`, `${percent.toFixed(2)}%`, t.adminCommission.toFixed(2), t.totalPrice.toFixed(2), t.bookingStatus
         ].map(escapeCsv);
     });
 
@@ -606,7 +614,7 @@ const TripEarning: React.FC = () => {
         </div>
         <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
            <p className="text-xs font-bold text-gray-500 uppercase">Total Revenue</p>
-           <h3 className="text-2xl font-bold text-emerald-600">₹{filteredTrips.reduce((sum, t) => sum + t.totalPrice, 0).toLocaleString()}</h3>
+           <h3 className="text-2xl font-bold text-emerald-600">₹{formatCurrency(filteredTrips.reduce((sum, t) => sum + t.totalPrice, 0))}</h3>
         </div>
         <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
            <p className="text-xs font-bold text-gray-500 uppercase">Completed</p>
@@ -721,13 +729,13 @@ const TripEarning: React.FC = () => {
                                 <Cell key={`cell-${index}`} fill={entry.color} />
                             ))}
                             <Label 
-                                value={`₹${commissionData.reduce((sum, item) => sum + item.value, 0).toLocaleString()}`} 
+                                value={`₹${formatCurrency(commissionData.reduce((sum, item) => sum + item.value, 0))}`} 
                                 position="center" 
                                 className="fill-gray-700 font-bold text-lg"
                                 style={{ fontSize: '18px', fontWeight: 'bold', fill: '#374151' }}
                             />
                         </Pie>
-                        <Tooltip formatter={(value: number) => `₹${value.toFixed(0)}`} />
+                        <Tooltip formatter={(value: number) => `₹${value.toFixed(2)}`} />
                         <Legend />
                     </PieChart>
                 </ResponsiveContainer>
@@ -793,13 +801,13 @@ const TripEarning: React.FC = () => {
                           </span>
                        </td>
                        <td className="px-6 py-4 text-right text-gray-500 text-xs">
-                          {commPercent.toFixed(1)}%
+                          {commPercent.toFixed(2)}%
                        </td>
                        <td className="px-6 py-4 text-right text-emerald-600 font-medium">
-                          ₹{trip.adminCommission.toFixed(0)}
+                          ₹{trip.adminCommission.toFixed(2)}
                        </td>
                        <td className="px-6 py-4 text-right">
-                          <div className="font-bold text-gray-900">₹{trip.totalPrice.toLocaleString()}</div>
+                          <div className="font-bold text-gray-900">₹{trip.totalPrice.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
                        </td>
                        <td className="px-6 py-4 text-center">
                           <span className={`px-2 py-1 rounded-full text-xs font-bold border ${
@@ -1019,7 +1027,7 @@ const TripEarning: React.FC = () => {
                                   // Only auto-calc tax if NOT cancelled
                                   const taxAmt = formData.bookingStatus !== 'Cancelled' ? (price * parseFloat(taxPercentage)) / 100 : 0;
                                   setFormData(prev => ({ ...prev, tripPrice: price, tax: taxAmt }));
-                              }} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm font-medium" placeholder="0" />
+                              }} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm font-medium" placeholder="0.00" />
                            </div>
 
                            {/* Conditional Rendering based on Status */}
@@ -1050,7 +1058,7 @@ const TripEarning: React.FC = () => {
                                             value={formData.tax || ''} 
                                             readOnly 
                                             className="w-full pl-5 p-2 border border-gray-300 rounded-lg outline-none text-sm bg-gray-50 focus:ring-2 focus:ring-emerald-500" 
-                                            placeholder="0" 
+                                            placeholder="0.00" 
                                         />
                                      </div>
                                   </div>
@@ -1061,7 +1069,7 @@ const TripEarning: React.FC = () => {
                            {formData.bookingStatus === 'Cancelled' && (
                                <div>
                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cancellation Charge (Addt'l)</label>
-                                   <input type="number" name="cancellationCharge" value={formData.cancellationCharge || ''} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="0" />
+                                   <input type="number" name="cancellationCharge" value={formData.cancellationCharge || ''} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="0.00" />
                                </div>
                            )}
 
@@ -1069,15 +1077,15 @@ const TripEarning: React.FC = () => {
                                <>
                                <div>
                                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Waiting Chg.</label>
-                                 <input type="number" name="waitingCharge" value={formData.waitingCharge || ''} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="0" />
+                                 <input type="number" name="waitingCharge" value={formData.waitingCharge || ''} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="0.00" />
                                </div>
                                <div>
                                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cancel Chg.</label>
-                                 <input type="number" name="cancellationCharge" value={formData.cancellationCharge || ''} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="0" />
+                                 <input type="number" name="cancellationCharge" value={formData.cancellationCharge || ''} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm" placeholder="0.00" />
                                </div>
                                <div className="col-span-2">
                                   <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Discount</label>
-                                  <input type="number" name="discount" value={formData.discount || ''} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm text-red-600" placeholder="0" />
+                                  <input type="number" name="discount" value={formData.discount || ''} onChange={handleInputChange} className="w-full p-2 border border-gray-300 rounded-lg outline-none text-sm text-red-600" placeholder="0.00" />
                                </div>
                                </>
                            )}
@@ -1119,7 +1127,7 @@ const TripEarning: React.FC = () => {
                                         value={formData.adminCommission || ''} 
                                         readOnly 
                                         className="w-full pl-5 p-2 border border-gray-300 rounded-lg outline-none text-sm bg-gray-100 text-gray-600 font-medium cursor-not-allowed" 
-                                        placeholder="0" 
+                                        placeholder="0.00" 
                                     />
                                  </div>
                               </div>

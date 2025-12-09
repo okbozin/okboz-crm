@@ -1,11 +1,12 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, MapPin, Calendar, DollarSign, Briefcase, Menu, X, LogOut, UserCircle, Building, Settings, Target, CreditCard, ClipboardList, ReceiptIndianRupee, Navigation, Car, Building2, PhoneIncoming, GripVertical, Edit2, Check, FileText, Layers, PhoneCall, Bus, Bell, Sun, Moon, Monitor, Mail, UserCog, CarFront, BellRing, BarChart3, Map, Headset, BellDot, Pencil, Lock } from 'lucide-react';
+import { LayoutDashboard, Users, MapPin, Calendar, DollarSign, Briefcase, Menu, X, LogOut, UserCircle, Building, Settings, Target, CreditCard, ClipboardList, ReceiptIndianRupee, Navigation, Car, Building2, PhoneIncoming, GripVertical, Edit2, Check, FileText, Layers, PhoneCall, Bus, Bell, Sun, Moon, Monitor, Mail, UserCog, CarFront, BellRing, BarChart3, Map, Headset, BellDot, Pencil, Lock, History, GitBranch } from 'lucide-react'; // Added History and GitBranch icons
 import { UserRole, Enquiry, CorporateAccount, Employee } from '../types';
 import { useBranding } from '../context/BrandingContext';
 import { useTheme } from '../context/ThemeContext';
 import { useNotification } from '../context/NotificationContext';
+import { MOCK_EMPLOYEES } from '../constants'; // Import MOCK_EMPLOYEES
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -36,7 +37,41 @@ const MASTER_ADMIN_LINKS = [
   { id: 'corporate', path: '/admin/corporate', label: 'Corporate', icon: Building2 },
   { id: 'settings', path: '/admin/settings', label: 'Settings', icon: Settings },
   { id: 'cms', path: '/admin/cms', label: 'CMS', icon: Pencil }, 
+  { id: 'version-history', path: '/admin/version-history', label: 'App Version History', icon: History }, // NEW: App Version History
 ];
+
+// Define all possible employee-accessible links, including admin views they might be granted.
+// The `id` here corresponds to what would be stored in `employee.allowedModules`.
+const MASTER_EMPLOYEE_VIEW_LINKS_MAP: { [key: string]: { id: string; path: string; label: string; icon: React.ElementType } } = {
+  // Core Employee Features (always potentially available in sidebar)
+  'my_attendance': { id: 'my_attendance', path: '/user', label: 'My Attendance', icon: Calendar },
+  'my_salary': { id: 'my_salary', path: '/user/salary', label: 'My Salary', icon: DollarSign },
+  'apply_leave': { id: 'apply_leave', path: '/user/apply-leave', label: 'Apply Leave', icon: Briefcase },
+  'my_profile': { id: 'my_profile', path: '/user/profile', label: 'My Profile', icon: UserCircle },
+  'security_account': { id: 'security_account', path: '/user/security-account', label: 'Security & Account', icon: Lock },
+  // Default employee access modules which might also have an 'admin view' counterpart
+  'tasks': { id: 'tasks', path: '/user/tasks', label: 'Task Management', icon: ClipboardList }, // /user/tasks is default
+  'customer_care': { id: 'customer_care', path: '/user/customer-care', label: 'Customer Care', icon: Headset }, // /user/customer-care is default
+  'trip_earning': { id: 'trip_earning', path: '/user/trip-earning', label: 'Trip Earning', icon: ReceiptIndianRupee }, // /user/trip-earning is default
+  'documents_employee_view': { id: 'documents_employee_view', path: '/user/documents', label: 'My Documents', icon: FileText }, // Employee's own documents
+  'vendor_attachment_employee_view': { id: 'vendor_attachment_employee_view', path: '/user/vendors', label: 'My Vendors', icon: CarFront }, // Employee's own vendors
+  'finance_expenses_employee_view': { id: 'finance_expenses_employee_view', path: '/user/expenses', label: 'My Expenses', icon: CreditCard }, // Employee's own expenses
+
+  // Admin-level views that can be explicitly granted to employees (IDs match StaffList.tsx MODULE_PERMISSIONS)
+  'admin_attendance_view': { id: 'admin_attendance_view', path: '/admin/attendance', label: 'Attendance (Admin)', icon: Calendar },
+  'staff_management': { id: 'staff_management', path: '/admin/staff', label: 'Staff Management', icon: Users },
+  'vendor_attachment': { id: 'vendor_attachment', path: '/admin/vendors', label: 'Vendor Attachment (Admin)', icon: CarFront },
+  'branches': { id: 'branches', path: '/admin/branches', label: 'Branches (Admin)', icon: Building },
+  'documents_admin_view': { id: 'documents_admin_view', path: '/admin/documents', label: 'Documents (Admin)', icon: FileText },
+  'payroll_admin_view': { id: 'payroll_admin_view', path: '/admin/payroll', label: 'Payroll (Admin)', icon: DollarSign },
+  'finance_expenses_admin_view': { id: 'finance_expenses_admin_view', path: '/admin/finance-and-expenses', label: 'Finance & Expenses (Admin)', icon: CreditCard },
+  'email_marketing': { id: 'email_marketing', path: '/admin/email-marketing', label: 'Email Marketing (Admin)', icon: Mail },
+  'customer_care_admin_view': { id: 'customer_care_admin_view', path: '/admin/customer-care', label: 'Customer Care (Admin)', icon: Headset },
+  'tasks_admin_view': { id: 'tasks_admin_view', path: '/admin/tasks', label: 'Tasks (Admin)', icon: ClipboardList },
+  'trip_earning_admin_view': { id: 'trip_earning_admin_view', path: '/admin/trip-earning', label: 'Trip Earning (Admin)', icon: ReceiptIndianRupee },
+  'live_tracking_admin_view': { id: 'live_tracking_admin_view', path: '/admin/tracking', label: 'Live Tracking (Admin)', icon: Navigation },
+};
+
 
 const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -152,6 +187,27 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
                  foundName = emp.name;
                  foundRole = emp.role;
                  setCurrentEmployee(emp);
+             } else {
+                 // If no employee found, use a mock employee to prevent null access issues.
+                 // This assumes MOCK_EMPLOYEES in constants.ts has at least one entry.
+                 const defaultEmp = MOCK_EMPLOYEES[0];
+                 if (defaultEmp) {
+                     setCurrentEmployee(defaultEmp);
+                     foundName = defaultEmp.name;
+                     foundRole = defaultEmp.role;
+                 } else {
+                     // Fallback if even MOCK_EMPLOYEES is empty (should not happen after constants.ts change)
+                     setCurrentEmployee({
+                         id: 'MOCK_EMP_ID', name: 'Mock Employee', role: 'Staff', department: 'General',
+                         avatar: 'https://ui-avatars.com/api/?name=ME&background=random&color=fff',
+                         joiningDate: new Date().toISOString().split('T')[0],
+                         status: 'Active', liveTracking: false, allowRemotePunch: false,
+                         attendanceConfig: { gpsGeofencing: false, qrScan: false, manualPunch: false },
+                         allowedModules: [], corporateId: 'admin'
+                     });
+                     foundName = 'Mock Employee';
+                     foundRole = 'Staff';
+                 }
              }
            } catch(e) {
              console.error("Error fetching employee details", e);
@@ -258,60 +314,63 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
     if (link.id === 'corporate' && role !== UserRole.ADMIN) return false;
     if (link.id === 'leads' && role === UserRole.CORPORATE) return false;
     if (link.id === 'employee-settings' && role === UserRole.CORPORATE) return false;
-    if (link.id === 'settings' && role === UserRole.CORPORATE) return true;
-    if (link.id === 'finance-and-expenses' && role === UserRole.EMPLOYEE) return false;
-    if (link.id === 'admin-expenses' && role !== UserRole.ADMIN) return false;
+    if (link.id === 'settings' && role === UserRole.CORPORATE) return false; // Corporate user does not access /admin/settings for global settings
+    if (link.id === 'finance-and-expenses' && role === UserRole.EMPLOYEE) return false; // Employee uses /user/expenses
     if (link.id === 'cms' && role !== UserRole.ADMIN) return false;
-    if (link.id === 'email-marketing' && role === UserRole.CORPORATE) return false;
+    if (link.id === 'email-marketing' && role === UserRole.CORPORATE) return false; // Email marketing is typically for Super Admin
+    
+    // NEW: Only Super Admin can see Version History
+    if (link.id === 'version-history' && role !== UserRole.ADMIN) return false;
+
     return true;
   });
 
   // Dynamic Employee Links based on Allowed Modules
   const employeeLinks = useMemo(() => {
-      // Default links for all employees
-      // Order updated as per request: Attendance, Customer Care, Trip Earning, Tasks, Salary, Leave, Profile, Security
+      // Base set of links for any employee
       const baseLinks = [
-        { id: 'attendance', path: '/user', label: 'My Attendance', icon: Calendar },
-        { id: 'customer_care', path: '/user/customer-care', label: 'Customer Care', icon: Headset },
-        { id: 'trip_earning', path: '/user/trip-earning', label: 'Trip Earning', icon: ReceiptIndianRupee },
-        { id: 'tasks', path: '/user/tasks', label: 'Task Management', icon: ClipboardList },
-        { id: 'salary', path: '/user/salary', label: 'My Salary', icon: DollarSign },
-        { id: 'leave', path: '/user/apply-leave', label: 'Leave Management', icon: Briefcase },
-        { id: 'profile', path: '/user/profile', label: 'My Profile', icon: UserCircle }, 
-        { id: 'security', path: '/user/security-account', label: 'Security & Account', icon: Lock }, 
+        MASTER_EMPLOYEE_VIEW_LINKS_MAP['my_attendance'],
+        MASTER_EMPLOYEE_VIEW_LINKS_MAP['my_salary'],
+        MASTER_EMPLOYEE_VIEW_LINKS_MAP['apply_leave'],
+        MASTER_EMPLOYEE_VIEW_LINKS_MAP['my_profile'],
+        MASTER_EMPLOYEE_VIEW_LINKS_MAP['security_account'],
+        // These are also considered core employee modules (handled by /user routes in App.tsx)
+        MASTER_EMPLOYEE_VIEW_LINKS_MAP['tasks'], 
+        MASTER_EMPLOYEE_VIEW_LINKS_MAP['customer_care'],
+        MASTER_EMPLOYEE_VIEW_LINKS_MAP['trip_earning'],
+        MASTER_EMPLOYEE_VIEW_LINKS_MAP['documents_employee_view'], // Employee's own documents
+        MASTER_EMPLOYEE_VIEW_LINKS_MAP['vendor_attachment_employee_view'], // Employee's own vendors
+        MASTER_EMPLOYEE_VIEW_LINKS_MAP['finance_expenses_employee_view'], // Employee's own expenses
       ];
 
-      if (currentEmployee?.allowedModules) {
-          // Additional Admin-level Modules (only add if not already in baseLinks)
-          // Note: Finance & Expenses and Live Tracking are explicitly removed for employees
+      const grantedAdminViews: typeof baseLinks = [];
 
-          // Attendance (Admin View)
-          if (currentEmployee.allowedModules.includes('attendance')) {
-              baseLinks.splice(4, 0, { id: 'attendance_admin', path: '/admin/attendance', label: 'Attendance (Admin)', icon: Calendar });
+      if (currentEmployee?.allowedModules && currentEmployee.allowedModules.length > 0) {
+        // Iterate over potential admin-level modules an employee can be granted
+        for (const moduleId of currentEmployee.allowedModules) {
+          const linkDefinition = MASTER_EMPLOYEE_VIEW_LINKS_MAP[moduleId];
+          if (linkDefinition) {
+            // Ensure we don't add duplicates if a core link has the same ID as an admin view permission.
+            // For this setup, the admin view IDs are distinct (e.g., 'admin_attendance_view')
+            // So we just add them to the granted list.
+            grantedAdminViews.push({ id: moduleId, ...linkDefinition });
           }
-          // Branches
-          if (currentEmployee.allowedModules.includes('branches')) {
-              baseLinks.splice(4, 0, { id: 'branches', path: '/admin/branches', label: 'Branches', icon: Building });
-          }
-          // Staff Management
-          if (currentEmployee.allowedModules.includes('staff_management')) {
-              baseLinks.splice(4, 0, { id: 'staff_management', path: '/admin/staff', label: 'Staff Management', icon: Users });
-          }
-          // Documents
-          if (currentEmployee.allowedModules.includes('documents')) {
-              baseLinks.splice(4, 0, { id: 'documents', path: '/user/documents', label: 'Documents', icon: FileText });
-          }
-          // Vendor Attachment
-          if (currentEmployee.allowedModules.includes('vendor_attachment')) {
-              baseLinks.splice(4, 0, { id: 'vendor_attachment', path: '/user/vendors', label: 'Vendor Attachment', icon: CarFront });
-          }
-          // Payroll (Admin View)
-          if (currentEmployee.allowedModules.includes('payroll')) {
-              baseLinks.splice(4, 0, { id: 'payroll', path: '/admin/payroll', label: 'Payroll (Admin)', icon: DollarSign });
-          }
+        }
       }
+      // Combine core links with any granted admin views
+      // Filter out any potential `null` or `undefined` if `MASTER_EMPLOYEE_VIEW_LINKS_MAP` had incomplete entries.
+      const finalLinks = [...baseLinks.filter(Boolean), ...grantedAdminViews.filter(Boolean)];
+      
+      // Remove duplicates by 'path' in case of overlaps (e.g., if 'tasks' was in both core and granted list with same path)
+      const uniquePaths = new Set<string>();
+      return finalLinks.filter(link => {
+        if (uniquePaths.has(link.path)) {
+          return false;
+        }
+        uniquePaths.add(link.path);
+        return true;
+      });
 
-      return baseLinks;
   }, [currentEmployee]);
 
   const displayLinks = (role === UserRole.ADMIN || role === UserRole.CORPORATE) ? visibleAdminLinks : employeeLinks;
