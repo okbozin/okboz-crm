@@ -1,5 +1,4 @@
 
-
 export enum UserRole {
   ADMIN = 'ADMIN',
   EMPLOYEE = 'EMPLOYEE',
@@ -14,6 +13,34 @@ export enum AttendanceStatus {
   WEEK_OFF = 'WEEK_OFF',
   HOLIDAY = 'HOLIDAY',
   NOT_MARKED = 'NOT_MARKED'
+}
+
+// NEW: Driver Payment Interface
+export interface DriverPayment {
+  id: string;
+  driverName: string;
+  driverPhoneNumber: string;
+  vehicleNumber: string;
+  orderId: string; // Added Order/Trip ID
+  paymentType: 'Empty Trip Payment' | 'Promo Code Payment';
+  amount: number;
+  paymentDate: string;
+  paymentStatus: 'Paid' | 'Pending';
+  paymentMode?: 'Cash' | 'UPI' | 'Online' | 'OK BOZ Wallet'; // Added Payment Mode
+  receiptUrl?: string; // Added Receipt URL
+  remarks?: string;
+  // Specific details based on type
+  details: {
+    // Empty Km Fields
+    pickupDistanceKm?: number;
+    paidKm?: number;
+    // Promo Fields
+    promoCodeName?: string;
+    promoOriginalFare?: number;
+    promoDiscountType?: 'Flat Amount' | 'Percentage';
+    promoDiscountValue?: number;
+  };
+  createdAt: string;
 }
 
 // NEW: Location Record for Attendance

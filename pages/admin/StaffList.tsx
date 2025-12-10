@@ -5,7 +5,7 @@ import {
   MapPin, Phone, Mail, Building2, 
   X, Save, Briefcase, Shield, User, CreditCard, Lock, Eye, EyeOff, AlertCircle,
   Calendar, CarFront, FileText, DollarSign, Headset, ClipboardList, ReceiptIndianRupee, Navigation, 
-  Upload, Loader2, Image as ImageIcon, UserCircle 
+  Upload, Loader2, Image as ImageIcon, UserCircle, CheckCircle, Ban
 } from 'lucide-react';
 import { Employee, CorporateAccount, Branch } from '../../types';
 import { MOCK_EMPLOYEES } from '../../constants';
@@ -14,6 +14,28 @@ import { uploadFileToCloud } from '../../services/cloudService';
 // --- Helpers ---
 const getSessionId = () => localStorage.getItem('app_session_id') || 'admin';
 const isSuperAdmin = () => getSessionId() === 'admin';
+
+// Helper for Avatar Colors based on name
+const getAvatarColor = (name: string) => {
+  const colors = [
+    'bg-emerald-500', 'bg-blue-500', 'bg-purple-500', 
+    'bg-orange-500', 'bg-indigo-500', 'bg-pink-500', 'bg-teal-500', 'bg-cyan-500'
+  ];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return colors[Math.abs(hash) % colors.length];
+};
+
+const getInitials = (name: string) => {
+  return name
+    .split(' ')
+    .map(n => n[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+};
 
 const MODULE_PERMISSIONS = [
   { id: 'admin_attendance_view', label: 'Attendance (Admin View)', icon: Calendar, path: '/admin/attendance' },
@@ -42,7 +64,7 @@ const MODULE_PERMISSIONS = [
 ];
 
 const StaffList: React.FC = () => {
-  // CRITICAL FIX: Synchronously load ALL data on mount to prevent overwriting
+  // Load ALL data on mount
   const [employees, setEmployees] = useState<Employee[]>(() => {
     if (isSuperAdmin()) {
        let allStaff: Employee[] = [];
@@ -52,7 +74,6 @@ const StaffList: React.FC = () => {
            const adminData = localStorage.getItem('staff_data');
            if (adminData) {
                const parsedAdmin = JSON.parse(adminData);
-               // Ensure they are tagged as admin for consistency
                allStaff = parsedAdmin.map((e: any) => ({...e, corporateId: 'admin'}));
            } else {
                allStaff = MOCK_EMPLOYEES.map(e => ({...e, corporateId: 'admin'}));
@@ -87,7 +108,13 @@ const StaffList: React.FC = () => {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  
+  // Filters
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterCorporate, setFilterCorporate] = useState('All');
+  const [filterBranch, setFilterBranch] = useState('All');
+  const [filterStatus, setFilterStatus] = useState('All');
+
   const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({});
 
   // Form State
@@ -155,15 +182,10 @@ const StaffList: React.FC = () => {
 
   // Persist Employee data
   useEffect(() => {
-    // Only run if we actually have data loaded to prevent wiping
-    // (though the new initialization logic makes this safer)
-    
     if (isSuperAdmin()) {
         const adminEmployees = employees.filter(e => !e.corporateId || e.corporateId === 'admin');
         localStorage.setItem('staff_data', JSON.stringify(adminEmployees));
 
-        // Iterate through loaded corporates to save their specific lists
-        // Note: This relies on 'corporates' state being populated.
         if (corporates.length > 0) {
             corporates.forEach(corp => {
                 const corporateEmployees = employees.filter(e => e.corporateId === corp.email);
@@ -171,7 +193,6 @@ const StaffList: React.FC = () => {
             });
         }
     } else {
-        // Corporate users save only their own employees
         const keySuffix = `_${getSessionId()}`;
         const currentCorpEmployees = employees.filter(e => e.corporateId === getSessionId());
         localStorage.setItem(`staff_data${keySuffix}`, JSON.stringify(currentCorpEmployees));
@@ -180,27 +201,26 @@ const StaffList: React.FC = () => {
 
   // Filtered employees for display
   const filteredEmployees = useMemo(() => {
-    let list = employees;
-    
-    // For Super Admin, filter by selected corporate in form (if not editing, default to 'admin' context)
-    // For corporate user, only show their employees.
-    const effectiveCorporateId = isSuperAdmin() ? formData.corporateId : getSessionId();
-    if (effectiveCorporateId !== 'admin') {
-      list = list.filter(e => e.corporateId === effectiveCorporateId);
-    } else if (isSuperAdmin()) { 
-      list = list.filter(e => !e.corporateId || e.corporateId === 'admin');
-    }
-
-    return list.filter(emp => {
+    return employees.filter(emp => {
       if (!emp) return false;
+      
       const matchesSearch = 
         emp.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
         emp.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        emp.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        emp.department?.toLowerCase().includes(searchTerm.toLowerCase());
-      return matchesSearch;
+        emp.phone?.includes(searchTerm);
+      
+      const matchesCorporate = filterCorporate === 'All' || emp.corporateId === filterCorporate || (filterCorporate === 'admin' && emp.corporateId === 'admin');
+      const matchesBranch = filterBranch === 'All' || emp.branch === filterBranch;
+      const matchesStatus = filterStatus === 'All' || emp.status === filterStatus;
+
+      // Ensure proper context visibility (Super Admin sees all, Corporate sees own)
+      const contextCheck = isSuperAdmin() 
+         ? true 
+         : emp.corporateId === getSessionId();
+
+      return matchesSearch && matchesCorporate && matchesBranch && matchesStatus && contextCheck;
     });
-  }, [employees, searchTerm, formData.corporateId]);
+  }, [employees, searchTerm, filterCorporate, filterBranch, filterStatus]);
 
   const departments = useMemo(() => {
     const key = isSuperAdmin() ? 'company_departments' : `company_departments_${getSessionId()}`;
@@ -284,7 +304,7 @@ const StaffList: React.FC = () => {
 
     setUploadingAvatar(true);
 
-    let avatarUrl = formData.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(formData.name || 'User')}&background=random&color=fff`;
+    let avatarUrl = formData.avatar || '';
     
     if (avatarInputRef.current?.files?.[0]) {
         try {
@@ -302,7 +322,6 @@ const StaffList: React.FC = () => {
             }
         } catch (error) {
             console.error("Avatar upload failed:", error);
-            alert("Failed to upload avatar. Proceeding without new avatar.");
         }
     }
     
@@ -347,44 +366,27 @@ const StaffList: React.FC = () => {
       if (editingId) {
         return prev.map(emp => emp.id === editingId ? employeeData : emp);
       } else {
-        if (prev.some(emp => emp.id === employeeData.id)) {
-            employeeData.id = `E${Date.now()}_${Math.random().toString(36).substring(2, 9)}`; 
-        }
-        return [...prev, employeeData];
+        return [employeeData, ...prev];
       }
     });
     
     setUploadingAvatar(false);
     setIsModalOpen(false);
     setEditingId(null);
-    setFormData(initialFormState);
-    if (avatarInputRef.current) avatarInputRef.current.value = ''; 
-  };
-
-  const handleAvatarSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData(prev => ({ ...prev, avatar: reader.result as string }));
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleTogglePasswordVisibility = (id: string) => {
-    setShowPasswords(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-7xl mx-auto space-y-6 pb-20">
+      
+      {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-            <Users className="w-8 h-8 text-emerald-600" /> Staff Management
+             <Users className="w-8 h-8 text-emerald-600" /> Staff Management
           </h2>
-          <p className="text-gray-500">Manage employee profiles, roles, and permissions</p>
+          <p className="text-gray-500">Manage your team members and access.</p>
         </div>
+        
         <button 
           onClick={handleOpenAddEmployee}
           className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg font-medium shadow-md transition-all flex items-center gap-2"
@@ -393,362 +395,367 @@ const StaffList: React.FC = () => {
         </button>
       </div>
 
-      {/* Filter and Search */}
+      {/* Filters Bar */}
       <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col md:flex-row gap-4 items-center">
-        <div className="relative flex-1 w-full">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-          <input 
-            type="text" 
-            placeholder="Search by name, email, or role..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          />
-        </div>
-        {isSuperAdmin() && (
-            <select 
-                value={formData.corporateId} 
-                onChange={e => setFormData({...formData, corporateId: e.target.value})}
-                className="px-4 py-2 border border-gray-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-emerald-500 min-w-[180px]"
-            >
-                <option value="admin">Head Office</option>
-                {corporates.map(c => (
-                    <option key={c.id} value={c.email}>{c.companyName}</option>
+         <div className="relative flex-1 w-full">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input 
+                type="text" 
+                placeholder="Search by name, email, or phone..." 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-gray-50/50"
+            />
+         </div>
+         
+         <div className="flex gap-2 w-full md:w-auto overflow-x-auto">
+             {isSuperAdmin() && (
+                 <select 
+                    value={filterCorporate}
+                    onChange={(e) => setFilterCorporate(e.target.value)}
+                    className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 min-w-[150px]"
+                 >
+                    <option value="All">All Corporates</option>
+                    <option value="admin">Head Office</option>
+                    {corporates.map(c => <option key={c.email} value={c.email}>{c.companyName}</option>)}
+                 </select>
+             )}
+             
+             <select 
+                value={filterBranch}
+                onChange={(e) => setFilterBranch(e.target.value)}
+                className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 min-w-[150px]"
+             >
+                <option value="All">All Branches</option>
+                {allBranches
+                    .filter(b => !isSuperAdmin() || filterCorporate === 'All' || b.owner === filterCorporate)
+                    .map((b, i) => (
+                    <option key={i} value={b.name}>{b.name}</option>
                 ))}
-            </select>
-        )}
+             </select>
+
+             <select 
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 min-w-[120px]"
+             >
+                <option value="All">All Status</option>
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
+             </select>
+         </div>
       </div>
 
-      {/* Employee List Table */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm whitespace-nowrap">
-            <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-200">
-              <tr>
-                <th className="px-6 py-4">Employee</th>
-                <th className="px-6 py-4">Role / Dept</th>
-                {isSuperAdmin() && <th className="px-6 py-4">Corporate</th>}
-                <th className="px-6 py-4">Contact</th>
-                <th className="px-6 py-4">Joining Date</th>
-                <th className="px-6 py-4">Status</th>
-                <th className="px-6 py-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {filteredEmployees.length === 0 ? (
-                <tr>
-                  <td colSpan={isSuperAdmin() ? 7 : 6} className="py-10 text-center text-gray-400">
-                    <div className="flex flex-col items-center">
-                      <Users className="w-12 h-12 mb-3 text-gray-200" />
-                      <p>No employees found matching your criteria.</p>
+      {/* Staff Grid Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {filteredEmployees.map(emp => {
+            const corpName = isSuperAdmin() && emp.corporateId === 'admin' 
+                ? 'Head Office' 
+                : corporates.find(c => c.email === emp.corporateId)?.companyName || 'Corporate';
+            
+            const displayBranch = emp.branch || 'Main Branch';
+            const displayLocation = isSuperAdmin() ? (emp.corporateId === 'admin' ? `OK BOZ HEAD OFFICE` : `OK BOZ ${corpName.toUpperCase()}`) : `OK BOZ ${displayBranch.toUpperCase()}`;
+
+            return (
+                <div key={emp.id} className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 hover:shadow-md transition-shadow relative group">
+                    {/* Action Buttons */}
+                    <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => handleEdit(emp)} className="text-gray-400 hover:text-blue-500 p-1 hover:bg-blue-50 rounded-full transition-colors">
+                            <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => handleDelete(emp.id)} className="text-gray-400 hover:text-red-500 p-1 hover:bg-red-50 rounded-full transition-colors">
+                            <Trash2 className="w-4 h-4" />
+                        </button>
                     </div>
-                  </td>
-                </tr>
-              ) : (
-                filteredEmployees.map((emp) => (
-                  <tr key={emp.id} className="hover:bg-gray-50 transition-colors group">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <img 
-                          src={emp.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(emp.name || 'User')}&background=random&color=fff`} 
-                          alt={emp.name} 
-                          className="w-10 h-10 rounded-full object-cover border border-gray-200"
-                        />
-                        <div>
-                          <div className="font-bold text-gray-900">{emp.name}</div>
-                          <div className="text-xs text-gray-500 font-mono mt-0.5">ID: {emp.id}</div>
+
+                    <div className="flex gap-4 mb-4">
+                        <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-sm ${emp.avatar && !emp.avatar.includes('ui-avatars') ? '' : getAvatarColor(emp.name)} overflow-hidden`}>
+                            {emp.avatar && !emp.avatar.includes('ui-avatars') ? (
+                                <img src={emp.avatar} alt={emp.name} className="w-full h-full object-cover" />
+                            ) : (
+                                getInitials(emp.name)
+                            )}
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="font-medium text-gray-800">{emp.role}</div>
-                      <div className="text-xs text-gray-500">{emp.department}</div>
-                    </td>
-                    {isSuperAdmin() && (
-                        <td className="px-6 py-4">
-                            <div className="flex items-center gap-1.5">
-                                <Building2 className="w-3 h-3 text-indigo-500" />
-                                <span className="text-indigo-700 font-medium text-xs bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
-                                    {emp.corporateId === 'admin' ? 'Head Office' : corporates.find(c => c.email === emp.corporateId)?.companyName || 'N/A'}
-                                </span>
-                            </div>
-                        </td>
-                    )}
-                    <td className="px-6 py-4">
-                      <div className="text-gray-700">{emp.email}</div>
-                      <div className="text-xs text-gray-500">{emp.phone}</div>
-                    </td>
-                    <td className="px-6 py-4 text-gray-600">
-                      {new Date(emp.joiningDate).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`px-3 py-1 rounded-full text-xs font-bold border ${
-                        emp.status === 'Active' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-600 border-gray-200'
-                      }`}>
-                        {emp.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button 
-                          onClick={() => handleEdit(emp)} 
-                          className="text-gray-400 hover:text-blue-600 p-1.5 hover:bg-blue-50 rounded-full transition-colors"
-                          title="Edit Employee"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button 
-                          onClick={() => handleDelete(emp.id)} 
-                          className="text-gray-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded-full transition-colors"
-                          title="Delete Employee"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                        <div>
+                            <h3 className="font-bold text-gray-900 text-lg leading-tight">{emp.name}</h3>
+                            <p className="text-sm text-gray-500 font-medium">{emp.role} • {emp.department}</p>
+                        </div>
+                    </div>
+
+                    <div className="space-y-2.5 text-sm text-gray-600 mb-5">
+                        <div className="flex items-center gap-2.5">
+                            <Mail className="w-4 h-4 text-gray-400 shrink-0" />
+                            <span className="truncate">{emp.email}</span>
+                        </div>
+                        <div className="flex items-center gap-2.5">
+                            <Phone className="w-4 h-4 text-gray-400 shrink-0" />
+                            <span>{emp.phone}</span>
+                        </div>
+                        <div className="flex items-center gap-2.5">
+                            <MapPin className="w-4 h-4 text-gray-400 shrink-0" />
+                            <span className="truncate">{isSuperAdmin() ? (emp.corporateId === 'admin' ? 'Head Office' : corpName) : displayBranch}</span>
+                        </div>
+                    </div>
+
+                    <div className="mb-4">
+                         <span className="inline-block bg-indigo-50 text-indigo-700 px-3 py-1 rounded text-xs font-bold uppercase tracking-wide border border-indigo-100">
+                             {displayLocation}
+                         </span>
+                    </div>
+
+                    <div className="pt-4 border-t border-gray-100 flex justify-between items-center">
+                        <span className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 ${emp.status === 'Active' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                           {emp.status}
+                        </span>
+                        {/* Simulated Online Status Dot */}
+                        {emp.isOnline ? (
+                            <span className="w-2.5 h-2.5 bg-green-500 rounded-full ring-2 ring-white shadow-sm" title="Online"></span>
+                        ) : (
+                            <span className="w-2.5 h-2.5 bg-red-400 rounded-full ring-2 ring-white shadow-sm" title="Offline"></span>
+                        )}
+                    </div>
+                </div>
+            );
+        })}
+        
+        {filteredEmployees.length === 0 && (
+            <div className="col-span-full py-12 text-center text-gray-500 bg-white rounded-xl border border-dashed border-gray-300">
+                <Users className="w-12 h-12 mx-auto text-gray-300 mb-3" />
+                <p>No employees found matching your filters.</p>
+            </div>
+        )}
       </div>
 
       {/* Add/Edit Employee Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col animate-in fade-in zoom-in duration-200">
-            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-2xl shrink-0">
-              <h3 className="font-bold text-gray-800 text-lg">{editingId ? 'Edit Employee' : 'Add New Employee'}</h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600">
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-            
-            <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-6 grid grid-cols-1 md:grid-cols-2 gap-6 custom-scrollbar">
-              {/* Left Column: Basic Info & Employment Details */}
-              <div className="space-y-6">
-                <h4 className="text-sm font-bold text-gray-800 border-b pb-2 flex items-center gap-2"><User className="w-4 h-4 text-emerald-500" /> Basic Information</h4>
-                
-                {/* Avatar Upload */}
-                <div className="flex items-center gap-4">
-                  <div className="relative w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 text-3xl font-bold border border-gray-200 shrink-0 overflow-hidden">
-                    {formData.avatar ? (
-                      <img src={formData.avatar} alt="Avatar" className="w-full h-full object-cover" />
-                    ) : (
-                      <ImageIcon className="w-10 h-10" />
-                    )}
-                    <input 
-                      type="file" 
-                      ref={avatarInputRef} 
-                      onChange={handleAvatarSelect} 
-                      className="absolute inset-0 opacity-0 cursor-pointer" 
-                      accept="image/*"
-                      disabled={uploadingAvatar}
-                    />
-                  </div>
-                  <div>
-                    <button 
-                      type="button" 
-                      onClick={() => avatarInputRef.current?.click()}
-                      disabled={uploadingAvatar}
-                      className="px-3 py-1.5 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded-lg flex items-center gap-2 disabled:opacity-50"
-                    >
-                      {uploadingAvatar ? <Loader2 className="w-4 h-4 animate-spin"/> : <Upload className="w-4 h-4"/>}
-                      {formData.avatar ? 'Change Avatar' : 'Upload Avatar'}
-                    </button>
-                    {formData.avatar && !uploadingAvatar && (
-                        <button 
-                            type="button" 
-                            onClick={() => setFormData(prev => ({...prev, avatar: ''}))}
-                            className="ml-2 text-xs text-red-500 hover:text-red-700 underline"
-                        >
-                            Remove
-                        </button>
-                    )}
-                  </div>
-                </div>
+           <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col animate-in fade-in zoom-in duration-200">
+              <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-2xl shrink-0">
+                 <h3 className="font-bold text-gray-800 text-lg">{editingId ? 'Edit Employee' : 'Add New Employee'}</h3>
+                 <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600"><X className="w-6 h-6"/></button>
+              </div>
+              
+              <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-8">
+                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    {/* Left Column: Basic Info */}
+                    <div className="space-y-5">
+                       <h4 className="text-sm font-bold text-gray-900 border-b pb-2 flex items-center gap-2"><User className="w-4 h-4 text-blue-500"/> Personal & Work Details</h4>
+                       
+                       <div className="flex justify-center mb-4">
+                          <div 
+                              onClick={() => avatarInputRef.current?.click()}
+                              className="w-24 h-24 rounded-full border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:border-emerald-500 hover:bg-emerald-50 transition-colors relative overflow-hidden group"
+                          >
+                              {formData.avatar && !formData.avatar.includes('ui-avatars') ? (
+                                  <img src={formData.avatar} alt="Avatar" className="w-full h-full object-cover" />
+                              ) : (
+                                  <>
+                                      <Upload className="w-6 h-6 text-gray-400 group-hover:text-emerald-500 mb-1" />
+                                      <span className="text-[10px] text-gray-500">Upload Photo</span>
+                                  </>
+                              )}
+                              <input 
+                                  type="file" 
+                                  ref={avatarInputRef} 
+                                  className="hidden" 
+                                  accept="image/*"
+                              />
+                          </div>
+                       </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Name *</label>
-                  <input type="text" name="name" value={formData.name || ''} onChange={handleInputChange} className="w-full p-2 border rounded-lg" required />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Email *</label>
-                    <input type="email" name="email" value={formData.email || ''} onChange={handleInputChange} className="w-full p-2 border rounded-lg" required />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Phone</label>
-                    <input type="tel" name="phone" value={formData.phone || ''} onChange={handleInputChange} className="w-full p-2 border rounded-lg" />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Password *</label>
-                  <div className="relative">
-                    <input 
-                      type={showPasswords[formData.id || 'new'] ? "text" : "password"} 
-                      name="password" 
-                      value={formData.password || ''} 
-                      onChange={handleInputChange} 
-                      className="w-full p-2 pr-10 border rounded-lg" 
-                      required={!editingId} // Password required only for new employee
-                      placeholder={editingId ? 'Leave blank to keep current' : 'Enter password'}
-                    />
-                    <button 
-                      type="button" 
-                      onClick={() => handleTogglePasswordVisibility(formData.id || 'new')}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
-                    >
-                      {showPasswords[formData.id || 'new'] ? <EyeOff className="w-4 h-4"/> : <Eye className="w-4 h-4"/>}
-                    </button>
-                  </div>
-                </div>
+                       <div className="grid grid-cols-2 gap-4">
+                          <div>
+                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Full Name *</label>
+                             <input required name="name" value={formData.name} onChange={handleInputChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="John Doe" />
+                          </div>
+                          <div>
+                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Phone *</label>
+                             <input required name="phone" value={formData.phone} onChange={handleInputChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="+91..." />
+                          </div>
+                       </div>
+                       
+                       <div>
+                           <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Email (Login ID) *</label>
+                           <input required type="email" name="email" value={formData.email} onChange={handleInputChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="john@company.com" />
+                       </div>
 
-                <h4 className="text-sm font-bold text-gray-800 border-b pb-2 flex items-center gap-2"><Briefcase className="w-4 h-4 text-blue-500" /> Employment Details</h4>
-                {isSuperAdmin() && (
-                    <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Corporate</label>
-                        <select name="corporateId" value={formData.corporateId || ''} onChange={handleInputChange} className="w-full p-2 border rounded-lg">
-                            <option value="admin">Head Office</option>
-                            {corporates.map(c => <option key={c.id} value={c.email}>{c.companyName}</option>)}
-                        </select>
+                       <div className="grid grid-cols-2 gap-4">
+                          <div>
+                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Department *</label>
+                             <select required name="department" value={formData.department} onChange={handleInputChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-emerald-500">
+                                <option value="">Select Dept</option>
+                                {departments.map(d => <option key={d} value={d}>{d}</option>)}
+                             </select>
+                          </div>
+                          <div>
+                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Role *</label>
+                             <select required name="role" value={formData.role} onChange={handleInputChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-emerald-500">
+                                <option value="">Select Role</option>
+                                {roles.map(r => <option key={r} value={r}>{r}</option>)}
+                             </select>
+                          </div>
+                       </div>
+
+                       {/* Conditional Branch/Corporate Selectors */}
+                       <div className="grid grid-cols-2 gap-4">
+                           {isSuperAdmin() && (
+                               <div>
+                                   <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Corporate</label>
+                                   <select 
+                                      name="corporateId" 
+                                      value={formData.corporateId} 
+                                      onChange={handleInputChange} 
+                                      className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-emerald-500"
+                                   >
+                                      <option value="admin">Head Office</option>
+                                      {corporates.map(c => <option key={c.id} value={c.email}>{c.companyName}</option>)}
+                                   </select>
+                               </div>
+                           )}
+                           
+                           <div>
+                               <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Branch</label>
+                               <select 
+                                  name="branch" 
+                                  value={formData.branch} 
+                                  onChange={handleInputChange} 
+                                  className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-emerald-500"
+                               >
+                                  <option value="">Select Branch</option>
+                                  {allBranches
+                                     .filter(b => b.owner === (formData.corporateId || getSessionId()))
+                                     .map(b => <option key={b.id} value={b.name}>{b.name}</option>)
+                                  }
+                               </select>
+                           </div>
+                       </div>
+                       
+                       <div className="grid grid-cols-2 gap-4">
+                           <div>
+                               <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Joining Date *</label>
+                               <input type="date" name="joiningDate" value={formData.joiningDate} onChange={handleInputChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500" />
+                           </div>
+                           <div>
+                               <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Monthly Salary (₹)</label>
+                               <input type="number" name="salary" value={formData.salary} onChange={handleInputChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500" placeholder="0" />
+                           </div>
+                       </div>
+
+                       <div>
+                           <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Login Password *</label>
+                           <div className="relative">
+                               <input 
+                                  type={showPasswords['new'] ? "text" : "password"} 
+                                  name="password" 
+                                  value={formData.password} 
+                                  onChange={handleInputChange} 
+                                  className="w-full p-2.5 pr-10 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500" 
+                                  placeholder="Set a strong password" 
+                                  required={!editingId}
+                               />
+                               <button 
+                                  type="button"
+                                  onClick={() => setShowPasswords(prev => ({...prev, new: !prev.new}))}
+                                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                               >
+                                   {showPasswords['new'] ? <EyeOff className="w-4 h-4"/> : <Eye className="w-4 h-4"/>}
+                               </button>
+                           </div>
+                       </div>
                     </div>
-                )}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Role *</label>
-                    <select name="role" value={formData.role || ''} onChange={handleInputChange} className="w-full p-2 border rounded-lg" required>
-                      <option value="">Select Role</option>
-                      {roles.map(r => <option key={r} value={r}>{r}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Department *</label>
-                    <select name="department" value={formData.department || ''} onChange={handleInputChange} className="w-full p-2 border rounded-lg" required>
-                      <option value="">Select Department</option>
-                      {departments.map(d => <option key={d} value={d}>{d}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Branch</label>
-                  <select name="branch" value={formData.branch || ''} onChange={handleInputChange} className="w-full p-2 border rounded-lg">
-                    <option value="">Select Branch</option>
-                    {allBranches
-                        .filter(b => b && (!formData.corporateId || b.owner === formData.corporateId))
-                        .map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
-                  </select>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Joining Date *</label>
-                    <input type="date" name="joiningDate" value={formData.joiningDate || ''} onChange={handleInputChange} className="w-full p-2 border rounded-lg" required />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Salary (CTC)</label>
-                    <input type="number" name="salary" value={formData.salary || ''} onChange={handleInputChange} className="w-full p-2 border rounded-lg" />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Status</label>
-                  <select name="status" value={formData.status || 'Active'} onChange={handleInputChange} className="w-full p-2 border rounded-lg">
-                    <option value="Active">Active</option>
-                    <option value="Inactive">Inactive</option>
-                  </select>
-                </div>
-              </div>
 
-              {/* Right Column: Advanced Settings & Permissions */}
-              <div className="space-y-6">
-                <h4 className="text-sm font-bold text-gray-800 border-b pb-2 flex items-center gap-2"><Shield className="w-4 h-4 text-purple-500" /> Attendance & Tracking</h4>
-                <div className="space-y-2">
-                    <label className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
-                      <input type="checkbox" name="liveTracking" checked={formData.liveTracking || false} onChange={handleInputChange} className="rounded" />
-                      <span className="text-sm">Enable Live Tracking</span>
-                    </label>
-                    <label className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
-                      <input type="checkbox" name="allowRemotePunch" checked={formData.allowRemotePunch || false} onChange={handleInputChange} className="rounded" />
-                      <span className="text-sm">Allow Remote Punch-in</span>
-                    </label>
-                </div>
-                <div className="space-y-3 p-3 bg-blue-50/20 border border-blue-100 rounded-lg">
-                    <h5 className="text-xs font-bold text-blue-800 uppercase mb-2">Attendance Modes</h5>
-                    <label className="flex items-center justify-between">
-                      <span className="text-sm text-gray-700">GPS Geofencing</span>
-                      <input type="checkbox" checked={formData.attendanceConfig?.gpsGeofencing || false} onChange={() => handleToggleAttendanceConfig('gpsGeofencing')} className="rounded text-blue-600" />
-                    </label>
-                    <label className="flex items-center justify-between">
-                      <span className="text-sm text-gray-700">QR Scan</span>
-                      <input type="checkbox" checked={formData.attendanceConfig?.qrScan || false} onChange={() => handleToggleAttendanceConfig('qrScan')} className="rounded text-blue-600" />
-                    </label>
-                    <label className="flex items-center justify-between">
-                      <span className="text-sm text-gray-700">Manual Punch</span>
-                      <input type="checkbox" checked={formData.attendanceConfig?.manualPunch || false} onChange={() => handleToggleAttendanceConfig('manualPunch')} className="rounded text-blue-600" />
-                    </label>
-                    {formData.attendanceConfig?.manualPunch && (
-                        <div className="ml-6 mt-2">
-                           <label className="block text-xs text-gray-600 mb-1">Manual Punch Mode:</label>
+                    {/* Right Column: Permissions & Config */}
+                    <div className="space-y-6">
+                       <h4 className="text-sm font-bold text-gray-900 border-b pb-2 flex items-center gap-2"><Lock className="w-4 h-4 text-purple-500"/> Permissions & Settings</h4>
+                       
+                       <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-3">
+                           <h5 className="text-xs font-bold text-gray-500 uppercase">Attendance Rules</h5>
+                           <label className="flex items-center justify-between cursor-pointer">
+                               <span className="text-sm text-gray-700">GPS Geofencing</span>
+                               <input type="checkbox" checked={formData.attendanceConfig?.gpsGeofencing} onChange={() => handleToggleAttendanceConfig('gpsGeofencing')} className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500" />
+                           </label>
+                           <label className="flex items-center justify-between cursor-pointer">
+                               <span className="text-sm text-gray-700">QR Scan Required</span>
+                               <input type="checkbox" checked={formData.attendanceConfig?.qrScan} onChange={() => handleToggleAttendanceConfig('qrScan')} className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500" />
+                           </label>
+                           <label className="flex items-center justify-between cursor-pointer">
+                               <span className="text-sm text-gray-700">Allow Manual Punch</span>
+                               <input type="checkbox" checked={formData.attendanceConfig?.manualPunch} onChange={() => handleToggleAttendanceConfig('manualPunch')} className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500" />
+                           </label>
+                           <div className="pt-2 border-t border-gray-200 mt-2">
+                               <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Manual Punch Mode</label>
+                               <select 
+                                  value={formData.attendanceConfig?.manualPunchMode} 
+                                  onChange={(e) => setFormData(prev => ({...prev, attendanceConfig: {...prev.attendanceConfig!, manualPunchMode: e.target.value as any}}))}
+                                  className="w-full p-2 border border-gray-300 rounded-lg text-xs bg-white"
+                               >
+                                   <option value="Anywhere">Anywhere (Remote)</option>
+                                   <option value="BranchRadius">Branch Radius Only</option>
+                               </select>
+                           </div>
+                       </div>
+
+                       <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                           <h5 className="text-xs font-bold text-gray-500 uppercase mb-3">Live Tracking</h5>
+                           <label className="flex items-center justify-between cursor-pointer">
+                               <span className="text-sm text-gray-700">Enable Live GPS Tracking</span>
+                               <input 
+                                  type="checkbox" 
+                                  name="liveTracking"
+                                  checked={formData.liveTracking} 
+                                  onChange={handleInputChange} 
+                                  className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500" 
+                               />
+                           </label>
+                           <p className="text-[10px] text-gray-400 mt-1">
+                               Tracking is active only when employee is clocked in.
+                           </p>
+                       </div>
+
+                       <div>
+                           <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Account Status</label>
                            <select 
-                             name="attendanceConfig.manualPunchMode"
-                             value={formData.attendanceConfig.manualPunchMode || 'Anywhere'} 
-                             onChange={handleInputChange} 
-                             className="w-full p-1.5 border rounded-lg text-xs"
+                              name="status" 
+                              value={formData.status} 
+                              onChange={handleInputChange}
+                              className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-emerald-500"
                            >
-                              <option value="Anywhere">Anywhere</option>
-                              <option value="BranchRadius">Within Branch Radius Only</option>
+                               <option value="Active">Active</option>
+                               <option value="Inactive">Inactive</option>
                            </select>
-                        </div>
-                    )}
-                </div>
+                       </div>
 
-                <h4 className="text-sm font-bold text-gray-800 border-b pb-2 flex items-center gap-2"><Lock className="w-4 h-4 text-red-500" /> Module Permissions</h4>
-                <div className="grid grid-cols-1 gap-2 bg-gray-50 p-4 rounded-lg border border-gray-100 max-h-60 overflow-y-auto">
-                    {MODULE_PERMISSIONS.map(module => (
-                        <label key={module.id} className="flex items-center gap-2">
-                            <input 
-                                type="checkbox" 
-                                name="allowedModules" 
-                                value={module.id} 
-                                checked={formData.allowedModules?.includes(module.id) || false} 
-                                onChange={handleInputChange} 
-                                className="rounded text-emerald-600"
-                            />
-                            <span className="text-sm text-gray-700">{module.label}</span>
-                        </label>
-                    ))}
-                </div>
+                       {/* Module Permissions */}
+                       <div>
+                           <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Module Access</label>
+                           <div className="h-40 overflow-y-auto border border-gray-200 rounded-lg p-2 bg-gray-50 custom-scrollbar">
+                               {MODULE_PERMISSIONS.map(mod => (
+                                   <label key={mod.id} className="flex items-center gap-2 p-2 hover:bg-white rounded cursor-pointer transition-colors">
+                                       <input 
+                                          type="checkbox" 
+                                          name="allowedModules" 
+                                          value={mod.id}
+                                          checked={formData.allowedModules?.includes(mod.id)}
+                                          onChange={handleInputChange}
+                                          className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500" 
+                                       />
+                                       <span className="text-sm text-gray-700">{mod.label}</span>
+                                   </label>
+                               ))}
+                           </div>
+                       </div>
+                    </div>
+                 </div>
 
-                {/* Personal Profile Details */}
-                <h4 className="text-sm font-bold text-gray-800 border-b pb-2 flex items-center gap-2"><UserCircle className="w-4 h-4 text-orange-500" /> Personal Details (Optional)</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Date of Birth</label>
-                    <input type="date" name="dob" value={formData.dob || ''} onChange={handleInputChange} className="w-full p-2 border rounded-lg" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Gender</label>
-                    <select name="gender" value={formData.gender || ''} onChange={handleInputChange} className="w-full p-2 border rounded-lg">
-                      <option value="">Select</option><option value="Male">Male</option><option value="Female">Female</option><option value="Other">Other</option>
-                    </select>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Home Address</label>
-                  <textarea name="homeAddress" rows={2} value={formData.homeAddress || ''} onChange={handleInputChange} className="w-full p-2 border rounded-lg resize-none" />
-                </div>
-              </div>
-
-              {/* Submit/Cancel Buttons */}
-              <div className="md:col-span-2 flex justify-end gap-3 pt-6 border-t border-gray-100">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-2.5 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors">Cancel</button>
-                <button type="submit" disabled={uploadingAvatar} className="px-8 py-2.5 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 shadow-md transition-colors flex items-center gap-2 disabled:opacity-50">
-                  {uploadingAvatar ? <Loader2 className="w-5 h-5 animate-spin"/> : <Save className="w-5 h-5"/>}
-                  {editingId ? 'Update Employee' : 'Add Employee'}
-                </button>
-              </div>
-            </form>
-          </div>
+                 <div className="pt-6 border-t border-gray-100 mt-6 flex justify-end gap-3">
+                    <button type="button" onClick={() => setIsModalOpen(false)} className="px-5 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 font-medium">Cancel</button>
+                    <button type="submit" disabled={uploadingAvatar} className="px-6 py-2.5 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 shadow-sm transition-colors flex items-center gap-2">
+                       {uploadingAvatar ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                       {editingId ? 'Update Employee' : 'Save Employee'}
+                    </button>
+                 </div>
+              </form>
+           </div>
         </div>
       )}
     </div>

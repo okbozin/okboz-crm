@@ -36,7 +36,6 @@ import { sendSystemNotification } from './services/cloudService';
 import Reports from './pages/admin/Reports';
 import CMS from './pages/admin/CMS'; 
 import AppVersionHistory from './pages/admin/AppVersionHistory'; 
-import DriverPayments from './pages/admin/DriverPayments'; // New Import
 
 /**
  * Main application component.
@@ -144,7 +143,6 @@ const App: React.FC = () => {
                         <Route path="/admin/reports" element={<Reports />} />
                         <Route path="/admin/customer-care" element={<CustomerCare role={userRole} />} />
                         <Route path="/admin/trip-earning" element={<TripEarning />} />
-                        <Route path="/admin/driver-payments" element={<DriverPayments />} />
                         <Route path="/admin/tracking" element={<LiveTracking />} />
                         <Route path="/admin/leads" element={<Leads />} />
                         <Route path="/admin/tasks" element={<TaskManagement role={userRole} />} />

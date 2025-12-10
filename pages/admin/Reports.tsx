@@ -7,14 +7,14 @@ import {
 import { 
   Download, TrendingUp, DollarSign, 
   Briefcase, ArrowUpRight, Car, MapPin, Activity, CheckSquare, Users, PieChart as PieChartIcon,
-  Filter, Calendar, Building2, PhoneIncoming, RefreshCw
+  Filter, Calendar, Building2, PhoneIncoming, RefreshCw, CreditCard, CheckCircle, Clock
 } from 'lucide-react';
 import { MOCK_EMPLOYEES, getEmployeeAttendance } from '../../constants';
-import { AttendanceStatus, PayrollHistoryRecord } from '../../types';
+import { AttendanceStatus, PayrollHistoryRecord, DriverPayment } from '../../types';
 
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#6366f1'];
 
-type ReportTab = 'Finance & Expenses' | 'Payroll Management' | 'Attendance Management' | 'Trip Earning' | 'Customer Care';
+type ReportTab = 'Finance & Expenses' | 'Driver Payments' | 'Payroll Management' | 'Attendance Management' | 'Trip Earning' | 'Customer Care';
 
 const Reports: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ReportTab>('Finance & Expenses');
@@ -26,6 +26,7 @@ const Reports: React.FC = () => {
   const [rawEnquiries, setRawEnquiries] = useState<any[]>([]); // Using global_enquiries for Customer Care
   const [rawStaff, setRawStaff] = useState<any[]>([]);
   const [rawTrips, setRawTrips] = useState<any[]>([]);
+  const [rawDriverPayments, setRawDriverPayments] = useState<any[]>([]); // NEW: Driver Payments
   const [corporatesList, setCorporatesList] = useState<any[]>([]);
   const [branchesList, setBranchesList] = useState<any[]>([]);
 
@@ -131,6 +132,27 @@ const Reports: React.FC = () => {
       }
       setRawTrips(allTrips);
 
+      // Load Driver Payments (NEW)
+      let allDriverPayments: any[] = [];
+      if (isSuperAdmin) {
+          const adminPayments = JSON.parse(localStorage.getItem('driver_payments_data') || '[]');
+          // Inject ownerId = 'admin' for filtering
+          allDriverPayments = [...adminPayments.map((p: any) => ({...p, ownerId: 'admin'}))];
+          
+          corporates.forEach((c: any) => {
+             const cPayments = JSON.parse(localStorage.getItem(`driver_payments_data_${c.email}`) || '[]');
+             // Inject ownerId = corporate email
+             allDriverPayments = [...allDriverPayments, ...cPayments.map((p: any) => ({...p, ownerId: c.email}))];
+          });
+      } else {
+          const key = `driver_payments_data_${sessionId}`;
+          const cPayments = JSON.parse(localStorage.getItem(key) || '[]');
+          // Inject ownerId = sessionId
+          allDriverPayments = [...cPayments.map((p: any) => ({...p, ownerId: sessionId}))];
+      }
+      setRawDriverPayments(allDriverPayments);
+
+
     } catch (e) {
       console.error("Error loading report data", e);
     }
@@ -178,6 +200,7 @@ const Reports: React.FC = () => {
   const filteredPayroll = useMemo(() => rawPayroll.filter(p => isContextMatch(p, 'ownerId') && isDateInFilter(p.date)), [rawPayroll, filterCorporate, filterBranch, selectedMonth, dateRange, filterDateType]);
   const filteredStaff = useMemo(() => rawStaff.filter(s => isContextMatch(s, 'owner')), [rawStaff, filterCorporate, filterBranch]); // Staff filtering is snapshot based usually
   const filteredEnquiries = useMemo(() => rawEnquiries.filter(e => isContextMatch(e, 'corporateId') && isDateInFilter(e.createdAt)), [rawEnquiries, filterCorporate, filterBranch, selectedMonth, dateRange, filterDateType]);
+  const filteredDriverPayments = useMemo(() => rawDriverPayments.filter(p => isContextMatch(p, 'ownerId') && isDateInFilter(p.paymentDate)), [rawDriverPayments, filterCorporate, filterBranch, selectedMonth, dateRange, filterDateType]);
 
   // --- 3. Statistics Calculation ---
 
@@ -188,11 +211,13 @@ const Reports: React.FC = () => {
     const tripRevenue = filteredTrips.filter(t => t.bookingStatus === 'Completed').reduce((sum, t) => sum + (Number(t.totalPrice) || 0), 0);
     const payrollCost = filteredPayroll.reduce((sum, p) => sum + (p.totalAmount || 0), 0);
     
+    // Add Driver Payments (Payouts) to expenses logic
+    const driverPayouts = filteredDriverPayments.filter(p => p.paymentStatus === 'Paid').reduce((sum, p) => sum + (p.amount || 0), 0);
+
     const totalIncome = otherIncome + tripRevenue;
-    const netProfit = totalIncome - (totalExpense + payrollCost);
+    const netProfit = totalIncome - (totalExpense + payrollCost + driverPayouts);
 
     // Chart Data (Daily Trend within selected period)
-    // Simplified: Grouping by "Day" for chart
     const trendData: Record<string, any> = {};
     
     // Populate keys based on date filter (last 30 days or selected range)
@@ -210,20 +235,55 @@ const Reports: React.FC = () => {
             trendData[day].Income += (Number(t.totalPrice) || 0);
         }
     });
+    filteredDriverPayments.forEach(p => {
+        if(p.paymentStatus === 'Paid') {
+            const day = p.paymentDate.split('T')[0];
+            if(!trendData[day]) trendData[day] = { name: day, Income: 0, Expense: 0 };
+            trendData[day].Expense += (p.amount || 0);
+        }
+    });
     
     // Sort by date
     const chartData = Object.values(trendData).sort((a: any, b: any) => a.name.localeCompare(b.name));
 
-    return { totalIncome, totalExpense, payrollCost, netProfit, chartData };
-  }, [filteredExpenses, filteredTrips, filteredPayroll]);
+    return { totalIncome, totalExpense: totalExpense + driverPayouts, payrollCost, netProfit, chartData };
+  }, [filteredExpenses, filteredTrips, filteredPayroll, filteredDriverPayments]);
 
   const expenseCategoryData = useMemo(() => {
     const categoryMap: Record<string, number> = {};
     filteredExpenses.filter(e => e.type === 'Expense').forEach(e => {
         categoryMap[e.category] = (categoryMap[e.category] || 0) + (parseFloat(e.amount) || 0);
     });
+    // Add Driver Payments as a category
+    const driverPayTotal = filteredDriverPayments.filter(p => p.paymentStatus === 'Paid').reduce((sum, p) => sum + p.amount, 0);
+    if(driverPayTotal > 0) categoryMap['Driver Payments'] = driverPayTotal;
+
     return Object.keys(categoryMap).map(key => ({ name: key, value: categoryMap[key] })).sort((a,b) => b.value - a.value);
-  }, [filteredExpenses]);
+  }, [filteredExpenses, filteredDriverPayments]);
+
+  // Driver Payment Stats
+  const driverPaymentStats = useMemo(() => {
+     const totalPaid = filteredDriverPayments.filter(p => p.paymentStatus === 'Paid').reduce((sum, p) => sum + p.amount, 0);
+     const totalPending = filteredDriverPayments.filter(p => p.paymentStatus === 'Pending').reduce((sum, p) => sum + p.amount, 0);
+     
+     const emptyKmPaid = filteredDriverPayments.filter(p => p.paymentStatus === 'Paid' && p.paymentType === 'Empty Trip Payment').reduce((sum, p) => sum + p.amount, 0);
+     const promoPaid = filteredDriverPayments.filter(p => p.paymentStatus === 'Paid' && p.paymentType === 'Promo Code Payment').reduce((sum, p) => sum + p.amount, 0);
+
+     // Chart Data: Payments per day
+     const paymentsByDate: Record<string, number> = {};
+     filteredDriverPayments
+        .filter(p => p.paymentStatus === 'Paid')
+        .forEach(p => {
+             const d = new Date(p.paymentDate).toLocaleDateString(undefined, {month:'short', day:'numeric'});
+             paymentsByDate[d] = (paymentsByDate[d] || 0) + p.amount;
+        });
+     const paymentChartData = Object.keys(paymentsByDate).map(key => ({
+         name: key,
+         amount: paymentsByDate[key]
+     }));
+
+     return { totalPaid, totalPending, emptyKmPaid, promoPaid, paymentChartData };
+  }, [filteredDriverPayments]);
 
   // Attendance Tab Stats
   const attendanceStats = useMemo(() => {
@@ -386,6 +446,7 @@ const Reports: React.FC = () => {
           <div className="flex gap-2 overflow-x-auto border-t border-gray-100 pt-4">
                 {[
                     { id: 'Finance & Expenses', icon: DollarSign },
+                    { id: 'Driver Payments', icon: CreditCard }, // NEW BUTTON
                     { id: 'Payroll Management', icon: Users },
                     { id: 'Attendance Management', icon: Calendar },
                     { id: 'Trip Earning', icon: Car },
@@ -479,6 +540,102 @@ const Reports: React.FC = () => {
                               </PieChart>
                           </ResponsiveContainer>
                       </div>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* --- DRIVER PAYMENTS TAB (NEW) --- */}
+      {activeTab === 'Driver Payments' && (
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
+               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+                      <p className="text-xs font-bold text-gray-500 uppercase">Total Paid</p>
+                      <h3 className="text-2xl font-bold text-emerald-600">₹{driverPaymentStats.totalPaid.toLocaleString()}</h3>
+                      <p className="text-xs text-emerald-600 mt-1 flex items-center gap-1"><CheckCircle className="w-3 h-3"/> Settled</p>
+                  </div>
+                  <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+                      <p className="text-xs font-bold text-gray-500 uppercase">Pending Requests</p>
+                      <h3 className="text-2xl font-bold text-red-600">₹{driverPaymentStats.totalPending.toLocaleString()}</h3>
+                      <p className="text-xs text-red-400 mt-1 flex items-center gap-1"><Clock className="w-3 h-3"/> To be paid</p>
+                  </div>
+                  <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+                      <p className="text-xs font-bold text-gray-500 uppercase">Empty Km Payout</p>
+                      <h3 className="text-2xl font-bold text-orange-600">₹{driverPaymentStats.emptyKmPaid.toLocaleString()}</h3>
+                  </div>
+                  <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+                      <p className="text-xs font-bold text-gray-500 uppercase">Promo Code Reimb.</p>
+                      <h3 className="text-2xl font-bold text-purple-600">₹{driverPaymentStats.promoPaid.toLocaleString()}</h3>
+                  </div>
+              </div>
+
+              {/* Bar Chart Section */}
+              <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                  <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2">
+                      <TrendingUp className="w-5 h-5 text-emerald-600" /> Payout Trends
+                  </h3>
+                  <div className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={driverPaymentStats.paymentChartData}>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill:'#9ca3af', fontSize:12}} dy={10} />
+                              <YAxis axisLine={false} tickLine={false} tick={{fill:'#9ca3af', fontSize:12}} />
+                              <Tooltip cursor={{fill: 'transparent'}} formatter={(value: number) => [`₹${value.toLocaleString()}`, 'Amount']} />
+                              <Legend />
+                              <Bar dataKey="amount" fill="#10b981" radius={[4, 4, 0, 0]} name="Paid Amount" barSize={40} />
+                          </BarChart>
+                      </ResponsiveContainer>
+                  </div>
+              </div>
+
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                  <div className="p-4 border-b border-gray-100 flex justify-between items-center">
+                      <h3 className="font-bold text-gray-800">Transaction History</h3>
+                      <span className="text-sm text-gray-500">Records found: {filteredDriverPayments.length}</span>
+                  </div>
+                  <div className="overflow-x-auto">
+                      <table className="w-full text-left text-sm whitespace-nowrap">
+                          <thead className="bg-gray-50 text-gray-500 font-medium">
+                              <tr>
+                                  <th className="px-6 py-3">Date</th>
+                                  <th className="px-6 py-3">Driver</th>
+                                  <th className="px-6 py-3">Type</th>
+                                  <th className="px-6 py-3">Details</th>
+                                  <th className="px-6 py-3 text-right">Amount</th>
+                                  <th className="px-6 py-3 text-center">Status</th>
+                              </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                              {filteredDriverPayments.map(p => (
+                                  <tr key={p.id} className="hover:bg-gray-50">
+                                      <td className="px-6 py-3 text-gray-600">{new Date(p.paymentDate).toLocaleDateString()}</td>
+                                      <td className="px-6 py-3">
+                                          <div className="font-medium text-gray-900">{p.driverName}</div>
+                                          <div className="text-xs text-gray-500">{p.vehicleNumber}</div>
+                                      </td>
+                                      <td className="px-6 py-3">
+                                          <span className={`px-2 py-1 rounded text-xs font-bold border ${p.paymentType === 'Empty Trip Payment' ? 'bg-orange-50 text-orange-700 border-orange-200' : 'bg-purple-50 text-purple-700 border-purple-200'}`}>
+                                             {p.paymentType === 'Empty Trip Payment' ? 'Empty Km' : 'Promo Code'}
+                                          </span>
+                                      </td>
+                                      <td className="px-6 py-3 text-xs text-gray-600">
+                                         {p.paymentType === 'Empty Trip Payment' ? (
+                                            <span>Pickup: {p.details?.pickupDistanceKm}km | Paid: {p.details?.paidKm}km</span>
+                                         ) : (
+                                            <span>{p.details?.promoCodeName} ({p.details?.promoDiscountValue}{p.details?.promoDiscountType === 'Percentage' ? '%' : ' Flat'})</span>
+                                         )}
+                                      </td>
+                                      <td className="px-6 py-3 text-right font-bold text-gray-900">₹{p.amount.toLocaleString()}</td>
+                                      <td className="px-6 py-3 text-center">
+                                          <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${p.paymentStatus === 'Paid' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                                              {p.paymentStatus}
+                                          </span>
+                                      </td>
+                                  </tr>
+                              ))}
+                              {filteredDriverPayments.length === 0 && <tr><td colSpan={6} className="py-8 text-center text-gray-400">No driver payments found.</td></tr>}
+                          </tbody>
+                      </table>
                   </div>
               </div>
           </div>
