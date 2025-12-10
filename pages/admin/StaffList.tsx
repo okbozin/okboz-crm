@@ -5,7 +5,7 @@ import {
   MapPin, Phone, Mail, Building2, 
   X, Save, Briefcase, Shield, User, CreditCard, Lock, Eye, EyeOff, AlertCircle,
   Calendar, CarFront, FileText, DollarSign, Headset, ClipboardList, ReceiptIndianRupee, Navigation, 
-  Upload, Loader2, Image as ImageIcon, UserCircle, CheckCircle, Ban
+  Upload, Loader2, Image as ImageIcon, UserCircle, CheckCircle, Ban, BarChart3, Car
 } from 'lucide-react';
 import { Employee, CorporateAccount, Branch } from '../../types';
 import { MOCK_EMPLOYEES } from '../../constants';
@@ -38,29 +38,13 @@ const getInitials = (name: string) => {
 };
 
 const MODULE_PERMISSIONS = [
-  { id: 'admin_attendance_view', label: 'Attendance (Admin View)', icon: Calendar, path: '/admin/attendance' },
-  { id: 'staff_management', label: 'Staff Management', icon: Users, path: '/admin/staff' },
-  { id: 'vendor_attachment', label: 'Vendor Attachment (Admin View)', icon: CarFront, path: '/admin/vendors' },
-  { id: 'branches', label: 'Branches (Admin View)', icon: Building2, path: '/admin/branches' },
-  { id: 'documents_admin_view', label: 'Documents (Admin View)', icon: FileText, path: '/admin/documents' },
-  { id: 'payroll_admin_view', label: 'Payroll (Admin View)', icon: DollarSign, path: '/admin/payroll' },
-  { id: 'finance_expenses_admin_view', label: 'Finance & Expenses (Admin View)', icon: CreditCard, path: '/admin/finance-and-expenses' },
-  { id: 'email_marketing', label: 'Email Marketing', icon: Mail, path: '/admin/email-marketing' },
-  { id: 'customer_care_admin_view', label: 'Customer Care (Admin View)', icon: Headset, path: '/admin/customer-care' },
-  { id: 'tasks_admin_view', label: 'Tasks (Admin View)', icon: ClipboardList, path: '/admin/tasks' },
-  { id: 'trip_earning_admin_view', label: 'Trip Earning (Admin View)', icon: ReceiptIndianRupee, path: '/admin/trip-earning' },
-  { id: 'live_tracking_admin_view', label: 'Live Tracking (Admin View)', icon: Navigation },
-  { id: 'my_attendance', label: 'My Attendance (Employee View)', icon: Calendar },
-  { id: 'my_salary', label: 'My Salary (Employee View)', icon: DollarSign },
-  { id: 'apply_leave', label: 'Apply Leave (Employee View)', icon: Briefcase },
-  { id: 'my_profile', label: 'My Profile (Employee View)', icon: UserCircle },
-  { id: 'security_account', label: 'Security & Account (Employee View)', icon: Lock },
-  { id: 'tasks', label: 'My Tasks (Employee View)', icon: ClipboardList },
-  { id: 'customer_care', label: 'My Customer Care (Employee View)', icon: Headset },
-  { id: 'trip_earning', label: 'My Trip Earning (Employee View)', icon: ReceiptIndianRupee },
-  { id: 'documents_employee_view', label: 'My Documents (Employee View)', icon: FileText },
-  { id: 'vendor_attachment_employee_view', label: 'My Vendors (Employee View)', icon: CarFront },
-  { id: 'finance_expenses_employee_view', label: 'My Expenses (Employee View)', icon: CreditCard },
+  { id: 'reports', label: 'Reports & Analytics', icon: BarChart3 },
+  { id: 'live_tracking', label: 'Live Tracking', icon: Navigation },
+  { id: 'attendance', label: 'Attendance', icon: Calendar },
+  { id: 'staff_management', label: 'Staff Management', icon: Users },
+  { id: 'payroll', label: 'Payroll', icon: DollarSign },
+  { id: 'finance_expenses', label: 'Finance & Expenses', icon: CreditCard },
+  { id: 'driver_payments', label: 'Driver Payments', icon: Car },
 ];
 
 const StaffList: React.FC = () => {

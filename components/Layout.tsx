@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, MapPin, Calendar, DollarSign, Briefcase, Menu, X, LogOut, UserCircle, Building, Settings, Target, CreditCard, ClipboardList, ReceiptIndianRupee, Navigation, Car, Building2, PhoneIncoming, GripVertical, Edit2, Check, FileText, Layers, PhoneCall, Bus, Bell, Sun, Moon, Monitor, Mail, UserCog, CarFront, BellRing, BarChart3, Map, Headset, BellDot, Pencil, Lock, Wallet } from 'lucide-react';
+import { LayoutDashboard, Users, MapPin, Calendar, DollarSign, Briefcase, Menu, X, LogOut, UserCircle, Building, Settings, Target, CreditCard, ClipboardList, ReceiptIndianRupee, Navigation, Car, Building2, PhoneIncoming, GripVertical, Edit2, Check, FileText, Layers, PhoneCall, Bus, Bell, Sun, Moon, Monitor, Mail, UserCog, CarFront, BellRing, BarChart3, Map as MapIcon, Headset, BellDot, Pencil, Lock, Wallet } from 'lucide-react';
 import { UserRole, Enquiry, CorporateAccount, Employee } from '../types';
 import { useBranding } from '../context/BrandingContext';
 import { useTheme } from '../context/ThemeContext';
@@ -21,7 +21,6 @@ const MASTER_ADMIN_LINKS = [
   { id: 'customer-care', path: '/admin/customer-care', label: 'Customer Care', icon: Headset },
   
   { id: 'trip-earning', path: '/admin/trip-earning', label: 'Trip Earning', icon: ReceiptIndianRupee }, // NEW
-  { id: 'driver-payments', path: '/admin/driver-payments', label: 'Driver Payments', icon: Car }, // NEW: Driver Payments
   { id: 'tracking', path: '/admin/tracking', label: 'Live Tracking', icon: Navigation },
   
   { id: 'leads', path: '/admin/leads', label: 'Franchisee Leads', icon: Layers },
@@ -299,12 +298,13 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
     if (link.id === 'admin-expenses' && role !== UserRole.ADMIN) return false; // NEW: Only admin sees Admin Expenses
     if (link.id === 'cms' && role !== UserRole.ADMIN) return false;
     if (link.id === 'email-marketing' && role === UserRole.CORPORATE) return false; // Email marketing is typically for Super Admin
-    if (link.id === 'driver-payments' && role !== UserRole.ADMIN && role !== UserRole.CORPORATE) return false; // Driver payments visible to Admin & Corporate
+    if (link.id === 'driver-payments' && role !== UserRole.ADMIN && role !== UserRole.CORPORATE) return false;
     return true;
   });
 
   // Dynamic Employee Links based on Allowed Modules
   const employeeLinks = useMemo(() => {
+      // Base set of links for any employee
       const baseLinks = [
         { id: 'attendance', path: '/user', label: 'My Attendance', icon: Calendar },
         { id: 'salary', path: '/user/salary', label: 'My Salary', icon: DollarSign },
@@ -324,7 +324,7 @@ const Layout: React.FC<LayoutProps> = ({ children, role, onLogout }) => {
           }
           // Trip Booking
           if (currentEmployee.allowedModules.includes('trip_booking')) {
-              baseLinks.splice(1, 0, { id: 'trip_booking', path: '/admin/trips', label: 'Trip Booking', icon: Map });
+              baseLinks.splice(1, 0, { id: 'trip_booking', path: '/admin/trips', label: 'Trip Booking', icon: MapIcon }); // Fixed: Use MapIcon
           }
           // Live Tracking
           if (currentEmployee.allowedModules.includes('live_tracking')) {

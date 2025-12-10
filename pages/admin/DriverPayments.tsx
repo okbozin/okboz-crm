@@ -99,7 +99,7 @@ const DriverPayments: React.FC = () => {
           } else {
               // SPECIFIC CONTEXT MODE
               const dataKey = viewContext === 'admin' ? 'driver_payments_data' : `driver_payments_data_${viewContext}`;
-              const settingsKey = `driver_payment_settings_${viewContext}`;
+              const settingsKey = viewContext === 'admin' ? 'driver_payment_settings' : `driver_payment_settings_${viewContext}`;
 
               // Load Payments
               loadedPayments = JSON.parse(localStorage.getItem(dataKey) || '[]');
@@ -132,7 +132,7 @@ const DriverPayments: React.FC = () => {
   // --- Save Rules ---
   const saveRules = (newRules: typeof rules) => {
       if (viewContext === 'All') return; // Cannot save rules for 'All'
-      const settingsKey = `driver_payment_settings_${viewContext}`;
+      const settingsKey = viewContext === 'admin' ? 'driver_payment_settings' : `driver_payment_settings_${viewContext}`;
       localStorage.setItem(settingsKey, JSON.stringify(newRules));
       setRules(newRules);
   };

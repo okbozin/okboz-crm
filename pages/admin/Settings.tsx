@@ -6,7 +6,7 @@ import {
   UploadCloud, DownloadCloud, Loader2, Map as MapIcon, Check,
   Users, Target, Building2, Car, Wallet, MapPin, Truck, Layers, RefreshCw, Eye,
   Phone, DollarSign, Plane, Briefcase as BriefcaseIcon, Clock, Calendar, X,
-  EyeOff, AlertCircle, Info, ExternalLink
+  EyeOff, AlertCircle, Info, ExternalLink, IndianRupee
 } from 'lucide-react';
 import { 
   HARDCODED_FIREBASE_CONFIG, getCloudDatabaseStats,
@@ -20,6 +20,7 @@ const Settings: React.FC = () => {
   const [dbStatus, setDbStatus] = useState<'Connected' | 'Disconnected' | 'Error'>('Disconnected');
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   
   const [collectionStats, setCollectionStats] = useState<any[]>([]);
 
@@ -66,6 +67,7 @@ const Settings: React.FC = () => {
         { key: 'leads_data', label: 'Active Leads', icon: Target, color: 'text-gray-600' },
         { key: 'corporate_accounts', label: 'Corporate Accounts', icon: Building2, color: 'text-gray-600' },
         { key: 'vendor_data', label: 'Vehicle Vendors', icon: Layers, color: 'text-gray-600' },
+        { key: 'driver_payments_data', label: 'Driver Payments', icon: Car, color: 'text-gray-600' }, // New
         { key: 'office_expenses', label: 'Finance & Expenses', icon: Wallet, color: 'text-gray-600' },
         { key: 'branches_data', label: 'Branches', icon: MapPin, color: 'text-gray-600' },
         { key: 'trips_data', label: 'Trips', icon: Truck, color: 'text-gray-600' },
@@ -121,6 +123,7 @@ const Settings: React.FC = () => {
   };
 
   const checkConnection = async () => {
+    setIsRefreshing(true);
     try {
       const s = await getCloudDatabaseStats();
       
@@ -136,6 +139,8 @@ const Settings: React.FC = () => {
     } catch (e) {
       console.error("Failed to check connection", e);
       setDbStatus('Error');
+    } finally {
+        setIsRefreshing(false);
     }
   };
 
@@ -527,10 +532,11 @@ const Settings: React.FC = () => {
                 </h3>
                 <button 
                     onClick={checkConnection}
-                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 bg-white border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors shadow-sm"
+                    disabled={isRefreshing}
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 bg-white border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors shadow-sm disabled:opacity-70"
                 >
-                    <RefreshCw className={`w-4 h-4 ${dbStatus === 'Connected' && !stats ? 'animate-spin' : ''}`} /> 
-                    Refresh
+                    <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} /> 
+                    {isRefreshing ? 'Refreshing...' : 'Refresh'}
                 </button>
             </div>
 

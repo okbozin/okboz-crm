@@ -1,3 +1,4 @@
+
 import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
 import { getFirestore, doc, setDoc, collection, getDocs, Firestore, updateDoc, query, where } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
@@ -73,7 +74,9 @@ const NAMESPACED_KEYS = [
   'tasks_data',
   'sub_admins',
   'app_settings',
-  'trips_data'
+  'trips_data',
+  'driver_payments_data',    // NEW: Sync Driver Payments
+  'driver_payment_settings'  // NEW: Sync Driver Payment Rules
 ];
 
 const NOTIFICATION_COLLECTION = 'global_notifications';
@@ -378,18 +381,6 @@ export const fetchSystemNotifications = async (): Promise<Notification[]> => {
     
     let q = collection(db, NOTIFICATION_COLLECTION);
     
-    // Base query: filter out read notifications
-    // Note: Firestore `where` clause can only handle one `array-contains`
-    // So for `targetRoles`, we have to fetch all and filter in client if multiple roles in targetRoles are possible
-    // For simplicity for now, we'll assume a single role or global.
-    
-    // For now, fetch all unread and filter on client based on more complex rules
-    // Or, if rules allow, fetch by role. For this demo, let's fetch all unread
-    // and apply client-side filtering for complex `targetRoles` logic.
-    
-    // Query notifications that are NOT read OR have targetRoles matching current user
-    // It's not efficient to combine `!=` and array-contains in Firestore without multiple queries
-    // So, we will fetch all unread, and filter on the client for targetRoles
     const snapshot = await getDocs(q);
     let allNotifications: Notification[] = [];
     snapshot.forEach(doc => {
@@ -417,9 +408,6 @@ export const fetchSystemNotifications = async (): Promise<Notification[]> => {
       if (userRole === UserRole.ADMIN) {
         const isGlobalOrAdminTargeted = (!notif.corporateId && !notif.employeeId) || (notif.targetRoles.includes(UserRole.ADMIN));
         if (isGlobalOrAdminTargeted) return true;
-        // Also admin can see notifications for their managed corporates/employees
-        // This would require fetching all corporate accounts and staff under admin
-        // For simplicity, we'll only check if targeted directly to admin role or global.
       }
       
       return true; // If it passes all filters, it's relevant
@@ -450,6 +438,5 @@ export const markNotificationAsRead = async (notificationId: string) => {
   }
 };
 
-// No need for setupAutoSync and hydrateFromCloud as they are covered by autoLoadFromCloud and syncToCloud
 export const setupAutoSync = () => {};
 export const hydrateFromCloud = async () => Promise.resolve();
