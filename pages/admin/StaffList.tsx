@@ -144,14 +144,19 @@ const StaffList: React.FC = () => {
         let loadedBranches: Branch[] = [];
         if (isSuperAdmin()) {
           const adminBranches = JSON.parse(localStorage.getItem('branches_data') || '[]').filter((item: any) => item && typeof item === 'object');
-          loadedBranches = [...adminBranches];
+          // Inject owner='admin' for head office branches since it's stripped on save
+          loadedBranches = [...adminBranches.map((b: any) => ({...b, owner: 'admin'}))];
+          
           loadedCorporates.forEach((c: any) => {
             const cBranches = JSON.parse(localStorage.getItem(`branches_data_${c.email}`) || '[]').filter((item: any) => item && typeof item === 'object');
-            loadedBranches = [...loadedBranches, ...cBranches];
+            // Inject owner=c.email
+            loadedBranches = [...loadedBranches, ...cBranches.map((b: any) => ({...b, owner: c.email}))];
           });
         } else {
           const key = `branches_data_${getSessionId()}`;
-          loadedBranches = JSON.parse(localStorage.getItem(key) || '[]').filter((item: any) => item && typeof item === 'object');
+          const rawBranches = JSON.parse(localStorage.getItem(key) || '[]').filter((item: any) => item && typeof item === 'object');
+          // Inject owner=sessionId
+          loadedBranches = rawBranches.map((b: any) => ({...b, owner: getSessionId()}));
         }
         setAllBranches(loadedBranches);
       } catch (e) {
@@ -401,7 +406,7 @@ const StaffList: React.FC = () => {
                  >
                     <option value="All">All Corporates</option>
                     <option value="admin">Head Office</option>
-                    {corporates.map(c => <option key={c.email} value={c.email}>{c.companyName}</option>)}
+                    {corporates.map(c => <option key={c.id} value={c.email}>{c.companyName}</option>)}
                  </select>
              )}
              
